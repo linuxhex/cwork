@@ -5,44 +5,25 @@ description: 在 writing-plans 之后执行。按计划落地实现，并强制�
 
 # Executing Plans
 
-## 位置与串联
-- 必须在 `writing-plans` 完成后执行。
-- 执行过程中必须循环调用 `loop-refined`。
-- 收敛后自动进入下一阶段：`commit-code`。
+## 概述
+`executing-plans` 承担“落地实现 + 任务编排 + 推演联动”。
 
-## 阶段目标
-- 严格执行 `02-plan.md` 的任务。
-- 每轮改动都经过“推演 -> 修复 -> 再推演”验证。
-- 保证多工程改动最终一致且可追溯。
+核心原则：每个任务都必须经过 `loop-refined` 证实，不能只看代码改完。
+
+## 开始声明
+建议先声明：
+> 我正在使用 `executing-plans` 按计划执行并触发推演修复闭环。
 
 ## HARD GATE
-- 未进入 `executing-plans` 状态禁止编码。
-- 任一任务未通过推演验证不得标记完成。
-- 任一工程存在未关闭问题，不得进入 `commit-code`。
+- `workflow-state` 不是 `writing-plans` 或 `executing-plans`，禁止执行。
+- 未完成任务认领，禁止开始并发执行。
+- 任一任务未过推演验证，禁止标记任务完成。
 
-## 输入来源
-1. 主工程 `02-plan.md`
-2. 依赖工程 `02-repo-plan.md`
-3. 上轮推演记录（若存在）：
-   - 主工程 `03-changes.md`
-   - 主工程 `process/round-<N>.md`
-   - 依赖工程 `03-repo-changes.md`
+## 本 skill 自带资产
+- 脚本：`skills/executing-plans/scripts/claim_and_start_task.sh`
+- 模板：`skills/executing-plans/templates/task-log.md`
 
-## 执行节奏（单任务）
-1. 领取任务：在 `agent_claims.json` 记录 owner 与 scope。
-2. 最小改动实现：只改当前任务必要内容。
-3. 立即进入 `loop-refined`：做一轮跨工程逻辑推演。
-4. 记录问题并修复：更新主工程和依赖工程文档。
-5. 再推演：确认修复有效且无新增回归。
-6. 任务收口：满足 DoD 后进入下一任务。
-
-## 默认质量策略
-- 不强制新增单元测试。
-- 问题发现与回归判断由 `loop-refined` 负责。
-- 如业务高风险，可补充手工测试或联调脚本，但不是本流程硬门禁。
-
-## 阶段推进命令
-开始执行前：
+## 进入阶段检查点
 
 ```bash
 bash skills/init/scripts/phase_checkpoint.sh \
@@ -53,46 +34,71 @@ bash skills/init/scripts/phase_checkpoint.sh \
   --owner <agent-id>
 ```
 
-每轮推演完成后：
+## 任务启动脚本
 
 ```bash
-bash skills/init/scripts/phase_checkpoint.sh \
-  --main-dir <主工程绝对路径> \
-  --deps <逗号分隔依赖工程绝对路径> \
+bash skills/executing-plans/scripts/claim_and_start_task.sh \
+  --repo <工程绝对路径> \
   --requirement-key <需求key> \
-  --phase loop-refined \
-  --owner <agent-id>
+  --agent-id <agent-id> \
+  --task-id <task-id> \
+  --note "<任务说明>"
 ```
 
-## 并发协作约束（多 agent）
-- 不同 agent 负责不同工程或不同模块。
-- 任何阶段推进前必须加锁，避免状态竞争。
-- 冲突处理优先级：状态文件事实 > 口头约定。
-- 长任务需续租锁（TTL 到期前 renew）。
+该脚本会：
+- 校验当前工程状态必须是 `executing-plans`。
+- 写入 `agent-claims`（claimed -> in_progress）。
+- 生成 `process/task-<task-id>.md` 任务记录。
 
-## 阶段通过标准
-- `02-plan.md` 所有任务完成。
-- `03-changes.md` 所有问题 `closed`。
-- 最新一轮推演无新增问题。
-- 所有工程 `workflow-state` 已到 `loop-refined` 或 `commit-code` 前态。
+## 执行节奏（单任务）
+1. 认领任务并建任务日志。
+2. 最小改动实现当前目标。
+3. 进入 `loop-refined` 做一轮推演。
+4. 修复发现问题并更新文档。
+5. 再推演确认无回归。
+6. 更新 claim 状态为 `done/closed`。
 
-## 常见失败与处理
-- 失败：推演发现跨工程契约破坏。
-  - 处理：回到对应依赖工程修复契约，再次推演。
-- 失败：某工程状态被其他 agent 提前推进。
-  - 处理：读取 state 版本，按实际状态续跑，不回退已生效结果。
-- 失败：任务完成但文档未同步。
-  - 处理：补写 `03-*` 文档后重跑检查点。
+## 并发模式（多 agent）
+- 按工程或按模块切分任务，避免同文件冲突。
+- 状态推进统一走 `phase_checkpoint.sh`，禁止手工改 state 文件。
+- 长任务期间定期续租锁，避免锁过期后并发抢写。
 
-## 质量红线
-- 不允许“改完直接提交，不做 loop-refined”。
-- 不允许“只在主工程记录问题，不同步依赖工程”。
-- 不允许“问题 unresolved 仍推进到 commit-code”。
+## 流程图
+```mermaid
+flowchart TD
+  A[进入 executing-plans] --> B[认领任务 claim]
+  B --> C[最小改动实现]
+  C --> D[调用 loop-refined]
+  D --> E{有 open 问题?}
+  E -->|有| F[修复并记录]
+  F --> D
+  E -->|无| G[任务完成并更新 claim]
+  G --> H{还有任务?}
+  H -->|有| B
+  H -->|无| I[进入 commit-code]
+```
 
-## 输出给下一阶段的最小交接
-- 每工程最终改动摘要
-- 问题清单（全部 closed）
-- 最后一轮推演结论
-- 可提交文件范围
+## 常见失败与恢复
+- 失败：claim 冲突（任务已被其他 agent 认领）。
+  - 恢复：重选任务或等待释放。
+- 失败：中途状态被推进。
+  - 恢复：读取最新 state 后按相位续跑。
+- 失败：任务日志缺失，难追溯。
+  - 恢复：补写 `process/task-*.md` 并回填关键决策。
 
-下一阶段：`commit-code`
+## 反模式
+- 不认领任务，直接并发改代码。
+- 改完不推演，直接进入提交。
+- 任务完成但不更新 claim 状态。
+
+## 完成定义
+- 所有计划任务达成 DoD。
+- 所有关键问题完成修复并关闭。
+- 所有任务 claim 处于 `done/closed` 或已归档。
+
+下一阶段：`loop-refined`（循环内） -> `commit-code`
+
+## 示例
+- `skills/executing-plans/execution-report-template.md`
+- `skills/executing-plans/examples/sample-task-log.md`
+

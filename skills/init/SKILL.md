@@ -5,51 +5,49 @@ description: 需求流程起点。初始化主工程与依赖工程，统一分�
 
 # Init
 
-## 位置与串联
-- 必须作为流程起点执行。
-- 完成后自动进入下一阶段：`brainstorming`。
+## 概述
+`init` 是 cwork 的唯一入口。它负责把“零散对话”转成“可执行多工程流水线”。
 
-## 阶段目标
-- 把当前工程设为主工程，建立跨工程统一上下文。
-- 所有相关工程同步切换/创建同名 feature 分支。
-- 自动生成主工程和依赖工程需求文档、过程文档、拆分记录。
+执行成功后会完成三件事：
+1. 主工程与依赖工程统一进入同名 feature 分支。
+2. 需求文档在主工程与依赖工程自动落地。
+3. 后续阶段的状态机与并发治理文件自动初始化。
 
-## 必填输入
-1. `main_dir`：主工程绝对路径（默认当前目录）。
-2. `deps`：依赖工程绝对路径列表（逗号分隔）。
-3. `feature_branch`：目标分支名。
-4. `requirement_key`：需求标识（小写+下划线）。
-5. `requirement_title`：需求标题。
-6. `force_discard=true`：确认允许强制回退未提交改动。
+## 开始声明
+执行前建议先声明：
+> 我正在使用 `init` 初始化 cwork 多工程需求工作区。
 
-## 分支命名规则（强制）
-- 必须 `feature_` 开头。
-- 仅允许英文字母与下划线。
-- 不允许数字、中文、短横线。
-- 下划线分段后，每段满足 `^[a-z][A-Za-z]*$`。
+## HARD GATE
+- 未提供 `--force-discard true`，禁止执行。
+- 任一依赖工程路径无效，禁止执行。
+- 任一仓库不是 git 仓库或缺少 `origin`，禁止执行。
+- `feature` 命名不符合规则，禁止执行。
+
+## 本 skill 自带资产
+- 脚本：`skills/init/scripts/*`
+- 模板：`skills/init/templates/requirement-manifest.md`
+
+
+## 用户输入采集顺序
+按以下顺序采集，不能跳步：
+1. 主工程目录（默认当前目录）
+2. 依赖工程目录列表（绝对路径）
+3. feature 分支名
+4. `requirement_key`
+5. `requirement_title`
+6. 强制回退确认（`--force-discard true`）
+
+## 分支命名规则
+- 必须以 `feature_` 开头。
+- 仅允许字母与下划线。
+- 禁止数字、中文、短横线。
+- 下划线分段后，每段满足：`^[a-z][A-Za-z]*$`。
 
 示例：
 - `feature_userCenterExport`
 - `feature_chargeFlowAlign_orderSync`
 
-## HARD GATE
-- 未传 `--force-discard true`，禁止执行。
-- 任一依赖工程路径无效，禁止执行。
-- 任一仓库非 git 或无 `origin`，禁止执行。
-
-## 核心动作（自动）
-1. 预检查所有工程：git 仓库、远程、路径、分支规则。
-2. 获取远程默认分支：`origin/HEAD`，失败则回退 `master/main`。
-3. 强制回退本地改动：`reset --hard` + `clean -fd`。
-4. 对齐默认分支到远程最新。
-5. 分支切换策略：
-   - 本地有分支：强制切换
-   - 远程有分支：跟踪切换
-   - 都没有：从最新默认分支新建
-6. 多仓原子保障：任一仓失败，已切换仓库回滚到原引用。
-7. 生成文档体系并初始化 workflow/claims。
-
-## 执行命令
+## 执行主命令
 
 ```bash
 bash skills/init/scripts/init_requirement_workspace.sh \
@@ -61,8 +59,35 @@ bash skills/init/scripts/init_requirement_workspace.sh \
   --force-discard true
 ```
 
-## 自动生成产物
-主工程目录：`docs/requirements/<requirement_key>/`
+## 自动执行逻辑
+1. 全量预检查：路径、git、origin、远程可拉取。
+2. 识别默认分支：优先 `origin/HEAD`，回退 `master/main`。
+3. 强制清理本地改动：`reset --hard` + `clean -fd`。
+4. 默认分支对齐远程最新。
+5. feature 分支处理：
+   - 本地已存在：强制切换
+   - 远程已存在：跟踪切换
+   - 都不存在：从最新默认分支新建
+6. 多仓原子回滚：任一仓失败，已切换仓自动回滚到原引用。
+7. 文档和状态文件初始化。
+
+## 主流程图
+```mermaid
+flowchart TD
+  A[收集输入] --> B[全量预检查]
+  B --> C[识别远程默认分支]
+  C --> D[强制回退本地改动]
+  D --> E[多仓切换或新建 feature]
+  E --> F{任一仓失败?}
+  F -->|是| G[回滚已切换仓并终止]
+  F -->|否| H[生成主工程需求文档]
+  H --> I[拆分同步到依赖工程]
+  I --> J[初始化 workflow-state 和 agent-claims]
+  J --> K[进入 brainstorming]
+```
+
+## 产物清单
+主工程：`docs/requirements/<requirement_key>/`
 - `00-context.md`
 - `01-analysis.md`
 - `02-plan.md`
@@ -71,43 +96,53 @@ bash skills/init/scripts/init_requirement_workspace.sh \
 - `05-split-actions.md`
 - `dependencies/*`
 - `process/*`
+- `commit-allowlist.txt`
 
-依赖工程目录：`docs/requirements/<requirement_key>/`
+依赖工程：`docs/requirements/<requirement_key>/`
 - `00-repo-context.md`
 - `01-repo-analysis.md`
 - `02-repo-plan.md`
 - `03-repo-changes.md`
-- `10-repo-perspective-custom.md`
-- `11-repo-contract-custom.md`
+- `10-repo-perspective-custom.md`（人工维护，不覆盖）
+- `11-repo-contract-custom.md`（人工维护，不覆盖）
 - `98-main-doc-links.md`
 - `99-dispatch-receipt.md`
 - `commit-allowlist.txt`
 
-每工程根需求标记：
+每个工程都会生成：
 - `docs/requirements/ACTIVE_REQUIREMENT.md`
 - `docs/requirements/ACTIVE_REQUIREMENT_HISTORY.md`
+- `docs/requirements/<key>/workflow-state.json`
+- `docs/requirements/<key>/agent-claims.json`
 
-并发治理：
-- `workflow-state.json`
-- `agent-claims.json`
+## 并发治理能力
+`init` 后默认启用：
+- `workflow_state.sh`：阶段状态机 + 版本 CAS。
+- `workflow_lock.sh`：目录锁 + TTL + renew。
+- `agent_claims.sh`：任务认领、更新、归档。
 
-## 阶段完成判定
-- 所有工程均在同名 feature 分支。
-- 文档目录生成完整。
-- `ACTIVE_REQUIREMENT.md` 在每个工程存在。
-- 后续可直接在任一工程目录继续 AI 对话并识别需求上下文。
-
-## 常见失败与处理
+## 常见失败与恢复
 - 失败：远程默认分支无法识别。
-  - 处理：先修复 `origin/HEAD` 或补齐 `master/main`。
+  - 恢复：修复 `origin/HEAD` 或确认 `master/main` 后重跑。
 - 失败：某仓切换失败。
-  - 处理：脚本自动回滚，修复后重跑全流程。
-- 失败：误触发强制回退。
-  - 处理：从 git reflog 或备份恢复，init 不能自动恢复未提交改动。
+  - 恢复：脚本会自动回滚，修复错误后重跑 `init`。
+- 失败：误用强制回退导致本地改动丢失。
+  - 恢复：只能依赖 git 历史、reflog 或外部备份。
 
-## 质量红线
-- 不允许只切主工程分支，不切依赖工程。
-- 不允许手工跳过文档生成。
-- 不允许不记录 requirement_key 就进入后续阶段。
+## 反模式
+- 只切主工程，不切依赖工程。
+- 先手工切分支再补跑 `init`。
+- 不记录 `requirement_key` 直接进后续阶段。
+
+## 完成判定
+- 所有工程处于同名 feature 分支。
+- 主/依赖工程文档目录完整。
+- 活跃需求标记存在。
+- 返回 `NEXT_SKILL=brainstorming`。
 
 下一阶段：`brainstorming`
+
+## 示例
+- `skills/init/init-input-checklist.md`
+- `skills/init/examples/sample-init-command.md`
+

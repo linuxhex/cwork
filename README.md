@@ -25,6 +25,14 @@
   - 多工程统一提交
   - 自动推进状态到 `done`
 
+## Skill Assets
+- `init`: `scripts/` + `templates/` + `examples/`
+- `brainstorming`: `scripts/` + `templates/` + `examples/`
+- `writing-plans`: `scripts/` + `templates/` + `examples/`
+- `executing-plans`: `scripts/` + `templates/` + `examples/`
+- `loop-refined`: `scripts/` + `templates/` + `examples/`
+- `commit-code`: `scripts/` + `templates/` + `examples/`
+
 ## 固定执行顺序
 1. `init`
 2. `brainstorming`
