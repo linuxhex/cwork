@@ -144,3 +144,9 @@ bash skills/commit-code/scripts/commit_all_related_repos.sh \
 - `skills/init/scripts/run_cwork_pipeline.sh`: 从 `brainstorming` 到 `commit-code` 串联阶段推进。
 - `skills/brainstorming/scripts/build-visual-state.sh`: 生成视觉伴侣状态数据。
 - `skills/brainstorming/scripts/start-server.sh` / `stop-server.sh`: 启停视觉伴侣本地服务。
+
+## Support Skills
+- `workflow-runner`: 一条命令编排多工程需求流程（可选自动提交）。
+- `subagent-driven-development`: 多 agent 并发任务分派与双阶段审查。
+- `verification-before-completion`: 声称完成前必须有多工程证据校验。
+

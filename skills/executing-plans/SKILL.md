@@ -63,6 +63,13 @@ bash skills/executing-plans/scripts/claim_and_start_task.sh \
 - 状态推进统一走 `phase_checkpoint.sh`，禁止手工改 state 文件。
 - 长任务期间定期续租锁，避免锁过期后并发抢写。
 
+
+## 与并发子代理集成（推荐）
+当任务可按工程切分时，优先配合 `subagent-driven-development`：
+1. 控制代理拆解任务并分配 ownership。
+2. 子代理通过 claim 机制领取任务。
+3. 每任务完成后先审查规格一致性，再审查代码质量。
+
 ## 流程图
 ```mermaid
 flowchart TD

@@ -44,6 +44,18 @@ bash skills/commit-code/scripts/validate_commit_readiness.sh \
 示例：
 - `【占位单互联】<modify> 调整跨工程推演收敛与提交门禁`
 
+
+## 完成前证据门（强烈建议）
+在正式提交前先运行：
+
+```bash
+bash skills/verification-before-completion/scripts/verify_cwork_evidence.sh \
+  --main-dir <主工程绝对路径> \
+  --deps <逗号分隔依赖工程绝对路径> \
+  --requirement-key <需求key> \
+  --expect-phase commit-code
+```
+
 ## 正式提交命令
 
 ```bash
