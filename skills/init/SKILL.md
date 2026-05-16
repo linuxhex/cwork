@@ -25,6 +25,9 @@ description: 需求流程起点。初始化主工程与依赖工程，统一分�
 
 ## 本 skill 自带资产
 - 脚本：`skills/init/scripts/*`
+  - `validate_microservice_scope.sh`（微服务多工程范围守卫）
+  - `generate_service_manifest.sh`（服务拓扑与职责清单）
+  - `run_cwork_pipeline.sh`（阶段串联推进器）
 - 模板：`skills/init/templates/requirement-manifest.md`
 
 
@@ -46,6 +49,29 @@ description: 需求流程起点。初始化主工程与依赖工程，统一分�
 示例：
 - `feature_userCenterExport`
 - `feature_chargeFlowAlign_orderSync`
+
+
+## 微服务范围守卫
+在多工程微服务场景下，建议先校验工程范围：
+
+```bash
+bash skills/init/scripts/validate_microservice_scope.sh \
+  --main-dir <主工程绝对路径> \
+  --deps <逗号分隔依赖工程绝对路径> \
+  --expect-multi true
+```
+
+再生成服务拓扑清单：
+
+```bash
+bash skills/init/scripts/generate_service_manifest.sh \
+  --main-dir <主工程绝对路径> \
+  --requirement-key <需求key> \
+  --deps <逗号分隔依赖工程绝对路径> \
+  --feature-branch <feature_...>
+```
+
+输出：`docs/requirements/<key>/07-service-topology.md`。
 
 ## 执行主命令
 
@@ -145,4 +171,17 @@ flowchart TD
 ## 示例
 - `skills/init/init-input-checklist.md`
 - `skills/init/examples/sample-init-command.md`
+
+
+## 一键串联阶段推进（可选）
+
+```bash
+bash skills/init/scripts/run_cwork_pipeline.sh \
+  --main-dir <主工程绝对路径> \
+  --deps <逗号分隔依赖工程绝对路径> \
+  --requirement-key <需求key> \
+  --owner <agent-id> \
+  --from-phase brainstorming \
+  --to-phase commit-code
+```
 

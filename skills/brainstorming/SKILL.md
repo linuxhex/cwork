@@ -21,6 +21,8 @@ description: 在 init 之后执行。把需求转成可执行分析，明确主�
 
 ## 本 skill 自带资产
 - 脚本：`skills/brainstorming/scripts/prepare_brainstorming_docs.sh`
+  - `start-server.sh` / `stop-server.sh`（可视化伴侣服务）
+  - `build-visual-state.sh`（把当前需求状态导出到 state.json）
 - 模板：
   - `skills/brainstorming/templates/analysis-main.md`
   - `skills/brainstorming/templates/analysis-repo.md`
@@ -63,6 +65,32 @@ flowchart TD
   E --> F[写入主工程与依赖工程分析文档]
   F --> G[phase checkpoint]
   G --> H[进入 writing-plans]
+```
+
+
+## 可视化伴侣（可选）
+当你需要给多工程需求做可视化讲解时：
+
+1) 构建状态文件
+```bash
+bash skills/brainstorming/scripts/build-visual-state.sh \
+  --main-dir <主工程绝对路径> \
+  --requirement-key <需求key> \
+  --deps <逗号分隔依赖工程绝对路径> \
+  --feature-branch <feature_...> \
+  --out-file skills/brainstorming/scripts/state.json
+```
+
+2) 启动服务
+```bash
+bash skills/brainstorming/scripts/start-server.sh
+```
+
+3) 浏览器打开（本地）：`http://127.0.0.1:3901`
+
+4) 停止服务
+```bash
+bash skills/brainstorming/scripts/stop-server.sh
 ```
 
 ## 阶段推进命令

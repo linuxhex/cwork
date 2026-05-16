@@ -137,3 +137,10 @@ bash skills/commit-code/scripts/commit_all_related_repos.sh \
 提交信息格式：
 - `【需求简称】<type> 详细说明`
 - `type` 允许：`add|del|modify|fix|refactor|docs`
+
+## Microservice Helpers
+- `skills/init/scripts/validate_microservice_scope.sh`: 校验这是多工程微服务需求（至少 1 个依赖工程）。
+- `skills/init/scripts/generate_service_manifest.sh`: 生成 `07-service-topology.md` 服务职责清单。
+- `skills/init/scripts/run_cwork_pipeline.sh`: 从 `brainstorming` 到 `commit-code` 串联阶段推进。
+- `skills/brainstorming/scripts/build-visual-state.sh`: 生成视觉伴侣状态数据。
+- `skills/brainstorming/scripts/start-server.sh` / `stop-server.sh`: 启停视觉伴侣本地服务。

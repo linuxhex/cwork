@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>cwork Visual Companion</title>
+  <style>
+    :root { --bg:#0f172a; --panel:#111827; --text:#e5e7eb; --muted:#94a3b8; --ok:#34d399; --warn:#f59e0b; --bad:#ef4444; }
+    body { margin:0; font-family: "PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif; background: linear-gradient(120deg,#0b1020,#111827); color:var(--text); }
+    .wrap { max-width: 1100px; margin: 24px auto; padding: 0 16px; }
+    .card { background: rgba(17,24,39,.88); border:1px solid rgba(148,163,184,.25); border-radius: 14px; padding: 16px; margin-bottom: 14px; }
+    h1,h2 { margin: 0 0 12px; }
+    .timeline { display:flex; gap:10px; flex-wrap: wrap; }
+    .node { padding:8px 12px; border-radius:999px; border:1px solid rgba(148,163,184,.35); color:var(--muted); }
+    .node.active { color:#fff; border-color: var(--ok); box-shadow:0 0 0 1px rgba(52,211,153,.2) inset; }
+    .grid { display:grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    table { width:100%; border-collapse: collapse; }
+    th, td { border-bottom:1px solid rgba(148,163,184,.25); text-align:left; padding:8px; font-size:13px; }
+    .tag { padding:2px 8px; border-radius:999px; font-size:12px; }
+    .open { background: rgba(239,68,68,.15); color:#fecaca; }
+    .closed { background: rgba(52,211,153,.15); color:#a7f3d0; }
+    code { color:#a7f3d0; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <h1>cwork Visual Companion</h1>
+    <div id="meta"></div>
+  </div>
+  <div class="card">
+    <h2>阶段时间线</h2>
+    <div class="timeline" id="timeline"></div>
+  </div>
+  <div class="grid">
+    <div class="card">
+      <h2>工程状态</h2>
+      <table>
+        <thead><tr><th>工程</th><th>分支</th><th>阶段</th></tr></thead>
+        <tbody id="repoRows"></tbody>
+      </table>
+    </div>
+    <div class="card">
+      <h2>问题收敛</h2>
+      <table>
+        <thead><tr><th>Round</th><th>Open</th><th>Closed</th></tr></thead>
+        <tbody id="issueRows"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+<script src="./helper.js"></script>
+</body>
+</html>
