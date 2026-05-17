@@ -3,9 +3,15 @@ name: executing-plans
 description: 在 writing-plans 之后执行。按计划落地实现，并强制进入 loop-refined 的多轮逻辑推演与修复闭环，收敛后进入 commit-code。
 ---
 
-# Executing Plans
+# 执行计划
 
 ## 概述
+
+## 语言约束
+- 对话、分析、结论、提示默认使用中文。
+- 仅在必要处保留英文：命令、路径、参数名、状态码、字段名。
+- 禁止输出英文整句作为主要内容。
+
 `executing-plans` 承担“落地实现 + 任务编排 + 推演联动”。
 
 核心原则：每个任务都必须经过 `loop-refined` 证实，不能只看代码改完。

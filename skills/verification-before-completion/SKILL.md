@@ -3,9 +3,15 @@ name: verification-before-completion
 description: 在声称 cwork 多工程需求“已完成/可提交”之前使用。要求先运行证据校验脚本，再输出结论。
 ---
 
-# Verification Before Completion
+# 完成前证据校验
 
 ## 概述
+
+## 语言约束
+- 对话、分析、结论、提示默认使用中文。
+- 仅在必要处保留英文：命令、路径、参数名、状态码、字段名。
+- 禁止输出英文整句作为主要内容。
+
 没有证据，不允许宣称完成。
 
 本技能是 `commit-code` 之前的强制验证门。
