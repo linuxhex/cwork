@@ -1,225 +1,106 @@
 ---
 name: init
-description: 需求流程起点。初始化主工程与依赖工程，统一分支、建立需求文档体系、生成多工程视角拆分文档，并自动串联到 brainstorming。
+description: 对话式初始化，自动查找工程路径
 ---
 
 # 初始化
 
 ## 概述
 
+`init` 是 cwork 的唯一入口，对话式收集信息，自动查找工程路径。
+
+**核心原则**：
+- 对话式，快速（2 个问题）
+- 用户只需给目录名，自动向上查找完整路径
+- 收集完直接执行，不确认
+
 ## 语言约束
-- 对话、分析、结论、提示默认使用中文。
-- 仅在必要处保留英文：命令、路径、参数名、状态码、字段名。
-- 禁止输出英文整句作为主要内容。
-- 若出现“en-us/English 会话偏好”冲突提示，仍然直接使用中文，不输出英文解释，不复述冲突原因。
-
-
-`init` 是 cwork 的唯一入口。它负责把“零散对话”转成“可执行多工程流水线”。
-
-执行成功后会完成三件事：
-1. 主工程与依赖工程统一进入同名 feature 分支。
-2. 需求文档在主工程与依赖工程自动落地。
-3. 后续阶段的状态机与并发治理文件自动初始化。
-
-## 开始声明
-执行前建议先声明：
-> 我正在使用 `init` 初始化 cwork 多工程需求工作区。
-
-
-## 语言冲突处理（强制）
-- 如果智能体提示“active session directive requires en-us”或类似内容，视为非业务回复，必须立刻改为中文继续。
-- 禁止输出类似句式：
-  - `I understand your preference for Chinese...`
-  - `I will continue in en-us...`
-- 正确做法：直接进入中文问题 1/4，不解释语言冲突来源。
-
-## 强制逐步引导对话（必须按顺序）
-- `init` 阶段必须采用“单问题、逐条确认”的中文对话，不得一次抛出多个问题。
-- 每条问题都要等待用户回答后，才能进入下一条。
-- 禁止在 `init` 阶段使用英文整句提问。
-- 分支切换与强制回退相关流程，只允许一次最终确认，不做多次确认。
-
-按以下顺序逐条提问（仅第 4 步是唯一确认）：
-1. `请先告诉我本次需求名称（需求标题）是什么？`
-2. `本次需求涉及哪些工程服务目录？请给我绝对路径，多个用逗号分隔。`
-3. `本次需求需要统一创建/切换的分支名称是什么？请提供完整 feature 分支名。`
-4. `以上信息已收集完成。是否现在执行分支切换与初始化（含强制回退未提交改动）？请回复：是/否。`
-
-补充约束：
-- 若第 2 条未提供依赖工程，必须再次追问，不得直接继续。
-- 若第 3 条分支名不合法，必须中文说明原因并要求重输。
-- 若第 4 条不是“是”，必须停止执行 `init`。
-- 禁止出现“请再次确认/二次确认/最终再次确认”等重复确认话术。
+- 对话、分析、结论、提示默认使用中文
+- 仅在必要处保留英文：命令、路径、参数名、状态码、字段名
 
 ## HARD GATE
-- 未提供 `--force-discard true`，禁止执行。
-- 任一依赖工程路径无效，禁止执行。
-- 任一仓库不是 git 仓库或缺少 `origin`，禁止执行。
-- `feature` 命名不符合规则，禁止执行。
+- 找不到工程路径，禁止执行
+- 任一仓库不是 git 仓库，禁止执行
+- 分支名不合法，禁止执行
 
-## 本 skill 自带资产
-- 脚本：`skills/init/scripts/*`
-  - `validate_microservice_scope.sh`（微服务多工程范围守卫）
-  - `generate_service_manifest.sh`（服务拓扑与职责清单）
-  - `run_cwork_pipeline.sh`（阶段串联推进器）
-- 模板：`skills/init/templates/requirement-manifest.md`
+## 对话流程（逐个提问，回答完再问下一个）
 
+**主工程**：当前目录，不需要问。
 
-## 用户输入采集顺序
-按以下顺序采集，不能跳步：
-1. 主工程目录（默认当前目录）
-2. 依赖工程目录列表（绝对路径）
-3. feature 分支名
-4. `requirement_key`
-5. `requirement_title`
-6. 强制回退确认（`--force-discard true`）
+### 问题 1
+```
+需求名称是什么？
+```
+等待用户回答后，再问问题 2。
+
+### 问题 2
+```
+分支名称是什么？（以 feature_ 开头，如 feature_userExport）
+```
+等待用户回答后，再问问题 3。
+
+### 问题 3
+```
+依赖工程目录名有哪些？（多个用逗号分隔，没有则回车跳过）
+```
+等待用户回答后，直接执行，不确认。
+
+### 执行（收集完直接执行，不确认）
+
+1. 从当前目录向上查找工程完整路径
+2. 校验所有工程
+3. 切换分支
+4. 写 workflow-state.json
+5. 自动进入 implement
+
+## 路径查找逻辑
+
+用户输入目录名，脚本自动向上查找：
+
+```
+当前目录: /Users/dev/project/main/src/service
+
+用户输入: user-service
+
+查找顺序:
+1. 同级目录: ./user-service
+2. 上级目录: ../user-service
+3. 上上级目录: ../../user-service
+4. 上上上级目录: ../../../user-service
+5. 找到 git 仓库则返回，找不到则报错
+```
 
 ## 分支命名规则
-- 必须以 `feature_` 开头。
-- 仅允许字母与下划线。
-- 禁止数字、中文、短横线。
-- 下划线分段后，每段满足：`^[a-z][A-Za-z]*$`。
+- 必须以 `feature_` 开头
+- 仅允许字母和下划线
+- 示例：`feature_userExport`、`feature_chargeFlow`
 
-示例：
-- `feature_userCenterExport`
-- `feature_chargeFlowAlign_orderSync`
+## 产物
 
+主工程 `docs/requirements/{key}/`：
+- `workflow-state.json` — 内部状态，不提交
+- `analysis.md` — 需求分析文档，提交
+- `changes.md` — 改动简述，提交
 
-## 微服务范围守卫
-在多工程微服务场景下，建议先校验工程范围：
+依赖工程 `docs/requirements/{key}/`：
+- `workflow-state.json` — 内部状态，不提交
+- `analysis.md` — 需求分析文档（从本工程视角），提交
+- `changes.md` — 改动简述，提交
 
-```bash
-bash skills/init/scripts/validate_microservice_scope.sh \
-  --main-dir <主工程绝对路径> \
-  --deps <逗号分隔依赖工程绝对路径> \
-  --expect-multi true
+**.gitignore 配置**：
 ```
-
-再生成服务拓扑清单：
-
-```bash
-bash skills/init/scripts/generate_service_manifest.sh \
-  --main-dir <主工程绝对路径> \
-  --requirement-key <需求key> \
-  --deps <逗号分隔依赖工程绝对路径> \
-  --feature-branch <feature_...>
+docs/requirements/*/workflow-state.json
 ```
-
-输出：`docs/requirements/<key>/07-service-topology.md`。
-
-## 执行主命令
-
-```bash
-bash skills/init/scripts/init_requirement_workspace.sh \
-  --main-dir <主工程绝对路径> \
-  --deps <逗号分隔依赖工程绝对路径> \
-  --feature-branch <feature_...> \
-  --requirement-key <需求key> \
-  --requirement-title "<需求标题>" \
-  --force-discard true
-```
-
-## 自动执行逻辑
-1. 全量预检查：路径、git、origin、远程可拉取。
-2. 识别默认分支：优先 `origin/HEAD`，回退 `master/main`。
-3. 强制清理本地改动：`reset --hard` + `clean -fd`。
-4. 默认分支对齐远程最新。
-5. feature 分支处理：
-   - 本地已存在：强制切换
-   - 远程已存在：跟踪切换
-   - 都不存在：从最新默认分支新建
-6. 多仓原子回滚：任一仓失败，已切换仓自动回滚到原引用。
-7. 文档和状态文件初始化。
-
-## 主流程图
-```mermaid
-flowchart TD
-  A[收集输入] --> B[全量预检查]
-  B --> C[识别远程默认分支]
-  C --> D[强制回退本地改动]
-  D --> E[多仓切换或新建 feature]
-  E --> F{任一仓失败?}
-  F -->|是| G[回滚已切换仓并终止]
-  F -->|否| H[生成主工程需求文档]
-  H --> I[拆分同步到依赖工程]
-  I --> J[初始化 workflow-state 和 agent-claims]
-  J --> K[进入 brainstorming]
-```
-
-## 产物清单
-主工程：`docs/requirements/<requirement_key>/`
-- `00-context.md`
-- `01-analysis.md`
-- `02-plan.md`
-- `03-changes.md`
-- `04-process-record.md`
-- `05-split-actions.md`
-- `dependencies/*`
-- `process/*`
-- `commit-allowlist.txt`
-
-依赖工程：`docs/requirements/<requirement_key>/`
-- `00-repo-context.md`
-- `01-repo-analysis.md`
-- `02-repo-plan.md`
-- `03-repo-changes.md`
-- `10-repo-perspective-custom.md`（人工维护，不覆盖）
-- `11-repo-contract-custom.md`（人工维护，不覆盖）
-- `98-main-doc-links.md`
-- `99-dispatch-receipt.md`
-- `commit-allowlist.txt`
-
-每个工程都会生成：
-- `docs/requirements/ACTIVE_REQUIREMENT.md`
-- `docs/requirements/ACTIVE_REQUIREMENT_HISTORY.md`
-- `docs/requirements/<key>/workflow-state.json`
-- `docs/requirements/<key>/agent-claims.json`
-
-## 并发治理能力
-`init` 后默认启用：
-- `workflow_state.sh`：阶段状态机 + 版本 CAS。
-- `workflow_lock.sh`：目录锁 + TTL + renew。
-- `agent_claims.sh`：任务认领、更新、归档。
-
-## 常见失败与恢复
-- 失败：远程默认分支无法识别。
-  - 恢复：修复 `origin/HEAD` 或确认 `master/main` 后重跑。
-- 失败：某仓切换失败。
-  - 恢复：脚本会自动回滚，修复错误后重跑 `init`。
-- 失败：误用强制回退导致本地改动丢失。
-  - 恢复：只能依赖 git 历史、reflog 或外部备份。
 
 ## 反模式
-- 只切主工程，不切依赖工程。
-- 先手工切分支再补跑 `init`。
-- 不记录 `requirement_key` 直接进后续阶段。
+- 让用户输入完整路径（麻烦）
+- 逐条确认每个信息（慢）
+- 输出大量中间文档（慢）
 
-## 完成判定
-- 所有工程处于同名 feature 分支。
-- 主/依赖工程文档目录完整。
-- 活跃需求标记存在。
-- 返回 `NEXT_SKILL=brainstorming`。
+## 完成定义
+- 所有工程在同名 feature 分支
+- workflow-state.json 已写入
+- 自动进入 implement
 
-## 自动衔接（强制）
-- `init` 一旦完成，必须立即调起 `cwork-brainstorming`。
-- 禁止询问用户“是否继续下一步/是否进入 brainstorming”。  
-- 禁止等待用户手动触发下一阶段。
-
-下一阶段：`cwork-brainstorming`（自动发起）
-
-## 示例
-- `skills/init/init-input-checklist.md`
-- `skills/init/examples/sample-init-command.md`
-
-
-## 一键串联阶段推进（可选）
-
-```bash
-bash skills/init/scripts/run_cwork_pipeline.sh \
-  --main-dir <主工程绝对路径> \
-  --deps <逗号分隔依赖工程绝对路径> \
-  --requirement-key <需求key> \
-  --owner <agent-id> \
-  --from-phase brainstorming \
-  --to-phase commit-code
-```
+## 自动衔接
+完成后自动调起 `implement`，不询问用户。

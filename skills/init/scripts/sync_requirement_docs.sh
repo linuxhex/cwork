@@ -13,6 +13,38 @@ trim() {
   printf '%s' "$v"
 }
 
+write_if_changed_from_stdin() {
+  local target="$1"
+  local dir
+  local tmp
+  dir="$(dirname "$target")"
+  mkdir -p "$dir"
+  tmp="$(mktemp)"
+  cat > "$tmp"
+  if [[ -f "$target" ]] && cmp -s "$tmp" "$target"; then
+    rm -f "$tmp"
+    return 0
+  fi
+  mv "$tmp" "$target"
+}
+
+append_history_once() {
+  local history_file="$1"
+  local signature="$2"
+  local line="$3"
+
+  if [[ ! -f "$history_file" ]]; then
+    cat > "$history_file" <<HISTORY
+# 活跃需求历史
+
+HISTORY
+  fi
+
+  if ! rg -Fq "$signature" "$history_file"; then
+    printf '%s\n' "$line" >> "$history_file"
+  fi
+}
+
 short_path_hash() {
   local v="$1"
   if command -v shasum >/dev/null 2>&1; then
@@ -87,17 +119,16 @@ write_active_requirement_marker() {
   local role="$2"
   local repo_doc_dir="$3"
   local history_file
+  local signature
+  local history_line
 
   mkdir -p "$repo/docs/requirements"
   history_file="$repo/docs/requirements/ACTIVE_REQUIREMENT_HISTORY.md"
-  if [[ ! -f "$history_file" ]]; then
-    cat > "$history_file" <<HISTORY
-# 活跃需求历史
+  signature="key=$REQUIREMENT_KEY | branch=$feature_branch | role=$role | doc=$repo_doc_dir"
+  history_line="- $TIMESTAMP | $signature"
+  append_history_once "$history_file" "$signature" "$history_line"
 
-HISTORY
-  fi
-  printf '%s\n' "- $TIMESTAMP | key=$REQUIREMENT_KEY | branch=$feature_branch | role=$role | doc=$repo_doc_dir" >> "$history_file"
-  cat > "$repo/docs/requirements/ACTIVE_REQUIREMENT.md" <<ACTIVE
+  write_if_changed_from_stdin "$repo/docs/requirements/ACTIVE_REQUIREMENT.md" <<ACTIVE
 # 当前活跃需求
 
 - requirement_key: $REQUIREMENT_KEY
@@ -106,7 +137,6 @@ HISTORY
 - repo_role: $role
 - main_repo: $main_repo
 - repo_doc_dir: $repo_doc_dir
-- synced_at: $TIMESTAMP
 
 ## 使用方式
 - 在当前工程目录内直接基于本文件和 \`repo_doc_dir\` 下文档继续对话。
@@ -201,7 +231,7 @@ DPLAN
 DCHANGES
   fi
 
-  cat > "$dep_doc_dir/98-main-doc-links.md" <<DLINKS
+  write_if_changed_from_stdin "$dep_doc_dir/98-main-doc-links.md" <<DLINKS
 # 主工程文档映射
 
 - 主工程目录: $main_repo
@@ -211,10 +241,9 @@ DCHANGES
 - 主工程 03-changes: $CHANGES_FILE
 DLINKS
 
-  cat > "$dep_doc_dir/99-dispatch-receipt.md" <<RECEIPT
+  write_if_changed_from_stdin "$dep_doc_dir/99-dispatch-receipt.md" <<RECEIPT
 # 拆分接收记录
 
-- synced_at: $TIMESTAMP
 - 来源主工程: $main_repo
 - requirement_key: $REQUIREMENT_KEY
 - feature_branch: $feature_branch
@@ -275,7 +304,7 @@ CCON
 DALLOW
   fi
 
-  cat > "$dep_main_mirror" <<MIRROR
+  write_if_changed_from_stdin "$dep_main_mirror" <<MIRROR
 # 依赖工程：$dep_name
 
 - 路径: $dep
@@ -300,13 +329,13 @@ MIRROR
   SPLIT_ACTION_LINES="${SPLIT_ACTION_LINES}"$'\n'"$dep|$dep/docs/requirements/ACTIVE_REQUIREMENT.md|active-requirement-marker"
 done <<<"$DEP_LINES"
 
-cat > "$SPLIT_FILE" <<SPLIT
+{
+  cat <<SPLIT
 # 子工程拆分动作记录
 
-- 时间: $TIMESTAMP
 - 源目录: $MAIN_DOC_DIR
 
 ## 拆分动作（target_repo|target_file|source_hint）
 SPLIT
-
-printf '%s\n' "$SPLIT_ACTION_LINES" | sed '/^$/d' >> "$SPLIT_FILE"
+  printf '%s\n' "$SPLIT_ACTION_LINES" | sed '/^$/d'
+} | write_if_changed_from_stdin "$SPLIT_FILE"

@@ -1,3 +1,0 @@
-# repo|task_id|agent_id|note
-/abs/path/main-service|main-api-adapt|agent-main|主工程接口适配
-/abs/path/order-service|order-contract-align|agent-order|订单服务契约对齐
