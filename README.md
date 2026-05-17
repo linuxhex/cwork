@@ -195,3 +195,10 @@ bash skills/commit-code/scripts/commit_all_related_repos.sh \
 - `workflow-runner`: 一条命令编排多工程需求流程（可选自动提交）。
 - `subagent-driven-development`: 多 agent 并发任务分派与双阶段审查。
 - `verification-before-completion`: 声称完成前必须有多工程证据校验。
+
+## 编排器优化说明
+- `run_cwork_pipeline.sh` 新增阶段区间合法性校验：`from-phase` / `to-phase` 必须属于固定阶段且前后顺序正确。
+- `run_microservice_requirement.sh` 支持 `--from-phase` 和 `--to-phase` 参数。
+- 当 `--auto-commit true` 时，强制要求：
+  - `--auto-phase true`
+  - `--to-phase commit-code`
