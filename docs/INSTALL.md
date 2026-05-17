@@ -13,6 +13,17 @@ node /path/to/cwork/bin/cwork.js --tool auto
 - Cursor: `.cursor/skills/`
 - Gemini CLI: `.gemini/skills/`
 - Qoder: `.qoder/skills/`（全局安装建议用 `--project "$HOME" --allow-home`）
+- Windsurf: `.windsurf/skills/`
+- Aider: `.aider/skills/`
+- OpenCode: `.opencode/skills/`
+- Qwen Code: `.qwen/skills/`
+- Antigravity: `.antigravity/skills/`
+- Hermes Agent: `.hermes/skills/`
+- Trae: `.trae/skills/`
+- Kiro: `.kiro/steering/`
+- OpenClaw: `skills/`
+- Cline: `.cline/skills/`
+- GitHub Copilot: `.github/skills/`
 
 安装后的 skill 名称带 `cwork-` 前缀，避免冲突。
 
@@ -24,6 +35,6 @@ node /path/to/cwork/bin/cwork.js --uninstall --tool auto
 
 ## 3. 常见参数
 - `--project <dir>`：指定项目目录
-- `--tool auto|codex|claude|cursor|gemini|qoder|all`
+- `--tool auto|codex|claude|cursor|gemini|qoder|windsurf|aider|opencode|qwen|antigravity|hermes|trae|kiro|openclaw|cline|copilot|all`
 - `--mode copy|link`（`link` 使用符号链接）
 - `--dry-run`
