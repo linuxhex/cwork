@@ -84,6 +84,7 @@ node bin/cwork.js --project "$HOME" --tool qoder --allow-home
 
 ## 关键规则
 - `init` 是唯一起点，禁止跳过。
+- `init` 完成后自动进入 `cwork-brainstorming`，不需要用户手动触发。
 - 所有工程必须切换到同一 feature 分支。
 - 所有阶段都通过 `phase_checkpoint.sh` 推进。
 - 文档必须同时在主工程和依赖工程落地。

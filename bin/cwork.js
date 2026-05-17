@@ -273,7 +273,7 @@ function installToTool(projectDir, toolKey, opts) {
   }
 
   const bootstrapPath = resolve(projectDir, cfg.bootstrap);
-  const bootstrap = `# cwork 技能已安装\n\n## 对话语言硬约束\n- 默认使用中文对话、中文分析、中文结论。\n- 除命令/路径/参数名外，不使用英文整句。\n\n## init 阶段硬约束\n- 必须先执行 cwork-init。\n- 必须逐步中文引导并按顺序提问：\n  1) 需求名称是什么\n  2) 涉及哪些工程服务目录（绝对路径）\n  3) 统一创建/切换的分支名称是什么\n  4) 是否允许强制回退未提交改动（是/否）\n- 以上未完成前，不得进入后续技能。\n\n## 主流程技能\n- cwork-init\n- cwork-brainstorming\n- cwork-writing-plans\n- cwork-executing-plans\n- cwork-loop-refined\n- cwork-commit-code\n\n## 支撑技能\n- cwork-workflow-runner\n- cwork-subagent-driven-development\n- cwork-verification-before-completion`;
+  const bootstrap = `# cwork 技能已安装\n\n## 对话语言硬约束\n- 默认使用中文对话、中文分析、中文结论。\n- 除命令/路径/参数名外，不使用英文整句。\n- 若出现 en-us/English 偏好提示，仍直接中文继续，不输出英文解释。\n\n## init 阶段硬约束\n- 必须先执行 cwork-init。\n- 必须逐步中文引导并按顺序提问：\n  1) 需求名称是什么\n  2) 涉及哪些工程服务目录（绝对路径）\n  3) 统一创建/切换的分支名称是什么\n  4) 以上信息确认后，是否执行初始化与分支切换（是/否）\n- 分支切换与强制回退只允许一次最终确认，不做二次确认。\n- 以上未完成前，不得进入后续技能。\n- init 完成后，必须直接调起 cwork-brainstorming，禁止再问“是否继续下一步”。\n\n## 主流程技能\n- cwork-init\n- cwork-brainstorming\n- cwork-writing-plans\n- cwork-executing-plans\n- cwork-loop-refined\n- cwork-commit-code\n\n## 支撑技能\n- cwork-workflow-runner\n- cwork-subagent-driven-development\n- cwork-verification-before-completion`;
 
   appendOrCreateBootstrap(bootstrapPath, bootstrap, opts.dryRun);
 
