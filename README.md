@@ -4,6 +4,11 @@
 
 目标：让需求从初始化到最终提交形成闭环，并且全过程自动记录、自动拆分、自动推进状态。
 
+## 对话语言约束
+- 默认纯中文对话（分析、提问、结论都用中文）。
+- 仅命令、路径、参数名保留英文。
+- `init` 必须逐步中文引导：需求名称 -> 涉及工程服务 -> 统一分支名称 -> 强制回退确认。
+
 
 ## 安装与卸载
 
@@ -38,7 +43,7 @@ node bin/cwork.js --uninstall --tool all
 node bin/cwork.js --project "$HOME" --tool qoder --allow-home
 ```
 
-支持工具：`codex` / `claude` / `cursor` / `gemini` / `qoder`。
+支持工具：`codex` / `claude` / `cursor` / `gemini` / `qoder` / `windsurf` / `aider` / `opencode` / `qwen` / `antigravity` / `hermes` / `trae` / `kiro` / `openclaw` / `cline` / `copilot`。
 
 ## Skills
 - `init`
@@ -185,4 +190,3 @@ bash skills/commit-code/scripts/commit_all_related_repos.sh \
 - `workflow-runner`: 一条命令编排多工程需求流程（可选自动提交）。
 - `subagent-driven-development`: 多 agent 并发任务分派与双阶段审查。
 - `verification-before-completion`: 声称完成前必须有多工程证据校验。
-

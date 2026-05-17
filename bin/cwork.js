@@ -44,6 +44,72 @@ const TOOL_MAP = {
     skillsDir: '.qoder/skills',
     bootstrap: '.qoder/rules/cwork-skills.md'
   },
+  windsurf: {
+    name: 'Windsurf',
+    detect: ['.windsurf'],
+    skillsDir: '.windsurf/skills',
+    bootstrap: '.windsurf/rules/cwork-skills.md'
+  },
+  aider: {
+    name: 'Aider',
+    detect: ['.aider'],
+    skillsDir: '.aider/skills',
+    bootstrap: 'CONVENTIONS.md'
+  },
+  opencode: {
+    name: 'OpenCode',
+    detect: ['.opencode'],
+    skillsDir: '.opencode/skills',
+    bootstrap: '.opencode/rules/cwork-skills.md'
+  },
+  qwen: {
+    name: 'Qwen Code',
+    detect: ['.qwen'],
+    skillsDir: '.qwen/skills',
+    bootstrap: '.qwen/rules/cwork-skills.md'
+  },
+  antigravity: {
+    name: 'Antigravity',
+    detect: ['.antigravity'],
+    skillsDir: '.antigravity/skills',
+    bootstrap: '.antigravity/rules.md'
+  },
+  hermes: {
+    name: 'Hermes Agent',
+    detect: ['.hermes', 'HERMES.md', '.hermes.md'],
+    skillsDir: '.hermes/skills',
+    bootstrap: 'HERMES.md'
+  },
+  trae: {
+    name: 'Trae',
+    detect: ['.trae'],
+    skillsDir: '.trae/skills',
+    bootstrap: '.trae/rules/cwork-skills.md'
+  },
+  kiro: {
+    name: 'Kiro',
+    detect: ['.kiro'],
+    skillsDir: '.kiro/steering',
+    bootstrap: '.kiro/steering/cwork-skills.md'
+  },
+  openclaw: {
+    name: 'OpenClaw',
+    detect: ['.openclaw'],
+    skillsDir: 'skills',
+    bootstrap: 'AGENTS.md'
+  },
+  cline: {
+    name: 'Cline',
+    detect: ['.cline'],
+    skillsDir: '.cline/skills',
+    bootstrap: '.cline/rules/cwork-skills.md'
+  },
+  copilot: {
+    name: 'GitHub Copilot',
+    detect: ['.github/copilot-instructions.md'],
+    skillsDir: '.github/skills',
+    bootstrap: '.github/copilot-instructions.md'
+  },
 };
 
 function parseArgs(argv) {
@@ -94,7 +160,7 @@ function parseArgs(argv) {
 }
 
 function helpAndExit(code) {
-  const txt = `\nUsage:\n  cwork-skills [--project <dir>] [--tool auto|codex|claude|cursor|gemini|qoder|all] [--mode copy|link] [--allow-home]\n  cwork-skills --uninstall [--project <dir>] [--tool auto|codex|claude|cursor|gemini|qoder|all] [--allow-home]\n\nOptions:\n  --project    target project directory (default: cwd)\n  --tool       install target tool (default: auto)\n  --mode       copy or link skills (default: copy)\n  --uninstall  uninstall cwork skills from target\n  --dry-run    print operations only\n  --allow-home allow using HOME as project (needed for ~/.qoder global install)\n`;
+  const txt = `\nUsage:\n  cwork-skills [--project <dir>] [--tool auto|codex|claude|cursor|gemini|qoder|windsurf|aider|opencode|qwen|antigravity|hermes|trae|kiro|openclaw|cline|copilot|all] [--mode copy|link] [--allow-home]\n  cwork-skills --uninstall [--project <dir>] [--tool auto|codex|claude|cursor|gemini|qoder|windsurf|aider|opencode|qwen|antigravity|hermes|trae|kiro|openclaw|cline|copilot|all] [--allow-home]\n\nOptions:\n  --project    target project directory (default: cwd)\n  --tool       install target tool (default: auto)\n  --mode       copy or link skills (default: copy)\n  --uninstall  uninstall cwork skills from target\n  --dry-run    print operations only\n  --allow-home allow using HOME as project (needed for ~/.qoder global install)\n`;
   process.stdout.write(txt);
   process.exit(code);
 }
@@ -144,7 +210,14 @@ function appendOrCreateBootstrap(filePath, content, dryRun) {
 
   const existing = readFileSync(filePath, 'utf8');
   if (existing.includes(SENTINEL_BEGIN) && existing.includes(SENTINEL_END)) {
-    return;
+    const begin = existing.indexOf(SENTINEL_BEGIN);
+    const end = existing.indexOf(SENTINEL_END);
+    if (begin >= 0 && end >= begin) {
+      const after = end + SENTINEL_END.length;
+      const merged = (existing.slice(0, begin).replace(/\s+$/, '') + '\n\n' + wrapped + '\n' + existing.slice(after).replace(/^\s+/, '')).replace(/\n{3,}/g, '\n\n');
+      writeFileSync(filePath, merged.trim() + '\n', 'utf8');
+      return;
+    }
   }
 
   const merged = existing.replace(/\s+$/, '') + '\n\n' + wrapped;
@@ -200,7 +273,7 @@ function installToTool(projectDir, toolKey, opts) {
   }
 
   const bootstrapPath = resolve(projectDir, cfg.bootstrap);
-  const bootstrap = `# cwork skills 已安装\n\n在多工程微服务需求下，优先使用这些 skills：\n- cwork-init\n- cwork-brainstorming\n- cwork-writing-plans\n- cwork-executing-plans\n- cwork-loop-refined\n- cwork-commit-code\n\n支撑技能：\n- cwork-workflow-runner\n- cwork-subagent-driven-development\n- cwork-verification-before-completion`;
+  const bootstrap = `# cwork 技能已安装\n\n## 对话语言硬约束\n- 默认使用中文对话、中文分析、中文结论。\n- 除命令/路径/参数名外，不使用英文整句。\n\n## init 阶段硬约束\n- 必须先执行 cwork-init。\n- 必须逐步中文引导并按顺序提问：\n  1) 需求名称是什么\n  2) 涉及哪些工程服务目录（绝对路径）\n  3) 统一创建/切换的分支名称是什么\n  4) 是否允许强制回退未提交改动（是/否）\n- 以上未完成前，不得进入后续技能。\n\n## 主流程技能\n- cwork-init\n- cwork-brainstorming\n- cwork-writing-plans\n- cwork-executing-plans\n- cwork-loop-refined\n- cwork-commit-code\n\n## 支撑技能\n- cwork-workflow-runner\n- cwork-subagent-driven-development\n- cwork-verification-before-completion`;
 
   appendOrCreateBootstrap(bootstrapPath, bootstrap, opts.dryRun);
 
