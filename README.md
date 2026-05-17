@@ -82,6 +82,10 @@ node bin/cwork.js --project "$HOME" --tool qoder --allow-home
 5. `loop-refined`（在 `executing-plans` 内多轮执行）
 6. `commit-code`
 
+## 自动衔接规则
+- 每个阶段结束后自动进入下一阶段，不需要用户手动发起。
+- 禁止在阶段交接点询问“要不要进入下一步”。
+
 ## 关键规则
 - `init` 是唯一起点，禁止跳过。
 - `init` 完成后自动进入 `cwork-brainstorming`，不需要用户手动触发。

@@ -111,7 +111,12 @@ flowchart TD
 - 所有关键问题完成修复并关闭。
 - 所有任务 claim 处于 `done/closed` 或已归档。
 
-下一阶段：`loop-refined`（循环内） -> `commit-code`
+## 自动衔接（强制）
+- `cwork-executing-plans` 进入执行后，必须自动触发 `cwork-loop-refined` 循环，不等待用户手动发起。
+- 当 `loop-refined` 收敛后，必须自动进入 `cwork-commit-code`。
+- 禁止询问用户“是否进入 loop-refined / 是否进入 commit-code”。
+
+下一阶段：`cwork-loop-refined`（自动循环） -> `cwork-commit-code`（自动发起）
 
 ## 示例
 - `skills/executing-plans/execution-report-template.md`

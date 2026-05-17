@@ -115,6 +115,10 @@ bash skills/init/scripts/phase_checkpoint.sh \
 - 不跑预检直接 commit。
 - 不按统一 message 格式提交。
 
+## 自动收口（强制）
+- `cwork-commit-code` 完成后，流程自动结束为 `done`。
+- 禁止再询问用户是否“进入下一 skill”。
+
 ## 完成定义
 - 所有工程成功提交或标记 `SKIPPED_NO_CHANGES`。
 - 所有工程 `workflow-state` 为 `done`。
