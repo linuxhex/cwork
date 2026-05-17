@@ -111,7 +111,12 @@ flowchart TD
 - 最新一轮无新增高优问题。
 - 主/依赖工程推演文档一致。
 
-下一阶段：`commit-code`
+## 自动衔接（强制）
+- 每轮 `cwork-loop-refined` 结束后，若仍有未关闭问题，必须自动进入下一轮。
+- 当满足收敛条件时，必须自动进入 `cwork-commit-code`。
+- 禁止询问用户“是否继续下一轮/是否进入提交”。
+
+下一阶段：`cwork-commit-code`（收敛后自动发起）
 
 ## 示例
 - `skills/loop-refined/logic-probe-checklist.md`

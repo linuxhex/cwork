@@ -130,7 +130,11 @@ bash skills/init/scripts/phase_checkpoint.sh \
 - 所有依赖工程有对应分析视角。
 - `phase_checkpoint` 返回 `CHECKPOINT_DONE`。
 
-下一阶段：`writing-plans`
+## 自动衔接（强制）
+- `cwork-brainstorming` 结束后，必须直接进入 `cwork-writing-plans`。
+- 禁止询问用户“要不要进入 writing-plans”。
+
+下一阶段：`cwork-writing-plans`（自动发起）
 
 ## 示例
 - `skills/brainstorming/visual-companion.md`

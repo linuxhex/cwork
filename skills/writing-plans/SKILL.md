@@ -105,7 +105,11 @@ bash skills/init/scripts/phase_checkpoint.sh \
 - 所有任务具备可执行要素（归属/DoD/回滚/验证）。
 - `phase_checkpoint` 返回 `CHECKPOINT_DONE`。
 
-下一阶段：`executing-plans`
+## 自动衔接（强制）
+- `cwork-writing-plans` 结束后，必须直接进入 `cwork-executing-plans`。
+- 禁止询问用户“要不要开始执行计划”。
+
+下一阶段：`cwork-executing-plans`（自动发起）
 
 ## 示例
 - `skills/writing-plans/plan-document-reviewer-prompt.md`
