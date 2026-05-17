@@ -1,0 +1,12 @@
+{
+  "name": "cwork-skills",
+  "displayName": "cwork",
+  "description": "多工程微服务需求交付流程技能集",
+  "version": "0.1.0",
+  "author": {
+    "name": "caomunian"
+  },
+  "license": "MIT",
+  "skills": "./skills/",
+  "hooks": "./hooks/hooks-cursor.json"
+}

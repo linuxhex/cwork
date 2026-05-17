@@ -4,6 +4,42 @@
 
 目标：让需求从初始化到最终提交形成闭环，并且全过程自动记录、自动拆分、自动推进状态。
 
+
+## 安装与卸载
+
+推荐在目标项目根目录执行：
+
+```bash
+node /path/to/cwork/bin/cwork.js --tool auto
+```
+
+或使用 npm/npx（发布后）：
+
+```bash
+npx cwork-skills --tool auto
+```
+
+默认会自动检测工具并安装到对应目录，技能名会加前缀 `cwork-`（例如 `cwork-init`、`cwork-brainstorming`），避免和已有 skills 冲突。
+
+常用命令：
+
+```bash
+# 指定工具安装
+node bin/cwork.js --tool codex
+
+# 卸载
+node bin/cwork.js --uninstall --tool codex
+
+# 全工具安装/卸载
+node bin/cwork.js --tool all
+node bin/cwork.js --uninstall --tool all
+
+# 安装到本机 Qoder 全局目录
+node bin/cwork.js --project "$HOME" --tool qoder --allow-home
+```
+
+支持工具：`codex` / `claude` / `cursor` / `gemini` / `qoder`。
+
 ## Skills
 - `init`
   - 初始化主工程 + 依赖工程
