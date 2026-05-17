@@ -3,9 +3,15 @@ name: subagent-driven-development
 description: 在执行多工程微服务计划时使用。用于把任务按工程分派给多个 agent 并通过 claim/lock 机制防止冲突。
 ---
 
-# Subagent Driven Development
+# 子代理并发开发
 
 ## 概述
+
+## 语言约束
+- 对话、分析、结论、提示默认使用中文。
+- 仅在必要处保留英文：命令、路径、参数名、状态码、字段名。
+- 禁止输出英文整句作为主要内容。
+
 该技能用于多 agent 并发落地 `executing-plans`。
 
 核心原则：

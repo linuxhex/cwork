@@ -61,7 +61,7 @@ node bin/cwork.js --project "$HOME" --tool qoder --allow-home
   - 多工程统一提交
   - 自动推进状态到 `done`
 
-## Skill Assets
+## 技能资产结构
 - `init`: `scripts/` + `templates/` + `examples/`
 - `brainstorming`: `scripts/` + `templates/` + `examples/`
 - `writing-plans`: `scripts/` + `templates/` + `examples/`
@@ -174,14 +174,14 @@ bash skills/commit-code/scripts/commit_all_related_repos.sh \
 - `【需求简称】<type> 详细说明`
 - `type` 允许：`add|del|modify|fix|refactor|docs`
 
-## Microservice Helpers
+## 微服务辅助脚本
 - `skills/init/scripts/validate_microservice_scope.sh`: 校验这是多工程微服务需求（至少 1 个依赖工程）。
 - `skills/init/scripts/generate_service_manifest.sh`: 生成 `07-service-topology.md` 服务职责清单。
 - `skills/init/scripts/run_cwork_pipeline.sh`: 从 `brainstorming` 到 `commit-code` 串联阶段推进。
 - `skills/brainstorming/scripts/build-visual-state.sh`: 生成视觉伴侣状态数据。
 - `skills/brainstorming/scripts/start-server.sh` / `stop-server.sh`: 启停视觉伴侣本地服务。
 
-## Support Skills
+## 支撑技能
 - `workflow-runner`: 一条命令编排多工程需求流程（可选自动提交）。
 - `subagent-driven-development`: 多 agent 并发任务分派与双阶段审查。
 - `verification-before-completion`: 声称完成前必须有多工程证据校验。
