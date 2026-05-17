@@ -1,0 +1,33 @@
+{
+  "name": "cwork-skills",
+  "version": "0.1.0",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "description": "cwork 多工程微服务需求交付技能集：init -> brainstorming -> writing-plans -> executing-plans -> loop-refined -> commit-code，并支持编排、并发和完成前证据校验。",
+  "type": "module",
+  "bin": {
+    "cwork-skills": "bin/cwork.js"
+  },
+  "files": [
+    "bin/",
+    "skills/",
+    "hooks/",
+    ".codex-plugin/",
+    ".cursor-plugin/",
+    ".claude-plugin/",
+    "README.md"
+  ],
+  "keywords": [
+    "skills",
+    "codex",
+    "claude-code",
+    "cursor",
+    "gemini",
+    "microservice",
+    "workflow",
+    "multi-repo",
+    "cwork"
+  ],
+  "license": "MIT"
+}
