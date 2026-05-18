@@ -1,5 +1,5 @@
 ---
-name: init
+name: cwork-init
 description: 对话式初始化，自动查找工程路径
 ---
 
