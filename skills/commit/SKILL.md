@@ -1,5 +1,5 @@
 ---
-name: commit
+name: cwork-commit
 description: 推演收敛后自动提交，不确认
 ---
 

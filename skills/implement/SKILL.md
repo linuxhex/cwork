@@ -1,5 +1,5 @@
 ---
-name: implement
+name: cwork-implement
 description: 需求分析（对话式）+ 编写计划 + 执行计划 + 推演收敛
 ---
 
