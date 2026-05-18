@@ -146,7 +146,8 @@ description: 需求分析（对话式）+ 编写计划 + 执行计划 + 推演�
 
 **每步是一个操作（2-5 分钟）：**
 - "实现代码" - 一步
-- "Commit" - 一步
+
+**注意**：implement 过程中不做代码提交，提交由 commit 技能统一处理。
 
 ### 计划文档头部
 
@@ -177,15 +178,7 @@ description: 需求分析（对话式）+ 编写计划 + 执行计划 + 推演�
 def function(input):
     return expected
 ```
-
-- [ ] **步骤 2：Commit**
-
-```bash
-git add src/path/file.py
-git commit -m "feat: add specific feature"
-```
 ````
-
 ### 禁止占位符
 
 每个步骤都必须包含工程师需要的实际内容。以下是**计划缺陷**——绝不要写出来：
@@ -235,8 +228,9 @@ git commit -m "feat: add specific feature"
 1. **标记为进行中**
 2. **理解目标** — 重读任务描述，明确完成标准
 3. **执行实现** — 严格按照计划步骤执行
-4. **提交变更** — 每完成一个任务提交一次
-5. **标记为已完成**
+4. **标记为已完成**
+
+**注意**：implement 过程中不做代码提交，提交由 commit 技能统一处理。
 
 **批量审查检查点：**
 - 每完成 3 个任务后，暂停回顾：整体方向还对吗？
@@ -256,11 +250,43 @@ git commit -m "feat: add specific feature"
 - 列出你的理解和困惑，让用户澄清
 - 等待回复后再继续
 
-### 每个工程的记录视角
+### 文档路径规则（强制）
 
-每个工程从自己的视角记录到 `analysis.md` 和 `changes.md`：
+每个工程的文档必须写到对应路径，不得窜到其他工程目录：
 
 **主工程**：
+```
+docs/requirements/{requirement_key}/
+├── analysis.md
+├── changes.md
+└── plan.md
+```
+
+**依赖工程**：
+```
+docs/requirements/{requirement_key}/{service_name}/
+├── analysis.md
+├── changes.md
+└── plan.md
+```
+
+**示例**：
+```
+# 主工程
+docs/requirements/user-export/analysis.md
+
+# 依赖工程
+docs/requirements/user-export/user-service/analysis.md
+docs/requirements/user-export/order-service/analysis.md
+```
+
+### 每个工程的记录视角（强制）
+
+**每个工程必须从自己的定位视角写文档，不得遗漏。**
+
+主 agent 负责主工程文档，每个依赖工程 agent 负责对应工程文档：
+
+**主工程** (`docs/requirements/{requirement_key}/analysis.md`)：
 ```markdown
 # 需求分析
 
@@ -275,7 +301,7 @@ git commit -m "feat: add specific feature"
 - 新增字段 xxx
 ```
 
-**user-service**：
+**user-service** (`docs/requirements/{requirement_key}/user-service/analysis.md`)：
 ```markdown
 # 需求分析（user-service 视角）
 
@@ -288,6 +314,8 @@ git commit -m "feat: add specific feature"
 ## 契约变更
 - 响应新增字段 xxx
 ```
+
+**强制检查**：执行完成后，必须确认每个依赖工程目录下都有对应的文档文件。
 
 ---
 
@@ -347,9 +375,20 @@ while round <= 5:
 
 ## 输出
 
-每个工程生成 3 个文件：
+每个工程生成 3 个文件，写入对应路径：
+
+### 文件清单
+
+| 文件 | 说明 | 提交 |
+|------|------|------|
+| workflow-state.json | 内部状态 | 不提交 |
+| analysis.md | 需求分析文档 | 提交 |
+| changes.md | 改动简述 | 提交 |
+| plan.md | 实现计划 | 提交 |
 
 ### workflow-state.json（内部状态，不提交）
+
+**路径**：`docs/requirements/{requirement_key}/workflow-state.json`（主工程）
 
 ```json
 {
@@ -364,7 +403,7 @@ while round <= 5:
 
 ### analysis.md（需求分析文档，提交）
 
-**主工程视角**：
+**主工程路径**：`docs/requirements/{requirement_key}/analysis.md`
 
 ```markdown
 # 需求分析
@@ -400,7 +439,7 @@ while round <= 5:
 - 导出文件格式为 CSV
 ```
 
-**依赖工程视角**：
+**依赖工程路径**：`docs/requirements/{requirement_key}/{service_name}/analysis.md`
 
 ```markdown
 # 需求分析（user-service 视角）
@@ -425,6 +464,10 @@ while round <= 5:
 
 ### changes.md（改动简述，提交）
 
+**主工程路径**：`docs/requirements/{requirement_key}/changes.md`
+
+**依赖工程路径**：`docs/requirements/{requirement_key}/{service_name}/changes.md`
+
 ```markdown
 # 改动简述
 
@@ -447,6 +490,10 @@ while round <= 5:
 
 ### plan.md（实现计划，提交）
 
+**主工程路径**：`docs/requirements/{requirement_key}/plan.md`
+
+**依赖工程路径**：`docs/requirements/{requirement_key}/{service_name}/plan.md`
+
 ```markdown
 # 用户导出 实现计划
 
@@ -462,14 +509,32 @@ while round <= 5:
 - 创建：`src/controller/ExportController.java`
 
 - [ ] **步骤 1：实现代码**
-- [ ] **步骤 2：Commit**
 
 ### 任务 2：新增导出服务
 
 ...
 ```
 
+### 输出完整性检查（强制）
+
+执行完成后必须检查：
+
+```
+主工程文档：
+✓ docs/requirements/{requirement_key}/analysis.md
+✓ docs/requirements/{requirement_key}/changes.md
+✓ docs/requirements/{requirement_key}/plan.md
+
+依赖工程文档（每个依赖工程）：
+✓ docs/requirements/{requirement_key}/{service_name}/analysis.md
+✓ docs/requirements/{requirement_key}/{service_name}/changes.md
+✓ docs/requirements/{requirement_key}/{service_name}/plan.md
+```
+
+**如有缺失，立即补充对应文档。**
+
 ---
 
 ## 自动衔接
-完成后自动调起 commit，不询问用户。
+
+完成后自动调起 commit 技能进行代码提交，不询问用户。
