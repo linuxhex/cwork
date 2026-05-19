@@ -26,6 +26,23 @@ description: 需求分析（对话式）+ 编写计划 + 执行计划 + 推演�
 - workflow-state 不是 init 或 implement，禁止执行
 - 未完成需求分析，禁止执行实现
 - 推演未收敛，禁止进入 commit
+- **implement 过程中禁止提交代码**，所有提交由 cwork-commit 统一处理
+
+## 提交规范
+
+implement 过程中**禁止提交代码**，最终由 cwork-commit 统一提交并推送。
+
+**commit message 格式**：
+```
+【{需求简称}】<{type}> {说明}
+```
+
+**bug 修复格式**：
+```
+【{修复问题简述}】<fix> {问题的具体描述}
+```
+
+**type 允许值**：`add|del|modify|fix|refactor|docs`
 
 ---
 

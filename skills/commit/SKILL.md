@@ -29,7 +29,7 @@ description: 推演收敛后自动提交，不确认
 1. 检查 workflow-state 是否为 commit
 2. 检查所有工程分支是否一致
 3. 生成 commit message
-4. 提交所有工程
+4. 提交所有工程（commit + push）
 5. 输出提交结果
 
 ## commit message 格式
