@@ -81,6 +81,9 @@ while IFS= read -r repo; do
   hash=$(git -C "$repo" rev-parse --short HEAD)
   OUTPUT="$OUTPUT"$'\n'"$repo: $hash"
 
+  # 推送到远端当前分支
+  git -C "$repo" push >/dev/null 2>&1 || fail "推送失败: $repo"
+
   # 更新 workflow-state
   local state_file="$repo/docs/requirements/$REQ_KEY/workflow-state.json"
   local timestamp
