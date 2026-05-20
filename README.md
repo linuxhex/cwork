@@ -1,204 +1,280 @@
 # cwork
 
-面向多工程联动研发的自动化 workflow skills。
+面向多工程联动研发的自动化 workflow 技能体系。
 
-目标：让需求从初始化到最终提交形成闭环，并且全过程自动记录、自动拆分、自动推进状态。
+## 核心特点
 
-## 对话语言约束
-- 默认纯中文对话（分析、提问、结论都用中文）。
-- 仅命令、路径、参数名保留英文。
-- `init` 必须逐步中文引导：需求名称 -> 涉及工程服务 -> 统一分支名称 -> 强制回退确认。
+| 特点 | 说明 |
+|------|------|
+| 对话式需求分析 | 逐步提问，每次一个问题，获得批准后才执行 |
+| 多工程并行处理 | 每个依赖工程开独立 agent，并行执行互不干扰 |
+| 逻辑推演替代测试 | 用逻辑推演替代单元测试，自动发现问题修复 |
+| 自动衔接 | 每个阶段完成后自动进入下一阶段，无需手动触发 |
+| 全中文对话 | 所有分析、提问、结论都用中文 |
 
+## 技能结构（对外暴露）
 
-## 安装与卸载
+```
+cwork-init      → 初始化工作区（唯一入口）
+cwork-implement → 需求分析 + 编写计划 + 执行计划 + 推演收敛
+cwork-commit    → 提交所有工程
+```
 
-推荐在目标项目根目录执行：
+## 完整流程
+
+```
+┌─────────────────────────────────────────────────────┐
+│  /cwork-init                                        │
+├─────────────────────────────────────────────────────┤
+│  问题1: 需求名称是什么？                              │
+│  → 用户回答                                         │
+│  问题2: 分支名称是什么？                             │
+│  → 用户回答                                         │
+│  问题3: 依赖工程目录名有哪些？                        │
+│  → 用户回答                                         │
+│                                                     │
+│  执行：                                             │
+│  ├─ 自动查找工程完整路径                             │
+│  ├─ 校验所有工程                                    │
+│  ├─ 切换分支                                        │
+│  └─ 写 workflow-state.json                          │
+└─────────────────────────────────────────────────────┘
+                         │
+                         ▼ 自动衔接
+┌─────────────────────────────────────────────────────┐
+│  /cwork-implement                                   │
+├─────────────────────────────────────────────────────┤
+│  第一步：需求分析（对话式，逐步提问）                  │
+│  ├─ 探索项目上下文                                   │
+│  ├─ 提出澄清问题（每次一个）                          │
+│  ├─ 提出 2-3 种方案                                  │
+│  ├─ 展示设计，获得批准                               │
+│  └─ 记录分析结果                                    │
+│                                                     │
+│  第二步：编写计划                                    │
+│  ├─ 列出文件结构                                    │
+│  ├─ 拆分小步骤任务                                  │
+│  ├─ 编写任务代码                                    │
+│  └─ 自检计划完整性                                  │
+│                                                     │
+│  第三步：执行计划（多 agent 并行）                    │
+│  ├─ 加载并审查计划                                   │
+│  ├─ 主 agent 处理主工程                              │
+│  ├─ agent-A 处理 user-service                       │
+│  ├─ agent-B 处理 order-service                      │
+│  └─ 每个工程独立记录视角                              │
+│                                                     │
+│  第四步：推演收敛（逻辑推演替代测试）                  │
+│  ├─ Round 1: 推演 → 发现问题 → 修复                  │
+│  ├─ Round 2: 推演 → 发现问题 → 修复                  │
+│  └─ Round N: 推演 → 无问题 → 收敛                    │
+└─────────────────────────────────────────────────────┘
+                         │
+                         ▼ 自动衔接
+┌─────────────────────────────────────────────────────┐
+│  /cwork-commit                                      │
+├─────────────────────────────────────────────────────┤
+│  ├─ 检查 workflow-state                             │
+│  ├─ 检查分支一致性                                   │
+│  ├─ 提交所有工程（commit + push）                    │
+│  └─ 更新状态为 done                                  │
+└─────────────────────────────────────────────────────┘
+                         │
+                         ▼
+                      完成
+```
+
+## 安装
 
 ```bash
+# 复制到目标工具的 skills 目录
 node /path/to/cwork/bin/cwork.js --tool auto
-```
 
-或使用 npm/npx（发布后）：
-
-```bash
-npx cwork-skills --tool auto
-```
-
-默认会自动检测工具并安装到对应目录，技能名会加前缀 `cwork-`（例如 `cwork-init`、`cwork-brainstorming`），避免和已有 skills 冲突。
-
-常用命令：
-
-```bash
-# 指定工具安装
+# 或指定工具安装
 node bin/cwork.js --tool codex
 
 # 卸载
 node bin/cwork.js --uninstall --tool codex
-
-# 全工具安装/卸载
-node bin/cwork.js --tool all
-node bin/cwork.js --uninstall --tool all
-
-# 安装到本机 Qoder 全局目录
-node bin/cwork.js --project "$HOME" --tool qoder --allow-home
 ```
 
-支持工具：`codex` / `claude` / `cursor` / `gemini` / `qoder` / `windsurf` / `aider` / `opencode` / `qwen` / `antigravity` / `hermes` / `trae` / `kiro` / `openclaw` / `cline` / `copilot`。
+支持工具：`codex` / `claude` / `cursor` / `gemini` / `qoder` / `windsurf` / `aider` / `opencode` / `qwen` / `antigravity` / `hermes` / `trae` / `kiro` / `openclaw` / `cline` / `copilot`
 
-## Skills
-- `init`
-  - 初始化主工程 + 依赖工程
-  - 多仓统一分支切换/新建
-  - 自动生成并拆分需求文档体系
-- `brainstorming`
-  - 需求澄清、边界划分、风险识别
-  - 强制输出可执行验收标准
-- `writing-plans`
-  - 产出跨工程可执行计划
-  - 明确任务顺序、DoD、回滚策略
-- `executing-plans`
-  - 按计划实施
-  - 强制进入 `loop-refined` 多轮收敛
-- `loop-refined`
-  - 大范围逻辑推演 -> 修复 -> 再推演
-  - 默认作为质量门禁替代新增单元测试
-- `commit-code`
-  - 多工程统一提交
-  - 自动推进状态到 `done`
+安装后技能名会加前缀 `cwork-`（例如 `cwork-init`、`cwork-implement`），避免和已有 skills 冲突。
 
-## 技能资产结构
-- `init`: `scripts/` + `templates/` + `examples/`
-- `brainstorming`: `scripts/` + `templates/` + `examples/`
-- `writing-plans`: `scripts/` + `templates/` + `examples/`
-- `executing-plans`: `scripts/` + `templates/` + `examples/`
-- `loop-refined`: `scripts/` + `templates/` + `examples/`
-- `commit-code`: `scripts/` + `templates/` + `examples/`
+## 使用示例
 
-## 固定执行顺序
-1. `init`
-2. `brainstorming`
-3. `writing-plans`
-4. `executing-plans`
-5. `loop-refined`（在 `executing-plans` 内多轮执行）
-6. `commit-code`
-
-## 自动衔接规则
-- 每个阶段结束后自动进入下一阶段，不需要用户手动发起。
-- 禁止在阶段交接点询问“要不要进入下一步”。
-
-## 关键规则
-- `init` 是唯一起点，禁止跳过。
-- `init` 完成后自动进入 `cwork-brainstorming`，不需要用户手动触发。
-- 所有工程必须切换到同一 feature 分支。
-- 所有阶段都通过 `phase_checkpoint.sh` 推进。
-- 文档必须同时在主工程和依赖工程落地。
-- 默认不要求新增单元测试，质量收敛由 `loop-refined` 承担。
-
-## 初始化命令
-
-```bash
-bash skills/init/scripts/init_requirement_workspace.sh \
-  --main-dir <主工程绝对路径> \
-  --deps <逗号分隔依赖工程绝对路径> \
-  --feature-branch <feature_...> \
-  --requirement-key <lowercase_underscore_key> \
-  --requirement-title "<需求标题>" \
-  --force-discard true
 ```
+用户: /cwork-init
 
-## 分支命名约束
-- 必须 `feature_` 开头
-- 仅字母与下划线
-- 禁止数字、中文、短横线
-- 下划线后每段：`^[a-z][A-Za-z]*$`
+Claude: 需求名称是什么？
+用户: 用户导出
+
+Claude: 分支名称是什么？（以 feature_ 开头，如 feature_userExport）
+用户: feature_userExport
+
+Claude: 依赖工程目录名有哪些？（多个用逗号分隔，没有则回车跳过）
+用户: user-service,order-service
+
+Claude: [自动执行初始化，然后进入 implement]
+```
 
 ## 文档结构
-主工程：`docs/requirements/<key>/`
-- `00-context.md`
-- `01-analysis.md`
-- `02-plan.md`
-- `03-changes.md`
-- `04-process-record.md`
-- `05-split-actions.md`
-- `dependencies/*`
-- `process/*`
 
-依赖工程：`docs/requirements/<key>/`
-- `00-repo-context.md`
-- `01-repo-analysis.md`
-- `02-repo-plan.md`
-- `03-repo-changes.md`
-- `10-repo-perspective-custom.md`（人工视角，不覆盖）
-- `11-repo-contract-custom.md`（人工视角，不覆盖）
-- `98-main-doc-links.md`
-- `99-dispatch-receipt.md`
-- `commit-allowlist.txt`
+主工程 `docs/requirements/{requirement_key}/`：
+- `workflow-state.json` — 内部状态，不提交
+- `analysis.md` — 需求分析文档，提交
+- `changes.md` — 改动简述，提交
+- `plan.md` — 实现计划，提交
 
-每工程全局标记：
-- `docs/requirements/ACTIVE_REQUIREMENT.md`
-- `docs/requirements/ACTIVE_REQUIREMENT_HISTORY.md`
+依赖工程 `docs/requirements/{requirement_key}/{service_name}/`：
+- `workflow-state.json` — 内部状态，不提交
+- `analysis.md` — 需求分析文档（从本工程视角），提交
+- `changes.md` — 改动简述，提交
+- `plan.md` — 实现计划，提交
 
-## 阶段检查点
+## 推演收敛覆盖面
 
-```bash
-bash skills/init/scripts/phase_checkpoint.sh \
-  --main-dir <主工程绝对路径> \
-  --deps <逗号分隔依赖工程绝对路径> \
-  --requirement-key <需求key> \
-  --phase <brainstorming|writing-plans|executing-plans|loop-refined|commit-code> \
-  --owner <agent-id>
+| 检查项 | 说明 |
+|--------|------|
+| 主路径闭环 | 正常流程是否完整执行 |
+| 异常处理 | 超时、失败、重试是否处理 |
+| 契约一致 | 跨工程接口字段是否匹配 |
+| 边界条件 | 空数据、大数据量、特殊字符等 |
+| 并发防重 | 重复请求是否防重 |
+| 数据一致性 | 跨工程数据是否一致 |
+
+## 关键规则
+
+1. **init 是唯一入口**，禁止跳过
+2. **分支命名严格**：必须 `feature_`/`hotfix_`/`bugfix_`/`refactor_` 开头
+3. **需求分析必须完成**：未获得用户批准前不会执行实现
+4. **计划禁止占位符**：不能写"待定"、"TODO"等
+5. **每个工程独立记录**：从各自视角记录分析和改动
+6. **不需要编写测试用例**：用逻辑推演替代
+7. **implement 过程中禁止提交代码**：所有提交由 cwork-commit 统一处理
+
+## 多服务需求拆分
+
+当需求涉及多个服务时，cwork 会站在每个服务的定位角度，将需求拆分成多个需求理解和改动计划：
+
+| 原则 | 说明 |
+|------|------|
+| 每个服务独立视角 | 从本服务的职责定位理解需求 |
+| 每个服务独立分支 | 所有服务工程都切换到同一 feature 分支 |
+| 每个服务独立文档 | 每个服务有独立的 analysis.md、plan.md、changes.md |
+| 契约明确 | 服务间的调用关系和数据结构必须明确 |
+
+**示例**：主服务需要调用 user-service 和 order-service
+
+```
+主服务视角：我需要提供导出入口，调用 user-service 获取用户数据，调用 order-service 获取订单数据
+user-service 视角：主服务需要我提供用户数据，我需要新增 /user/data 接口
+order-service 视角：主服务需要我提供订单数据，我需要新增 /order/list 接口
 ```
 
-阶段检查点会自动完成：
-- 多工程加锁
-- 文档同步拆分
-- 状态推进
-- 已完成认领归档
+## 如何使用
 
-## 自动化治理脚本
-- `skills/init/scripts/workflow_state.sh`
-  - 状态机与版本校验（CAS）
-- `skills/init/scripts/workflow_lock.sh`
-  - 并发锁与 TTL 续租
-- `skills/init/scripts/agent_claims.sh`
-  - 任务认领与归档
-- `skills/init/scripts/sync_requirement_docs.sh`
-  - 文档拆分与依赖工程同步
-- `skills/init/scripts/phase_checkpoint.sh`
-  - 检查点统一入口
+### 第一步：初始化
 
-## 提交命令
-
-```bash
-bash skills/commit-code/scripts/commit_all_related_repos.sh \
-  --repos <逗号分隔绝对路径> \
-  --requirement-short "<需求简称>" \
-  --requirement-key <需求key> \
-  --commit-type <add|del|modify|fix|refactor|docs> \
-  --commit-detail "<详细说明>" \
-  [--allowlist-file <路径>] \
-  [--allow-all-changes]
+```
+/cwork-init
 ```
 
-提交信息格式：
-- `【需求简称】<type> 详细说明`
-- `type` 允许：`add|del|modify|fix|refactor|docs`
+Claude 会依次提问：
+1. 需求名称是什么？
+2. 分支名称是什么？（以 feature_ 开头）
+3. 依赖工程目录名有哪些？（多个用逗号分隔，没有则回车跳过）
 
-## 微服务辅助脚本
-- `skills/init/scripts/validate_microservice_scope.sh`: 校验这是多工程微服务需求（至少 1 个依赖工程）。
-- `skills/init/scripts/generate_service_manifest.sh`: 生成 `07-service-topology.md` 服务职责清单。
-- `skills/init/scripts/run_cwork_pipeline.sh`: 从 `brainstorming` 到 `commit-code` 串联阶段推进。
-- `skills/brainstorming/scripts/build-visual-state.sh`: 生成视觉伴侣状态数据。
-- `skills/brainstorming/scripts/start-server.sh` / `stop-server.sh`: 启停视觉伴侣本地服务。
+回答完后自动执行初始化，然后自动进入 implement。
 
-## 支撑技能
-- `workflow-runner`: 一条命令编排多工程需求流程（可选自动提交）。
-- `subagent-driven-development`: 多 agent 并发任务分派与双阶段审查。
-- `verification-before-completion`: 声称完成前必须有多工程证据校验。
+### 第二步：实现（自动衔接）
 
-## 编排器优化说明
-- `run_cwork_pipeline.sh` 新增阶段区间合法性校验：`from-phase` / `to-phase` 必须属于固定阶段且前后顺序正确。
-- `run_microservice_requirement.sh` 支持 `--from-phase` 和 `--to-phase` 参数。
-- 当 `--auto-commit true` 时，强制要求：
-  - `--auto-phase true`
-  - `--to-phase commit-code`
+```
+/cwork-implement
+```
+
+Claude 会：
+1. **需求分析**：逐步提问，每次一个问题，获得批准后才继续
+2. **编写计划**：为每个服务独立编写实现计划
+3. **执行计划**：多 agent 并行，每个工程一个独立 agent
+4. **推演收敛**：逻辑推演替代测试，自动发现问题并修复
+
+完成后自动进入 commit。
+
+### 第三步：提交（自动衔接）
+
+```
+/cwork-commit
+```
+
+自动提交所有服务工程，不确认。
+
+### 完整示例
+
+```
+用户: /cwork-init
+
+Claude: 需求名称是什么？
+用户: 用户导出
+
+Claude: 分支名称是什么？（以 feature_ 开头，如 feature_userExport）
+用户: feature_userExport
+
+Claude: 依赖工程目录名有哪些？（多个用逗号分隔，没有则回车跳过）
+用户: user-service,order-service
+
+Claude: 
+[执行初始化]
+- 查找工程路径 ✓
+  - 主工程: /Users/dev/project/main-service
+  - user-service: /Users/dev/project/user-service
+  - order-service: /Users/dev/project/order-service
+- 切换分支 ✓
+- 创建需求文档目录 ✓
+
+[自动进入 implement]
+
+Claude: 我正在分析项目上下文...
+
+Claude: 这个导出功能的核心目的是什么？
+A. 导出用户个人数据（合规要求）
+B. 导出用户消费记录（运营需求）
+C. 导出用户订单数据（用户自助）
+
+用户: A
+
+Claude: 导出的数据范围包括哪些？
+A. 基本信息 + 消费记录
+B. 基本信息 + 订单数据
+C. 全部数据
+
+用户: B
+
+...（继续需求分析，获得批准后执行）
+
+Claude: [推演收敛完成，自动进入 commit]
+
+Claude: 
+提交完成！
+
+main-service:
+  分支：feature_userExport
+  提交：abc123 【用户导出】<add> 新增导出功能
+  推送：✓
+
+user-service:
+  分支：feature_userExport
+  提交：def456 【用户导出】<add> 新增用户数据查询接口
+  推送：✓
+
+order-service:
+  分支：feature_userExport
+  提交：ghi789 【用户导出】<add> 新增订单查询接口
+  推送：✓
+
+状态：done
+```
+
+## 详细文档
+
+详见 `docs/USAGE.md`

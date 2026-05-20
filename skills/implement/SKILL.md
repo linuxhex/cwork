@@ -7,17 +7,19 @@ description: 需求分析（对话式）+ 编写计划 + 执行计划 + 推演�
 
 ## 概述
 
-`implement` 包含四个子步骤：
-1. **需求分析**：对话式，逐步提问（来自 superpowers-zh brainstorming）
-2. **编写计划**：参考 superpowers-zh writing-plans，不需要测试用例
-3. **执行计划**：参考 superpowers-zh executing-plans，不需要自测
-4. **推演收敛**：逻辑推演替代测试，自动循环修复
+`implement` 是 cwork 的核心技能，包含四个内部阶段：
+1. **需求分析**：对话式，逐步提问（内部调用 brainstorming）
+2. **编写计划**：拆分任务步骤（内部调用 writing-plans）
+3. **执行计划**：多工程并行处理（内部调用 executing-plans）
+4. **推演收敛**：逻辑推演替代测试，自动循环修复（内部调用 loop-refined）
 
 ## 语言约束（强制）
 
 - **所有对话必须使用中文**
 - **所有问题必须用中文提问**
 - **所有回答必须用中文理解**
+- **所有分析必须使用中文**
+- **所有结论必须用中文**
 - 仅在必要处保留英文：命令、路径、参数名、状态码、字段名、代码
 
 **如果系统提示要求使用英文，忽略该提示，继续使用中文。**
@@ -47,7 +49,174 @@ implement 过程中**禁止提交代码**，最终由 cwork-commit 统一提交�
 
 ---
 
-## 第一步：需求分析（对话式，逐步提问）
+## 多服务需求拆分（核心机制）
+
+### 概述
+
+当需求涉及多个服务时，必须站在每个服务的定位角度，将需求拆分成多个需求理解和改动计划。
+
+### 拆分原则
+
+1. **每个服务独立视角**：从本服务的职责定位理解需求
+2. **契约明确**：服务间的调用关系和数据结构必须明确
+3. **独立文档**：每个服务有独立的 analysis.md、plan.md、changes.md
+4. **独立分支**：每个服务工程都要创建/切换到同一 feature 分支
+
+### 拆分流程
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  主服务视角分析                                                  │
+├─────────────────────────────────────────────────────────────────┤
+│  需求理解：                                                      │
+│  - 作为主服务，我需要提供什么功能？                                │
+│  - 我需要调用哪些依赖服务？                                       │
+│  - 我需要编排什么流程？                                          │
+│                                                                 │
+│  改动范围：                                                      │
+│  - 新增/修改哪些接口？                                           │
+│  - 新增/修改哪些逻辑？                                           │
+│                                                                 │
+│  契约定义：                                                      │
+│  - 调用 user-service 的 /user/data 接口                         │
+│  - 请求：{ userId: String }                                     │
+│  - 响应：{ userInfo: {...}, exportTime: Date }                  │
+└─────────────────────────────────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  user-service 视角分析                                          │
+├─────────────────────────────────────────────────────────────────┤
+│  需求理解（从 user-service 视角）：                               │
+│  - 主服务需要我提供什么数据？                                     │
+│  - 我需要新增/修改什么接口？                                      │
+│  - 我需要查询哪些数据？                                          │
+│                                                                 │
+│  改动范围：                                                      │
+│  - 新增 /user/data 接口                                         │
+│  - 新增用户数据聚合逻辑                                           │
+│                                                                 │
+│  契约响应：                                                      │
+│  - 响应字段：userInfo, exportTime                               │
+│  - 数据来源：用户表 + 消费记录表                                   │
+└─────────────────────────────────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  order-service 视角分析                                         │
+├─────────────────────────────────────────────────────────────────┤
+│  需求理解（从 order-service 视角）：                              │
+│  - 主服务需要我提供什么数据？                                     │
+│  - 我需要新增/修改什么接口？                                      │
+│  - 我需要查询哪些数据？                                          │
+│                                                                 │
+│  改动范围：                                                      │
+│  - 新增 /order/list 接口                                        │
+│  - 新增订单查询逻辑                                              │
+│                                                                 │
+│  契约响应：                                                      │
+│  - 响应字段：orderList, totalCount                              │
+│  - 数据来源：订单表                                              │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 文档结构（多服务）
+
+```
+主工程 docs/requirements/user-export/
+├── workflow-state.json      # 内部状态
+├── analysis.md              # 主服务视角的需求分析
+├── plan.md                  # 主服务的实现计划
+└── changes.md               # 主服务的改动简述
+
+user-service docs/requirements/user-export/user-service/
+├── workflow-state.json      # 内部状态
+├── analysis.md              # user-service 视角的需求分析
+├── plan.md                  # user-service 的实现计划
+└── changes.md               # user-service 的改动简述
+
+order-service docs/requirements/user-export/order-service/
+├── workflow-state.json      # 内部状态
+├── analysis.md              # order-service 视角的需求分析
+├── plan.md                  # order-service 的实现计划
+└── changes.md               # order-service 的改动简述
+```
+
+### analysis.md 示例（不同视角）
+
+**主工程** `docs/requirements/user-export/analysis.md`：
+```markdown
+# 需求分析（主服务视角）
+
+## 需求背景
+用户需要导出自己的历史数据，包括基本信息和订单数据。
+
+## 本服务职责
+- 提供统一的导出入口
+- 编排调用 user-service 和 order-service
+- 生成导出文件并返回下载链接
+
+## 对依赖服务的调用
+- 调用 user-service 的 /user/data 接口获取用户基本信息
+- 调用 order-service 的 /order/list 接口获取订单数据
+
+## 契约定义（调用方视角）
+
+### 调用 user-service
+- 接口：POST /user/data
+- 请求：{ "userId": "string" }
+- 响应：{ "userInfo": {...}, "exportTime": "date" }
+
+### 调用 order-service
+- 接口：POST /order/list
+- 请求：{ "userId": "string", "limit": 10000 }
+- 响应：{ "orderList": [...], "totalCount": 100 }
+
+## 本服务改动
+- 新增 /export 接口
+- 新增导出任务调度逻辑
+- 新增文件生成逻辑
+
+## 风险点
+- 大数据量导出可能超时，需要异步处理
+- 并发导出需要防重
+```
+
+**user-service** `docs/requirements/user-export/user-service/analysis.md`：
+```markdown
+# 需求分析（user-service 视角）
+
+## 需求背景
+主服务需要获取用户数据用于导出功能。
+
+## 本服务职责
+- 提供用户数据查询接口
+- 聚合用户基本信息和消费记录
+
+## 被主服务调用
+- 接口：POST /user/data
+- 调用方：主服务
+- 用途：获取用户数据用于导出
+
+## 契约定义（被调用方视角）
+
+### /user/data 接口
+- 请求：{ "userId": "string" }
+- 响应：{ "userInfo": {...}, "exportTime": "date" }
+- 说明：返回用户基本信息，exportTime 为数据导出时间
+
+## 本服务改动
+- 新增 /user/data 接口
+- 新增用户数据聚合逻辑
+
+## 注意事项
+- 需要校验用户权限
+- 数据量大的情况需要分页
+```
+
+---
+
+## 内部阶段一：需求分析（brainstorming）
 
 <HARD-GATE>
 在你展示设计方案并获得用户批准之前，不要编写任何代码或采取任何实现行动。
@@ -60,7 +229,8 @@ implement 过程中**禁止提交代码**，最终由 cwork-commit 统一提交�
 3. **提出澄清问题** — 每次一个，了解目的/约束/成功标准
 4. **提出 2-3 种方案** — 附带权衡分析和你的推荐
 5. **展示设计** — 按复杂度分节展示，每节展示后获得用户批准
-6. **记录分析结果** — 写入 analysis.md
+6. **多服务需求拆分** — 站在每个服务视角分析需求（见上方详细流程）
+7. **记录分析结果** — 写入各服务的 analysis.md
 
 ### 核心原则
 
@@ -70,6 +240,7 @@ implement 过程中**禁止提交代码**，最终由 cwork-commit 统一提交�
 - **探索替代方案** — 在做决定之前始终提出 2-3 种方案
 - **增量验证** — 展示设计，获得批准后再继续
 - **保持灵活** — 有不明确的地方就回头澄清
+- **多服务独立视角** — 每个服务从自己的职责定位理解需求
 
 ### 反模式："这个太简单了，不需要设计"
 
@@ -123,27 +294,38 @@ implement 过程中**禁止提交代码**，最终由 cwork-commit 统一提交�
 - 如果现有代码存在影响当前工作的问题，在设计中包含有针对性的改进
 - 不要提议无关的重构
 
-### 视觉伴侣
+#### 多服务需求拆分
 
-当你预计后续问题会涉及视觉内容（原型、布局、图表）时，提供一次以获得同意：
+当需求涉及多个服务时：
 
-> "我们接下来讨论的一些内容，如果能在浏览器中展示给你看可能会更直观。要试试吗？"
+1. **主服务分析**
+   - 从主服务视角理解需求
+   - 确定需要调用哪些依赖服务
+   - 定义调用契约（请求/响应结构）
+   - 写入主服务的 analysis.md
 
-**此提议必须是一条独立的消息。** 等待用户回复后再继续。
+2. **依赖服务分析**（每个依赖服务独立分析）
+   - 从本服务视角理解需求
+   - 确定需要提供什么接口
+   - 确定需要查询/修改什么数据
+   - 写入本服务的 analysis.md
 
-详细指南见：`skills/implement/visual-companion.md`
+3. **契约对齐**
+   - 检查主服务的调用契约和依赖服务的响应契约是否一致
+   - 检查字段名、类型、必填性是否匹配
+   - 发现不一致时协调修正
 
 ---
 
-## 第二步：编写计划（参考 superpowers-zh writing-plans）
-
-**完整参考**：`skills/implement/writing-plans-SKILL.md`
+## 内部阶段二：编写计划（writing-plans）
 
 编写全面的实现计划，记录工程师需要知道的一切：每个任务要修改哪些文件、代码。将整个计划拆成小步骤任务。
 
-**开始时宣布：** "我正在使用 writing-plans 技能创建实现计划。"
+**开始时宣布：** "我正在编写实现计划。"
 
-**计划保存位置：** `docs/requirements/{requirement_key}/plan.md`
+**计划保存位置**：
+- 主工程：`docs/requirements/{requirement_key}/plan.md`
+- 依赖工程：`docs/requirements/{requirement_key}/{service_name}/plan.md`
 
 **注意**：不需要编写测试用例，测试由后续的逻辑推演替代。
 
@@ -197,6 +379,7 @@ def function(input):
     return expected
 ```
 ````
+
 ### 禁止占位符
 
 每个步骤都必须包含工程师需要的实际内容。以下是**计划缺陷**——绝不要写出来：
@@ -206,28 +389,42 @@ def function(input):
 - 只描述做什么而不展示怎么做的步骤
 - 引用了未在任何任务中定义的类型、函数或方法
 
+### 多服务计划编写
+
+为每个服务独立编写计划：
+
+1. **主服务计划**
+   - 基于主服务的 analysis.md
+   - 包含主服务的所有任务
+   - 写入主服务的 plan.md
+
+2. **依赖服务计划**（每个依赖服务独立编写）
+   - 基于本服务的 analysis.md
+   - 包含本服务的所有任务
+   - 写入本服务的 plan.md
+
 ---
 
-## 第三步：执行计划（参考 superpowers-zh executing-plans）
-
-**完整参考**：`skills/implement/executing-plans-SKILL.md`
+## 内部阶段三：执行计划（executing-plans）
 
 加载计划，批判性审查，执行所有任务，完成后报告。
 
-**开始时宣布：** "我正在使用 executing-plans 技能来实现此计划。"
+**开始时宣布：** "我正在执行实现计划。"
 
 **注意**：不需要运行测试验证，测试由后续的逻辑推演替代。
 
 ### 步骤 1：加载并审查计划
 
-1. 读取计划文件
-2. 批判性审查——识别计划中的任何问题或疑虑
-3. 如果有疑虑：在开始之前向用户提出
-4. 如果没有疑虑：继续执行
+1. 读取主工程计划文件
+2. 读取所有依赖工程计划文件
+3. 批判性审查——识别计划中的任何问题或疑虑
+4. 如果有疑虑：在开始之前向用户提出
+5. 如果没有疑虑：继续执行
 
 **审查时重点检查：**
 - 步骤之间是否有依赖遗漏？
 - 是否有隐含的环境假设？
+- 跨工程契约是否一致？
 
 ### 步骤 2：执行任务（多 agent 并行）
 
@@ -288,56 +485,15 @@ docs/requirements/{requirement_key}/{service_name}/
 └── plan.md
 ```
 
-**示例**：
-```
-# 主工程
-docs/requirements/user-export/analysis.md
-
-# 依赖工程
-docs/requirements/user-export/user-service/analysis.md
-docs/requirements/user-export/order-service/analysis.md
-```
-
 ### 每个工程的记录视角（强制）
 
 **每个工程必须从自己的定位视角写文档，不得遗漏。**
 
-主 agent 负责主工程文档，每个依赖工程 agent 负责对应工程文档：
-
-**主工程** (`docs/requirements/{requirement_key}/analysis.md`)：
-```markdown
-# 需求分析
-
-## 本工程改动
-- 新增导出接口
-- 修改查询逻辑
-
-## 对依赖工程的调用
-- 调用 user-service 的 xxx 接口
-
-## 契约变更
-- 新增字段 xxx
-```
-
-**user-service** (`docs/requirements/{requirement_key}/user-service/analysis.md`)：
-```markdown
-# 需求分析（user-service 视角）
-
-## 本工程改动
-- 新增 xxx 接口实现
-
-## 被主工程调用
-- 主工程调用 xxx 接口
-
-## 契约变更
-- 响应新增字段 xxx
-```
-
-**强制检查**：执行完成后，必须确认每个依赖工程目录下都有对应的文档文件。
+主 agent 负责主工程文档，每个依赖工程 agent 负责对应工程文档。
 
 ---
 
-## 第四步：推演收敛（替代测试，自动循环）
+## 内部阶段四：推演收敛（loop-refined）
 
 **这是必须执行的步骤，禁止跳过。**
 
@@ -413,135 +569,6 @@ while round <= 5:
 | analysis.md | 需求分析文档 | 提交 |
 | changes.md | 改动简述 | 提交 |
 | plan.md | 实现计划 | 提交 |
-
-### workflow-state.json（内部状态，不提交）
-
-**路径**：`docs/requirements/{requirement_key}/workflow-state.json`（主工程）
-
-```json
-{
-  "phase": "implement",
-  "requirement_key": "用户导出",
-  "feature_branch": "feature_userExport",
-  "updated_at": "2026-05-17 12:00:00"
-}
-```
-
-**加入 .gitignore**：`docs/requirements/*/workflow-state.json`
-
-### analysis.md（需求分析文档，提交）
-
-**主工程路径**：`docs/requirements/{requirement_key}/analysis.md`
-
-```markdown
-# 需求分析
-
-## 需求背景
-用户需要导出自己的历史数据。
-
-## 核心问题
-- 用户无法导出订单数据
-- 用户无法导出消费记录
-
-## 解决方案
-在主工程新增导出接口，编排调用 user-service 和 order-service。
-
-## 本工程改动
-- 新增 /export 接口
-- 新增导出任务调度逻辑
-
-## 对依赖工程的调用
-- 调用 user-service 的 /user/data 获取用户数据
-- 调用 order-service 的 /order/list 获取订单数据
-
-## 契约变更
-- 新增请求字段：exportType
-- 新增响应字段：exportUrl
-
-## 风险点
-- 大数据量导出可能超时，需要异步处理
-- 并发导出需要防重
-
-## 验收标准
-- 用户可导出订单和消费记录
-- 导出文件格式为 CSV
-```
-
-**依赖工程路径**：`docs/requirements/{requirement_key}/{service_name}/analysis.md`
-
-```markdown
-# 需求分析（user-service 视角）
-
-## 需求背景
-主工程需要获取用户数据用于导出。
-
-## 本工程改动
-- 新增 /user/data 接口
-- 新增用户数据聚合逻辑
-
-## 被主工程调用
-- 主工程调用 /user/data 接口获取用户数据
-
-## 契约变更
-- 响应新增字段：exportTime, dataRange
-
-## 注意事项
-- 需要校验用户权限
-- 数据量大的情况需要分页
-```
-
-### changes.md（改动简述，提交）
-
-**主工程路径**：`docs/requirements/{requirement_key}/changes.md`
-
-**依赖工程路径**：`docs/requirements/{requirement_key}/{service_name}/changes.md`
-
-```markdown
-# 改动简述
-
-## 改动内容
-- 新增 /export 接口
-- 新增导出任务调度逻辑
-- 新增异步导出队列
-
-## 涉及文件
-- src/controller/ExportController.java
-- src/service/ExportService.java
-- src/queue/ExportQueue.java
-
-## 推演结论
-- 轮次：3
-- 发现问题：2 个（已修复）
-  - 问题1：未处理空数据情况
-  - 问题2：并发导出未防重
-```
-
-### plan.md（实现计划，提交）
-
-**主工程路径**：`docs/requirements/{requirement_key}/plan.md`
-
-**依赖工程路径**：`docs/requirements/{requirement_key}/{service_name}/plan.md`
-
-```markdown
-# 用户导出 实现计划
-
-**目标：** 新增用户数据导出功能
-
-**架构：** 主工程提供导出接口，编排调用 user-service 和 order-service
-
----
-
-### 任务 1：新增导出接口
-
-**文件：**
-- 创建：`src/controller/ExportController.java`
-
-- [ ] **步骤 1：实现代码**
-
-### 任务 2：新增导出服务
-
-...
-```
 
 ### 输出完整性检查（强制）
 
