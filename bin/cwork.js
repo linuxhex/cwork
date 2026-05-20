@@ -186,8 +186,9 @@ function detectTools(projectDir) {
 }
 
 function skillDirs() {
+  const allowed = ['init', 'implement', 'commit'];
   return readdirSync(SKILLS_SRC, { withFileTypes: true })
-    .filter((e) => e.isDirectory() && existsSync(join(SKILLS_SRC, e.name, 'SKILL.md')))
+    .filter((e) => e.isDirectory() && allowed.includes(e.name) && existsSync(join(SKILLS_SRC, e.name, 'SKILL.md')))
     .map((e) => e.name)
     .sort();
 }
@@ -273,7 +274,7 @@ function installToTool(projectDir, toolKey, opts) {
   }
 
   const bootstrapPath = resolve(projectDir, cfg.bootstrap);
-  const bootstrap = `# cwork 技能已安装\n\n## 对话语言硬约束\n- 默认使用中文对话、中文分析、中文结论。\n- 除命令/路径/参数名外，不使用英文整句。\n- 若出现 en-us/English 偏好提示，仍直接中文继续，不输出英文解释。\n\n## init 阶段硬约束\n- 必须先执行 cwork-init。\n- 必须逐步中文引导并按顺序提问：\n  1) 需求名称是什么\n  2) 涉及哪些工程服务目录（绝对路径）\n  3) 统一创建/切换的分支名称是什么\n  4) 以上信息确认后，是否执行初始化与分支切换（是/否）\n- 分支切换与强制回退只允许一次最终确认，不做二次确认。\n- 以上未完成前，不得进入后续技能。\n- init 完成后，必须直接调起 cwork-brainstorming，禁止再问“是否继续下一步”。\n\n## 阶段自动衔接硬约束\n- cwork-init 结束后自动进入 cwork-brainstorming。\n- cwork-brainstorming 结束后自动进入 cwork-writing-plans。\n- cwork-writing-plans 结束后自动进入 cwork-executing-plans。\n- cwork-executing-plans 自动触发 cwork-loop-refined。\n- cwork-loop-refined 收敛后自动进入 cwork-commit-code。\n- 全流程禁止让用户手动发起下一 skill。\n\n## 主流程技能\n- cwork-init\n- cwork-brainstorming\n- cwork-writing-plans\n- cwork-executing-plans\n- cwork-loop-refined\n- cwork-commit-code\n\n## 支撑技能\n- cwork-workflow-runner\n- cwork-subagent-driven-development\n- cwork-verification-before-completion`;
+  const bootstrap = `# cwork 技能已安装\n\n## 对话语言硬约束\n- 默认使用中文对话、中文分析、中文结论。\n- 除命令/路径/参数名外，不使用英文整句。\n- 若出现 en-us/English 偏好提示，仍直接中文继续，不输出英文解释。\n\n## 主流程技能（用户可见）\n- cwork-init — 初始化（可选，用于多服务场景）\n- cwork-implement — 完整实现流程\n- cwork-commit — 提交代码\n\n## 内部技能（不暴露）\n- cwork-brainstorming（由 implement 内部调用）\n- cwork-writing-plans（由 implement 内部调用）\n- cwork-executing-plans（由 implement 内部调用）\n- cwork-loop-refined（由 implement 内部调用）\n\n## 阶段自动衔接硬约束\n- cwork-init 结束后自动进入 cwork-implement。\n- cwork-implement 结束后自动进入 cwork-commit。\n- 全流程禁止让用户手动发起下一 skill。`;
 
   appendOrCreateBootstrap(bootstrapPath, bootstrap, opts.dryRun);
 

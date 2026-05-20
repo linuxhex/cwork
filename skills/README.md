@@ -301,15 +301,9 @@ docs/requirements/*/workflow-state.json
 
 ## 五、参考文件
 
-来自 superpowers-zh：
-
 | 文件 | 说明 |
 |------|------|
-| `writing-plans-SKILL.md` | 编写计划技能（完整） |
-| `executing-plans-SKILL.md` | 执行计划技能（完整） |
-| `visual-companion.md` | 视觉伴侣 |
-| `spec-document-reviewer-prompt.md` | 规格文档审查 |
-| `plan-document-reviewer-prompt.md` | 计划文档审查 |
+| `implement/visual-companion.md` | 视觉伴侣（用于需求分析阶段） |
 
 ---
 
