@@ -33,43 +33,38 @@ if [[ -n "$DEPS_RAW" ]]; then
   done < <(tr ',' '\n' <<<"$DEPS_RAW")
 fi
 
-# 获取默认分支
-get_base_branch() {
-  local repo="$1"
-  local head_ref
-  head_ref=$(git -C "$repo" symbolic-ref --quiet refs/remotes/origin/HEAD 2>/dev/null || true)
-  if [[ -n "$head_ref" ]]; then
-    echo "${head_ref#refs/remotes/origin/}"
-    return
-  fi
-  git -C "$repo" show-ref --verify --quiet refs/remotes/origin/master && echo "master" && return
-  git -C "$repo" show-ref --verify --quiet refs/remotes/origin/main && echo "main" && return
-  fail "无法识别默认分支: $repo"
-}
-
 # 切换分支
 switch_branch() {
   local repo="$1"
-  local base
-  base=$(get_base_branch "$repo")
+  local base_branch=""
 
-  git -C "$repo" fetch origin --prune >/dev/null 2>&1 || true
-  git -C "$repo" reset --hard HEAD >/dev/null 2>&1 || true
-  git -C "$repo" clean -fd >/dev/null 2>&1 || true
-
-  if git -C "$repo" show-ref --verify --quiet "refs/heads/$base"; then
-    git -C "$repo" checkout -f "$base" >/dev/null 2>&1
+  # 暂存当前改动
+  if git -C "$repo" diff --quiet HEAD && git -C "$repo" diff --cached --quiet; then
+    : # 无改动，不暂存
   else
-    git -C "$repo" checkout -B "$base" "origin/$base" >/dev/null 2>&1
+    git -C "$repo" stash push -m "cwork-auto-stash before $FEATURE_BRANCH" >/dev/null 2>&1 || true
+    mkdir -p "$repo/.git/logs"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') | stash before $FEATURE_BRANCH" >> "$repo/.git/logs/cwork-stash"
   fi
-  git -C "$repo" reset --hard "origin/$base" >/dev/null 2>&1
 
+  # 获取远端默认分支（只允许 master 或 main）
+  git -C "$repo" fetch origin --prune >/dev/null 2>&1 || true
+
+  if git -C "$repo" show-ref --verify --quiet refs/remotes/origin/master; then
+    base_branch="master"
+  elif git -C "$repo" show-ref --verify --quiet refs/remotes/origin/main; then
+    base_branch="main"
+  else
+    fail "只支持从 master 或 main 分支 checkout，当前仓库无这两个分支: $repo"
+  fi
+
+  # 切换 feature 分支
   if git -C "$repo" show-ref --verify --quiet "refs/heads/$FEATURE_BRANCH"; then
     git -C "$repo" checkout -f "$FEATURE_BRANCH" >/dev/null 2>&1
   elif git -C "$repo" show-ref --verify --quiet "refs/remotes/origin/$FEATURE_BRANCH"; then
     git -C "$repo" checkout -B "$FEATURE_BRANCH" "origin/$FEATURE_BRANCH" >/dev/null 2>&1
   else
-    git -C "$repo" checkout -B "$FEATURE_BRANCH" "$base" >/dev/null 2>&1
+    git -C "$repo" checkout -B "$FEATURE_BRANCH" "origin/$base_branch" >/dev/null 2>&1
   fi
 }
 

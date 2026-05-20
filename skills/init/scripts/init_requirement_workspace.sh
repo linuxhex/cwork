@@ -14,8 +14,7 @@ Usage:
     --deps <dep1,dep2,...> \
     --feature-branch <feature_...> \
     --requirement-key <lowercase_underscore_key> \
-    --requirement-title "<title>" \
-    --force-discard true
+    --requirement-title "<title>"
 USAGE
 }
 
@@ -59,12 +58,6 @@ assert_git_repo() {
   git -C "$repo" rev-parse --is-inside-work-tree >/dev/null 2>&1 || fail "not a git repository: $repo"
 }
 
-force_discard_local_changes() {
-  local repo="$1"
-  git -C "$repo" reset --hard HEAD >/dev/null 2>&1 || return 1
-  git -C "$repo" clean -fd >/dev/null 2>&1 || return 1
-}
-
 current_ref() {
   local repo="$1"
   git -C "$repo" symbolic-ref --quiet --short HEAD 2>/dev/null || git -C "$repo" rev-parse --short HEAD
@@ -74,58 +67,38 @@ preflight_repo() {
   local repo="$1"
   assert_git_repo "$repo"
   git -C "$repo" remote get-url origin >/dev/null 2>&1 || fail "origin remote is required: $repo"
-  git -C "$repo" fetch origin --prune >/dev/null 2>&1 || fail "failed to fetch origin: $repo"
-}
-
-default_base_branch() {
-  local repo="$1"
-  local head_ref
-  head_ref="$(git -C "$repo" symbolic-ref --quiet refs/remotes/origin/HEAD 2>/dev/null || true)"
-  if [[ -n "$head_ref" ]]; then
-    printf '%s' "${head_ref#refs/remotes/origin/}"
-    return 0
-  fi
-
-  if git -C "$repo" show-ref --verify --quiet refs/remotes/origin/master; then
-    printf 'master'
-    return 0
-  fi
-
-  if git -C "$repo" show-ref --verify --quiet refs/remotes/origin/main; then
-    printf 'main'
-    return 0
-  fi
-
-  return 1
 }
 
 checkout_feature_from_latest_base() {
   local repo="$1"
   local feature_branch="$2"
-  local base_branch="$3"
 
-  force_discard_local_changes "$repo" || {
-    echo "failed to discard local changes: $repo" >&2
-    return 1
-  }
-
-  if git -C "$repo" show-ref --verify --quiet "refs/heads/$base_branch"; then
-    git -C "$repo" checkout -f "$base_branch" >/dev/null 2>&1 || {
-      echo "failed to checkout local $base_branch: $repo" >&2
-      return 1
-    }
+  # 暂存当前改动
+  if git -C "$repo" diff --quiet HEAD && git -C "$repo" diff --cached --quiet; then
+    : # 无改动，不暂存
   else
-    git -C "$repo" checkout -B "$base_branch" "origin/$base_branch" >/dev/null 2>&1 || {
-      echo "failed to create local $base_branch from origin/$base_branch: $repo" >&2
-      return 1
-    }
+    git -C "$repo" stash push -m "cwork-auto-stash before $feature_branch" >/dev/null 2>&1 || true
+    mkdir -p "$repo/.git/logs"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') | stash before $feature_branch" >> "$repo/.git/logs/cwork-stash"
   fi
 
-  git -C "$repo" reset --hard "origin/$base_branch" >/dev/null 2>&1 || {
-    echo "failed to align $base_branch with origin/$base_branch: $repo" >&2
+  # 获取远端默认分支（只允许 master 或 main）
+  git -C "$repo" fetch origin --prune >/dev/null 2>&1 || {
+    echo "failed to fetch origin: $repo" >&2
     return 1
   }
 
+  local base_branch=""
+  if git -C "$repo" show-ref --verify --quiet refs/remotes/origin/master; then
+    base_branch="master"
+  elif git -C "$repo" show-ref --verify --quiet refs/remotes/origin/main; then
+    base_branch="main"
+  else
+    echo "只支持从 master 或 main 分支 checkout，当前仓库无这两个分支: $repo" >&2
+    return 1
+  fi
+
+  # 切换 feature 分支
   if git -C "$repo" show-ref --verify --quiet "refs/heads/$feature_branch"; then
     git -C "$repo" checkout -f "$feature_branch" >/dev/null 2>&1 || {
       echo "failed to switch existing local branch: $repo -> $feature_branch" >&2
@@ -144,11 +117,11 @@ checkout_feature_from_latest_base() {
     return 0
   fi
 
-  git -C "$repo" checkout -B "$feature_branch" "$base_branch" >/dev/null 2>&1 || {
-    echo "failed to create branch from latest $base_branch: $repo -> $feature_branch" >&2
+  git -C "$repo" checkout -B "$feature_branch" "origin/$base_branch" >/dev/null 2>&1 || {
+    echo "failed to create branch from origin/$base_branch: $repo -> $feature_branch" >&2
     return 1
   }
-  printf '%s' "created_from_latest_base"
+  printf '%s' "created_from_origin_base"
 }
 
 rollback_switched_repos() {
@@ -201,7 +174,6 @@ DEPS_RAW=""
 FEATURE_BRANCH=""
 REQUIREMENT_KEY=""
 REQUIREMENT_TITLE=""
-FORCE_DISCARD="false"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -225,10 +197,6 @@ while [[ $# -gt 0 ]]; do
       REQUIREMENT_TITLE="$2"
       shift 2
       ;;
-    --force-discard)
-      FORCE_DISCARD="$2"
-      shift 2
-      ;;
     -h|--help)
       usage
       exit 0
@@ -243,7 +211,6 @@ done
 [[ -n "$FEATURE_BRANCH" ]] || fail "--feature-branch is required"
 [[ -n "$REQUIREMENT_KEY" ]] || fail "--requirement-key is required"
 [[ -n "$REQUIREMENT_TITLE" ]] || fail "--requirement-title is required"
-[[ "$FORCE_DISCARD" == "true" ]] || fail "--force-discard true is required before destructive cleanup"
 
 [[ "$MAIN_DIR" = /* ]] || fail "--main-dir must be an absolute path"
 assert_dir "$MAIN_DIR"
@@ -274,28 +241,19 @@ fi
 BRANCH_LOG_LINES=""
 ROLLBACK_LINES=""
 ALL_REPO_LINES="$MAIN_DIR"$'\n'"$DEP_LINES"
-REPO_BASE_LINES=""
 
 while IFS= read -r repo; do
   [[ -z "$repo" ]] && continue
   preflight_repo "$repo"
-  repo_base="$(default_base_branch "$repo")" || fail "cannot resolve default branch from origin for repo: $repo"
-  REPO_BASE_LINES="${REPO_BASE_LINES}"$'\n'"$repo|$repo_base"
-done <<<"$ALL_REPO_LINES"
-
-while IFS= read -r repo_base_line; do
-  [[ -z "$repo_base_line" ]] && continue
-  repo="${repo_base_line%%|*}"
-  repo_base="${repo_base_line#*|}"
   repo_before_ref="$(current_ref "$repo")"
-  if repo_branch_action="$(checkout_feature_from_latest_base "$repo" "$FEATURE_BRANCH" "$repo_base")"; then
-    BRANCH_LOG_LINES="${BRANCH_LOG_LINES}"$'\n'"$repo|$repo_branch_action|$FEATURE_BRANCH|$repo_base"
+  if repo_branch_action="$(checkout_feature_from_latest_base "$repo" "$FEATURE_BRANCH")"; then
+    BRANCH_LOG_LINES="${BRANCH_LOG_LINES}"$'\n'"$repo|$repo_branch_action|$FEATURE_BRANCH"
     ROLLBACK_LINES="${ROLLBACK_LINES}"$'\n'"$repo|$repo_before_ref"
   else
     rollback_switched_repos "$ROLLBACK_LINES"
     fail "atomic switch failed, rolled back switched repos: $repo"
   fi
-done <<<"$REPO_BASE_LINES"
+done <<<"$ALL_REPO_LINES"
 
 MAIN_DOC_DIR="$MAIN_DIR/docs/requirements/$REQUIREMENT_KEY"
 mkdir -p "$MAIN_DOC_DIR/dependencies" "$MAIN_DOC_DIR/process"
@@ -416,7 +374,7 @@ cat > "$MAIN_DOC_DIR/04-process-record.md" <<PROCESS
 - feature_branch: $FEATURE_BRANCH
 - 主工程: $MAIN_DIR
 
-## 分支处理结果（repo|action|branch|base_branch）
+## 分支处理结果（repo|action|branch）
 PROCESS
 
 printf '%s\n' "$BRANCH_LOG_LINES" | sed '/^$/d' >> "$MAIN_DOC_DIR/04-process-record.md"
