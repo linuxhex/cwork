@@ -134,19 +134,22 @@ implement 过程中**禁止提交代码**，最终由 cwork-commit 统一提交�
 ### 文档结构（多服务）
 
 ```
-主工程 docs/requirements/user-export/
+主工程：
+主工程/docs/requirements/user-export/
 ├── workflow-state.json      # 内部状态
 ├── analysis.md              # 主服务视角的需求分析
 ├── plan.md                  # 主服务的实现计划
 └── changes.md               # 主服务的改动简述
 
-user-service docs/requirements/user-export/user-service/
+user-service（在 user-service 工程目录下）：
+user-service/docs/requirements/user-export/
 ├── workflow-state.json      # 内部状态
 ├── analysis.md              # user-service 视角的需求分析
 ├── plan.md                  # user-service 的实现计划
 └── changes.md               # user-service 的改动简述
 
-order-service docs/requirements/user-export/order-service/
+order-service（在 order-service 工程目录下）：
+order-service/docs/requirements/user-export/
 ├── workflow-state.json      # 内部状态
 ├── analysis.md              # order-service 视角的需求分析
 ├── plan.md                  # order-service 的实现计划
@@ -336,7 +339,7 @@ order-service docs/requirements/user-export/order-service/
 
 **计划保存位置**：
 - 主工程：`docs/requirements/{requirement_key}/plan.md`
-- 依赖工程：`docs/requirements/{requirement_key}/{service_name}/plan.md`
+- 依赖工程：`依赖工程/docs/requirements/{requirement_key}/plan.md`
 
 **注意**：不需要编写测试用例，测试由后续的逻辑推演替代。
 
@@ -482,7 +485,7 @@ def function(input):
 
 **主工程**：
 ```
-docs/requirements/{requirement_key}/
+主工程/docs/requirements/{requirement_key}/
 ├── analysis.md
 ├── changes.md
 └── plan.md
@@ -490,7 +493,7 @@ docs/requirements/{requirement_key}/
 
 **依赖工程**：
 ```
-docs/requirements/{requirement_key}/{service_name}/
+依赖工程/docs/requirements/{requirement_key}/
 ├── analysis.md
 ├── changes.md
 └── plan.md
