@@ -34,6 +34,7 @@ description: 对话式初始化，自动查找工程路径，多服务分支切�
 - 找不到工程路径，禁止执行
 - 任一仓库不是 git 仓库，禁止执行
 - 分支名不合法，禁止执行
+- 需求ID格式不正确（必须为 OMJF-数字），禁止执行
 
 ## 说明
 - init 是可选入口，用于多服务场景的初始化
@@ -51,11 +52,17 @@ description: 对话式初始化，自动查找工程路径，多服务分支切�
 
 ### 问题 2
 ```
-分支名称是什么？（以 feature_ 开头，如 feature_userExport）
+云效需求ID是什么？（格式：OMJF-数字，如 OMJF-12345）
 ```
 等待用户回答后，再问问题 3。
 
 ### 问题 3
+```
+分支名称是什么？（以 feature_ 开头，如 feature_userExport）
+```
+等待用户回答后，再问问题 4。
+
+### 问题 4
 ```
 依赖工程目录名有哪些？（多个用逗号分隔，没有则回车跳过）
 ```
@@ -214,6 +221,7 @@ docs/requirements/*/workflow-state.json
   "phase": "init",
   "requirement_key": "user-export",
   "requirement_title": "用户导出",
+  "requirement_id": "OMJF-12345",
   "feature_branch": "feature_userExport",
   "main_dir": "/Users/dev/project/main-service",
   "deps": [
@@ -237,6 +245,7 @@ docs/requirements/*/workflow-state.json
   "phase": "init",
   "requirement_key": "user-export",
   "requirement_title": "用户导出",
+  "requirement_id": "OMJF-12345",
   "feature_branch": "feature_userExport",
   "service_name": "user-service",
   "main_dir": "/Users/dev/project/main-service",
