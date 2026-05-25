@@ -110,6 +110,17 @@ description: 需求分析（对话式）+ 编写计划 + 执行计划 + 推演�
 - 推演未收敛（round < 2 或仍有未修复问题），禁止进入 commit
 - **implement 过程中禁止提交代码**，所有提交由 cwork-commit 统一处理
 
+## 需求ID检查（强制）
+
+**开始需求分析前必须检查**：
+1. 读取 workflow-state.json 中的 requirement_id 字段
+2. 如果不存在或为空，询问用户：
+   ```
+   云效需求ID是什么？（格式：OMJF-数字，如 OMJF-12345）
+   ```
+3. 校验格式：必须匹配 `^OMJF-\d+$`
+4. 校验通过后，更新 workflow-state.json 中的 requirement_id 字段
+
 ## 阶段切换通知（强制）
 
 **每个阶段开始时必须明确声明当前阶段，格式如下：**

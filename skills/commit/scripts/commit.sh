@@ -2,18 +2,22 @@
 set -euo pipefail
 
 # 自动提交，不确认
-# 用法: commit.sh <主工程路径> [依赖工程路径] <需求key> <需求简称> <commit类型> <说明>
+# 用法: commit.sh <主工程路径> [依赖工程路径] <需求key> <需求简称> <需求ID> <commit类型> <说明>
 
 fail() { echo "ERROR: $*" >&2; exit 1; }
 
-[[ $# -lt 5 ]] && fail "用法: commit.sh <主工程路径> [依赖工程路径] <需求key> <需求简称> <类型> <说明>"
+[[ $# -lt 6 ]] && fail "用法: commit.sh <主工程路径> [依赖工程路径] <需求key> <需求简称> <需求ID> <类型> <说明>"
 
 MAIN_DIR="$1"
 DEPS_RAW="${2:-}"
 REQ_KEY="$3"
 REQ_SHORT="$4"
-COMMIT_TYPE="$5"
-COMMIT_DETAIL="${6:-}"
+REQ_ID="$5"
+COMMIT_TYPE="$6"
+COMMIT_DETAIL="${7:-}"
+
+# 校验需求ID格式
+[[ "$REQ_ID" =~ ^OMJF-[0-9]+$ ]] || fail "需求ID格式错误，必须为 OMJF-数字，如 OMJF-12345"
 
 # 校验类型
 case "$COMMIT_TYPE" in
@@ -58,8 +62,9 @@ while IFS= read -r repo; do
   check_branch "$repo"
 done < <(tr ',' '\n' <<<"$REPOS")
 
-# 生成 commit message
-COMMIT_MSG="【${REQ_SHORT}】<${COMMIT_TYPE}> ${COMMIT_DETAIL}"
+# 生成 commit message（带需求ID）
+COMMIT_MSG="#${REQ_ID}
+【${REQ_SHORT}】<${COMMIT_TYPE}> ${COMMIT_DETAIL}"
 
 # 提交
 OUTPUT=""
