@@ -107,7 +107,6 @@ description: 需求分析（对话式）+ 编写计划 + 执行计划 + 推演�
 - 有 workflow-state 但 phase 不是 init 或 implement，禁止执行
 - 未完成需求分析，禁止执行实现
 - **执行计划完成后必须进入推演收敛**，禁止跳过
-- 推演未收敛（round < 2 或仍有未修复问题），禁止进入 commit
 - **implement 过程中禁止提交代码**，所有提交由 cwork-commit 统一处理
 
 ## 需求ID检查（强制）
