@@ -263,25 +263,27 @@ implement 过程中**禁止提交代码**，最终由 cwork-commit 统一提交�
 ```
 主工程：
 主工程/docs/requirements/user-export/
-├── workflow-state.json      # 内部状态
+├── workflow-state.json      # 内部状态（包含 requirement_id）
 ├── analysis.md              # 主服务视角的需求分析
 ├── plan.md                  # 主服务的实现计划
 └── changes.md               # 主服务的改动简述
 
 user-service（在 user-service 工程目录下）：
 user-service/docs/requirements/user-export/
-├── workflow-state.json      # 内部状态
+├── workflow-state.json      # 内部状态（包含 requirement_id）
 ├── analysis.md              # user-service 视角的需求分析
 ├── plan.md                  # user-service 的实现计划
 └── changes.md               # user-service 的改动简述
 
 order-service（在 order-service 工程目录下）：
 order-service/docs/requirements/user-export/
-├── workflow-state.json      # 内部状态
+├── workflow-state.json      # 内部状态（包含 requirement_id）
 ├── analysis.md              # order-service 视角的需求分析
 ├── plan.md                  # order-service 的实现计划
 └── changes.md               # order-service 的改动简述
 ```
+
+**注意**：每个服务的 workflow-state.json 都必须包含 requirement_id 字段。
 
 ### analysis.md 示例（不同视角）
 

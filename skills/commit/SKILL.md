@@ -48,13 +48,16 @@ description: 推演收敛后自动提交所有服务工程，不确认
 ## 需求ID检查（强制）
 
 **提交前必须检查**：
-1. 读取 workflow-state.json 中的 requirement_id 字段
-2. 如果不存在或为空，询问用户：
+1. 读取当前服务 workflow-state.json 中的 requirement_id 字段
+2. 如果不存在或为空，尝试从主工程 workflow-state.json 读取 requirement_id
+3. 如果主工程也没有，询问用户：
    ```
    云效需求ID是什么？（格式：OMJF-数字，如 OMJF-12345）
    ```
-3. 校验格式：必须匹配 `^OMJF-\d+$`
-4. 校验通过后，更新 workflow-state.json 中的 requirement_id 字段
+4. 校验格式：必须匹配 `^OMJF-\d+$`
+5. 校验通过后，更新当前服务 workflow-state.json 中的 requirement_id 字段
+
+**多服务场景**：每个服务的 workflow-state.json 都应包含 requirement_id。如果依赖服务缺失，从主工程读取并补充。
 
 ## 执行逻辑（不问问题，直接执行）
 
