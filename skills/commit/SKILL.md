@@ -31,7 +31,7 @@ description: 推演收敛后自动提交所有服务工程，不确认
 **当 workflow-state.json 不存在时，以独立模式执行**：
 
 1. 以当前目录为主工程
-2. 检查当前分支名（必须为 feature/hotfix/bugfix/refactor 开头）
+2. 检查当前分支名（格式：{type}/{YYYYMMDD}_{description}，type 为 feature/hotfix/bugfix/refactor）
 3. 检查是否有未提交的改动
 4. 询问需求ID（格式：OMJF-数字）
 5. 询问需求名称（用于 commit message）
@@ -88,7 +88,7 @@ description: 推演收敛后自动提交所有服务工程，不确认
 ├─────────────────────────────────────────────────────────────────┤
 │  ✓ 主工程 workflow-state.phase = commit                         │
 │  ✓ 主工程推演已收敛                                               │
-│  ✓ 所有服务工程分支一致：feature_userExport                       │
+│  ✓ 所有服务工程分支一致：feature/20260529_user_export               │
 └─────────────────────────────────────────────────────────────────┘
                          │
                          ▼
@@ -98,17 +98,17 @@ description: 推演收敛后自动提交所有服务工程，不确认
 │  user-service:                                                  │
 │    → git add .                                                  │
 │    → git commit -m "【用户导出】<add> 新增用户数据查询接口"         │
-│    → git push origin feature_userExport                         │
+│    → git push origin feature/20260529_user_export                   │
 │                                                                 │
 │  order-service:                                                 │
 │    → git add .                                                  │
 │    → git commit -m "【用户导出】<add> 新增订单查询接口"             │
-│    → git push origin feature_userExport                         │
+│    → git push origin feature/20260529_user_export                   │
 │                                                                 │
 │  main-service:                                                  │
 │    → git add .                                                  │
 │    → git commit -m "【用户导出】<add> 新增导出功能"                │
-│    → git push origin feature_userExport                         │
+│    → git push origin feature/20260529_user_export                   │
 └─────────────────────────────────────────────────────────────────┘
                          │
                          ▼
@@ -198,17 +198,17 @@ src/               # 所有代码改动
 提交完成！
 
 main-service:
-  分支：feature_userExport
+  分支：feature/20260529_user_export
   提交：abc123
   推送：✓
 
 user-service:
-  分支：feature_userExport
+  分支：feature/20260529_user_export
   提交：def456
   推送：✓
 
 order-service:
-  分支：feature_userExport
+  分支：feature/20260529_user_export
   提交：ghi789
   推送：✓
 
