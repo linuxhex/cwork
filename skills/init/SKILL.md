@@ -58,7 +58,7 @@ description: 对话式初始化，自动查找工程路径，多服务分支切�
 
 ### 问题 3
 ```
-分支名称是什么？（以 feature_ 开头，如 feature_userExport）
+分支名称是什么？（格式：{type}/{YYYYMMDD}_{description}，如 feature/20260529_user_export）
 ```
 等待用户回答后，再问问题 4。
 
@@ -99,7 +99,7 @@ description: 对话式初始化，自动查找工程路径，多服务分支切�
 │  收集信息                                                        │
 ├─────────────────────────────────────────────────────────────────┤
 │  需求名称：用户导出                                               │
-│  分支名称：feature_userExport                                    │
+│  分支名称：feature/20260529_user_export                              │
 │  依赖工程：user-service, order-service                           │
 └─────────────────────────────────────────────────────────────────┘
                          │
@@ -127,17 +127,17 @@ description: 对话式初始化，自动查找工程路径，多服务分支切�
 ├─────────────────────────────────────────────────────────────────┤
 │  main-service:                                                  │
 │    → git stash（备份本地改动）                                    │
-│    → git checkout -b feature_userExport（创建分支）              │
+│    → git checkout -b feature/20260529_user_export（创建分支）        │
 │    → mkdir -p docs/requirements/user-export/                    │
 │                                                                 │
 │  user-service:                                                  │
 │    → git stash（备份本地改动）                                    │
-│    → git checkout -b feature_userExport（创建分支）              │
+│    → git checkout -b feature/20260529_user_export（创建分支）        │
 │    → mkdir -p docs/requirements/user-export/user-service/       │
 │                                                                 │
 │  order-service:                                                 │
 │    → git stash（备份本地改动）                                    │
-│    → git checkout -b feature_userExport（创建分支）              │
+│    → git checkout -b feature/20260529_user_export（创建分支）        │
 │    → mkdir -p docs/requirements/user-export/order-service/      │
 └─────────────────────────────────────────────────────────────────┘
                          │
@@ -172,9 +172,11 @@ description: 对话式初始化，自动查找工程路径，多服务分支切�
 ```
 
 ## 分支命名规则
-- 必须以 `feature_`、`hotfix_`、`bugfix_`、`refactor_` 开头
-- 允许字母、数字和下划线
-- 示例：`feature_userExport`、`feature_userExport_v2`、`hotfix_loginError`、`refactor_auth`
+- 格式：`{type}/{YYYYMMDD}_{description}`
+- type 必须为 `feature`、`hotfix`、`bugfix`、`refactor` 之一
+- 日期为当天日期，格式 YYYYMMDD
+- description 使用下划线分隔的英文描述
+- 示例：`feature/20260529_user_export`、`feature/20260529_user_export_v2`、`hotfix/20260529_fix_log_url`、`refactor/20260529_auth`
 
 ## 安全保护
 
@@ -222,7 +224,7 @@ docs/requirements/*/workflow-state.json
   "requirement_key": "user-export",
   "requirement_title": "用户导出",
   "requirement_id": "OMJF-12345",
-  "feature_branch": "feature_userExport",
+  "feature_branch": "feature/20260529_user_export",
   "main_dir": "/Users/dev/project/main-service",
   "deps": [
     {
@@ -246,7 +248,7 @@ docs/requirements/*/workflow-state.json
   "requirement_key": "user-export",
   "requirement_title": "用户导出",
   "requirement_id": "OMJF-12345",
-  "feature_branch": "feature_userExport",
+  "feature_branch": "feature/20260529_user_export",
   "service_name": "user-service",
   "main_dir": "/Users/dev/project/main-service",
   "this_dir": "/Users/dev/project/user-service",
