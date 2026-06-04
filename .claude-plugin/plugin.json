@@ -1,7 +1,0 @@
-{
-  "name": "cwork-skills",
-  "version": "0.1.0",
-  "description": "cwork 多工程微服务需求交付技能集",
-  "skills": "./skills/",
-  "hooks": "./hooks/hooks.json"
-}
