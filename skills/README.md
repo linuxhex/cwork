@@ -19,9 +19,11 @@
 ### 技能结构
 
 ```
-cwork-init      → 初始化工作区
-cwork-implement → 需求分析 + 编写计划 + 执行计划 + 推演收敛
-cwork-commit    → 提交所有工程
+cwork-init       → 初始化工作区
+cwork-implement  → 需求分析 + 编写计划 + 执行计划 + 推演收敛
+cwork-commit     → 提交所有工程
+cwork-doc        → 生成技术方案文档
+cwork-bug        → 快速修复bug
 ```
 
 ---
@@ -270,6 +272,87 @@ while round <= 5:
 
 ---
 
+### 3.4 cwork-doc
+
+**作用**：根据代码改动生成技术方案文档。
+
+**输入源（自动检测）**：
+1. 需求文档：基于 docs/requirements/{key}/ 下的文档
+2. Git 差异：基于当前分支与 master 分支的差异
+3. 指定文件：基于用户指定的代码文件
+
+**执行内容**：
+1. 检测输入源（需求文档 > Git 差异 > 指定文件）
+2. 分析代码改动，提取接口定义
+3. 提取数据模型（MySQL 表、Redis Key）
+4. 生成技术方案文档（按标准格式）
+5. 评估改动影响范围
+6. 补充稳定性设计建议
+
+**输出格式**：
+```
+一、需求说明
+二、详细设计
+  2.1 功能详细设计
+  2.2 交互接口设计（REST/RPC/MQ/JOB）
+  2.3 数据模型设计（MySQL/Redis）
+三、改动影响范围评估
+四、稳定性设计
+五、其他 checkList
+```
+
+**使用示例**：
+```bash
+# 基于需求文档生成
+cd docs/requirements/user-export
+/cwork-doc
+
+# 基于 Git 差异生成
+git checkout feature/user-export
+/cwork-doc
+
+# 基于指定文件生成
+/cwork-doc src/controller/UserController.java
+```
+
+---
+
+### 3.5 cwork-bug
+
+**作用**：快速修复 bug，流程简短高效。
+
+**执行流程**：
+1. 代码分析：分析当前代码，理解上下文
+2. 问题咨询：对话式了解问题现状和期望结果
+3. 问题定位：定位 bug 根因
+4. 修复代码：修复 bug，同步编写注释
+5. 推演验证：逻辑推演验证修复正确性
+
+**核心原则**：
+- 流程简短，快速定位修复
+- 对话式，逐步深入
+- 实际代码优先（注释和文档是次要的）
+- 修复时同步编写注释（从业务角度说明）
+
+**使用示例**：
+```bash
+/cwork-bug
+```
+
+**交互示例**：
+```
+问题现象是什么？
+> 用户登录时报空指针异常
+
+期望结果是什么？
+> 登录成功，返回用户信息和token
+
+问题发生的场景/条件？
+> 只有新用户第一次登录时出现
+```
+
+---
+
 ## 四、文件结构
 
 ### 产物
@@ -352,3 +435,5 @@ cp -r cwork/skills/* ~/.qoder/skills/
 - `/cwork-init`
 - `/cwork-implement`
 - `/cwork-commit`
+- `/cwork-doc`
+- `/cwork-bug`

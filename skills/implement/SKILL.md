@@ -424,9 +424,16 @@ order-service/docs/requirements/user-export/
 
 首先查看当前项目状态：
 - 文件结构
-- 文档
+- **实际运行的代码**（最重要，注释和文档是次要的，代码才是最真实的）
+- 文档（仅供参考，以实际代码为准）
 - 最近的 commit
 - 现有代码模式
+
+**重要原则**：
+- 注释和文档可能过时或不准确，实际运行的代码才是最真实的
+- 分析需求时，优先阅读和理解实际代码逻辑
+- 文档和注释仅作为辅助参考，不能替代代码分析
+- 如果文档描述与代码实现不一致，以代码为准
 
 在提出详细问题之前，先评估范围：如果需求描述了多个独立子系统，立即指出这一点。
 
@@ -835,7 +842,87 @@ def function(input):
 1. **标记为进行中**
 2. **理解目标** — 重读任务描述，明确完成标准
 3. **执行实现** — 严格按照计划步骤执行
-4. **标记为已完成**
+4. **同步注释** — 写代码时必须同步编写注释（见下方注释规范）
+5. **标记为已完成**
+
+### 代码注释规范（强制）
+
+**写代码时必须同步编写注释，注释要求：**
+
+1. **从业务和功能角度说明**
+   - 说明这段代码的业务目的
+   - 说明这个方法/类的功能职责
+   - 说明关键业务逻辑的处理思路
+
+2. **禁止写废话**
+   - ❌ 禁止：`// 设置用户ID`（废话，代码本身已经说明）
+   - ❌ 禁止：`// 循环处理`（废话，for 循环本身已经说明）
+   - ❌ 禁止：`// 返回结果`（废话，return 本身已经说明）
+   - ✓ 正确：`// 根据用户等级计算折扣比例，VIP用户享受8折优惠`
+   - ✓ 正确：`// 校验用户是否有权限访问该订单，防止越权查询`
+   - ✓ 正确：`// 异步发送通知，避免阻塞主流程`
+
+3. **注释位置要求**
+   - 类注释：说明类的业务职责
+   - 方法注释：说明方法的业务功能和关键参数含义
+   - 关键逻辑注释：在复杂业务逻辑处说明处理思路
+   - 分支注释：在条件分支处说明业务判断条件
+
+4. **注释格式示例**
+
+**类注释**：
+```java
+/**
+ * 用户订单导出服务
+ * 
+ * 职责：负责用户订单数据的导出功能，包括数据查询、格式转换、文件生成
+ */
+public class UserOrderExportService {
+```
+
+**方法注释**：
+```java
+/**
+ * 导出用户订单数据
+ * 
+ * 业务逻辑：
+ * 1. 校验用户权限，防止越权导出
+ * 2. 查询用户订单数据（分页查询，避免大查询）
+ * 3. 转换为导出格式
+ * 4. 生成Excel文件并上传OSS
+ * 
+ * @param userId 用户ID
+ * @param exportParams 导出参数（时间范围、订单状态等）
+ * @return 导出文件下载链接
+ */
+public String exportUserOrders(String userId, ExportParams exportParams) {
+```
+
+**关键逻辑注释**：
+```java
+// 校验用户权限，只能导出自己的订单，防止越权
+if (!userId.equals(currentUser.getId())) {
+    throw new PermissionDeniedException("无权导出他人订单");
+}
+
+// 分页查询订单，每页1000条，避免一次性查询大量数据导致OOM
+List<Order> orders = new ArrayList<>();
+int page = 1;
+while (true) {
+    List<Order> pageOrders = orderMapper.queryByUserId(userId, page, 1000);
+    if (pageOrders.isEmpty()) {
+        break;
+    }
+    orders.addAll(pageOrders);
+    page++;
+}
+
+// 异步上传文件到OSS，避免阻塞主流程，上传完成后发送通知
+asyncExecutor.execute(() -> {
+    String fileUrl = ossService.upload(file);
+    notificationService.sendExportCompleteNotice(userId, fileUrl);
+});
+```
 
 **注意**：implement 过程中不做代码提交，提交由 commit 技能统一处理。
 
