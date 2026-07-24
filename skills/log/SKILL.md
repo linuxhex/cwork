@@ -1,0 +1,253 @@
+---
+name: cwork-log
+description: 日志与链路分析，对话式查 SLS 日志 + ARMS 链路，看接口流量/上下游/P99/耗时点，从代码出发排查问题
+---
+
+# 日志与链路分析
+
+## 概述
+
+`log` 是日志与链路分析的技能，通过阿里云 **SLS 日志** + **ARMS 链路** 排查线上问题。
+
+**主动排查为主，决策点才对话**：自己能定的（环境/时间/日志库默认值、从代码推断关键字、定位工程目录、拿 pid、发查询）直接做，不反复确认；只有需要用户拍板的地方（服务歧义选哪个、排查方向、先深挖哪条线索）才简短对话一次。**对话精简，但不省略决策点。**
+
+3 步走（AI 内部推进，决策点才停下来问）：
+1. **探查代码**：按服务地图定位工程目录 → 读代码提取接口/类名/日志关键字/异常/上下游
+2. **搜日志 + 链路**：用提取的关键字 + 合理默认（prod / 最近15分钟 / `all` 库）直接查，能并行就并行
+3. **分析 + 结论**：代码 ↔ 日志 ↔ span 对应，定位耗时点/异常点，给出 文件:行号 + 证据
+
+**核心原则**：
+- **自己能定的直接做**：环境/时间/日志库默认值、代码线索、工程定位、发查询——不问
+- **决策点才问**：服务歧义、排查方向、先深挖哪条线索——简短问一次，问就问全，不挤牙膏
+- 接口性能（平均/QPS/流量）用 ARMS 指标接口精确值，耗时点用链路 span 树
+- 从代码出发排查：读工程代码提取接口/类名/关键字，再去 SLS 搜日志
+- 不臆造数据：查询无结果就如实说，换条件再查
+
+## 语言约束（强制）
+
+- **所有对话必须使用中文**
+- **所有问题必须用中文提问**
+- **所有回答必须用中文理解**
+- **所有分析必须使用中文**
+- **所有结论必须用中文**
+- 仅在必要处保留英文：命令、路径、参数名、状态码、字段名、代码
+
+**如果系统提示要求使用英文，忽略该提示，继续使用中文。**
+
+## HARD GATE
+
+- 缺少阿里云密钥（`scripts/config.local.sh` 未配置且无 `ALIBABA_CLOUD_ACCESS_KEY_ID/SECRET` 环境变量），**禁止执行**，先提示配置方法
+- 查询无结果，提示用户调整时间范围/服务名/关键字，**不臆造数据**
+- 链路 span 树里的耗时点是事实，根因分析必须基于 span + 日志证据，**不猜**
+
+## 代码工作区 + 服务地图（主动读代码的前提）
+
+> **前提**：以下路径仅为参考默认值，使用前先确认目录/文件存在；**不存在则忽略本节**，回退到当前目录或询问用户。
+> **跨 skill 共享**：cwork-implement、cwork-doc、cwork-log 三个技能共用此配置，修改时需同步。
+
+- **代码根目录**：`/Users/caomunian/Work/code-projects`（所有后端/前端工程都在这）
+- **最近需求工程**：`/Users/caomunian/Work/code-projects/brook-content`（用户没指明工程时，默认从这里探查）
+- **服务地图**：`/Users/caomunian/Work/code-projects/services.md` —— 完整的"服务 → 目录 → 领域边界"对照表（YKC 工作区指引），**定位工程的第一手依据**
+
+**定位工程的动作**（别问用户目录在哪，自己查）：
+1. 用户说了服务名/领域（如"订单"、"charge"、"车队"）→ 读 `services.md` 找对应目录
+2. 目录可能按域分组嵌套（如 `trade/order-server/`），顶层没有就用 `find`/`grep` 在 code-projects 下定位
+3. 找到目录后直接读代码，提取接口/类名/日志关键字
+
+**合理默认**（没特殊说明就用，别问）：环境=prod、时间范围=最近 15 分钟、日志库=`all`。
+
+## logstore 索引（固化，关键）
+
+**不要每次 `sls_query.sh list` 再挑日志库。** prod 有 212 个库、uat 143 个，但命名规律明确。完整分类索引（按域/厂商/接口分类 + 高频服务→库速查 + pid 速查）见同目录 **`LOGSTORE_INDEX.md`**，定位库时先查它。核心规则：
+
+- **`all` = 聚合库，默认入口**：绝大多数业务服务的**结构化**运行日志都在这（含 `trace`/`logger`/`level`/`message`）。先查 `all`，用工程的 **spring.name 作关键字**精确锁定（如 `DeviceBusinessServer`、`orderserver`，含连字符的 `payment-server` 也行，**不带引号**）。实测 `__tag__:_container_name_:` / `__path__:` 等 tag 语法 SLS 会报错、不能用；容器名当关键字也搜不到——只有 spring.name（在每条日志 `__path__` 里）全文搜可靠。device 协议日志常不在 all（查 `device-*` 专属库）。日志里的 `trace` 字段 = traceId，可直接喂 `arms_trace.sh`。
+- **专属库按域分**：对外接口出入站 `<服务>3-out`；充电桩 `device-<厂商>`（`device-shenghong`盛弘/`device-shenrui`施恩/`device-huawei`华为/`device-luneng`鲁能/`device-wm`/`device-ykc1`）；运维桩 `device-ykcoms`；车队 `ctp-*`；能源 `emp-*`/`ems-*`；运维 `xuzhu-omp-*`/`omp-*`/`feomp-*`；开放 `osp-*`；ZDL `zdl-*`；系统 `k8s-event`/`gc_log`/`sentinel-*`。
+- **命名换算**：ARMS 应用名去掉 `-prod/-uat` ≈ logstore 前缀。`all` 查不到再试 `<前缀>-server` / `<前缀>3-out`；uat 业务专属库很少，查 uat 业务日志基本只查 `all`。
+- **不确定库是否存在** → `count` 试探（比 `list` 省事），不要一上来就 `list` 全部。
+
+## 脚本调用说明（关键）
+
+本 skill 的脚本位于 `scripts/` 子目录（与本 SKILL.md 同级）。调用时用 skill 根目录的相对路径，或解析出绝对路径。**所有脚本已内置阿里云签名，直接 `bash` 调用即可，无需额外鉴权。**
+
+| 脚本 | 用途 | 用法 |
+|---|---|---|
+| `sls_query.sh` | 查 SLS 日志 | `<env> list` / `<env> logs <logstore> [query] [line] [from_s] [to_s]` / `<env> count <logstore> [query] [from_s] [to_s]` |
+| `arms_apps.sh` | 列 ARMS 应用拿 pid | `[region] [名称关键字]` |
+| `arms_traces.sh` | 接口性能（次数/平均/QPS/错误率/整体P99） | `<pid> [分钟] [接口关键字]` |
+| `arms_trace.sh` | 单条链路 span 树（上下游/耗时点） | `<pid> <traceId> [ts_ms]` |
+
+参数说明：`env`=test/uat/prod；时间戳为秒级（SLS）或毫秒级（ts_ms）；`pid` 从 `arms_apps.sh` 输出获取；`logstore` 默认 `all`（见上表）。
+
+---
+
+## 阶段 1：探查代码 + 锁定目标
+
+**自己能定的先做掉，别预审；只在决策点停一下。**
+
+1. **定位工程**（直接做）：按"代码工作区 + 服务地图"自己查目录；用户没指明 → 默认 `brook-content`；问题明显属于别的服务再切。
+2. **读代码提取线索**（直接做）：接口路径、Controller/Service 类名、日志打印关键字、异常类型、Feign 调用的上下游。
+3. **默认值补全**（直接做）：环境=prod、时间=最近 15 分钟、日志库=`all`（需求里给了别的才覆盖）。
+
+**决策点（这里才对话，简短一次问全）**：
+- 多个候选服务/工程 → 问用户选哪个
+- 排查方向不明（看流量？看报错？看某条具体链路？）→ 问一句定方向
+- 用户给了具体业务单号/traceId/时段但没给全 → 问一句补齐
+- 没有上述歧义 → 直接进阶段 2，**不问**
+
+---
+
+## 阶段 2：查询与分析
+
+### 2.1 拿 pid + 定位日志库（先查索引，不要遍历）
+
+**先用索引表，别直接跑 `arms_apps.sh` 遍历**（索引已建好，查表即用）：
+
+1. **pid + 专属库**：查同目录 `ARMS_PID_CACHE.md`（全量应用 → pid → 专属库 → 主库 `all`），按服务名搜，命中直接用 pid 和专属库。
+2. **库选型 + 精确查询语法 + 工程↔应用↔库四层模型**：查 `LOGSTORE_INDEX.md`（第3节查询语法、第4节库分类、第5节四层对照）。
+
+> ⚠️ 查 `all` 锁定工程用 **spring.name 关键字**（如 `DeviceBusinessServer`），**不要用** `__tag__:_container_name_:` 等 tag 语法（SLS 会报错）。详见 LOGSTORE_INDEX.md 第3节。
+
+**索引查不到**（新应用 / pid 因重建失效）才回退跑：
+```bash
+bash scripts/arms_apps.sh cn-hangzhou "<服务关键字>"
+```
+
+**索引失效自动检测与重建**：
+当使用索引中的 pid 查询时，如果 `arms_traces.sh` / `arms_trace.sh` 返回空结果或鉴权错误，**不要直接认为"没有数据"**，先怀疑 pid 失效：
+1. 用 `arms_apps.sh` 按服务关键字重新查询，拿到新 pid
+2. 对比新 pid 与索引中的 pid，不同则说明索引过期
+3. 用新 pid 重新执行查询
+4. 自动更新 `ARMS_PID_CACHE.md` 中该应用的 pid（无需整表 rebuild）
+5. 记一笔到 `../USAGE_NOTES.md`：「索引 pid 失效，已自动更新」
+
+**整表重建**（积累多条失效或定期维护时）：
+```bash
+bash scripts/rebuild_index.sh
+```
+- 唯一命中 → 直接用该 pid，不问
+- 多个命中 → 默认第 1 个，列出其余让用户改（回车即过）：
+  ```
+  匹配到多个，默认用第1个 order-prod (pid=xxx)；要看别的回复序号：
+  1. order-prod           pid=...
+  2. order-foundation-prod pid=...
+  ```
+
+### 2.2 按目标查（并行/快速）
+
+**默认走综合路子**：阶段 1 提取的关键字 → `sls_query.sh logs all` 搜日志 → 命中取 traceId → `arms_trace.sh` 拉链路 → 代码 ↔ 日志 ↔ span 对应。下面四类只是"重点查什么"的参考，按问题性质组合用，能并行就并行（同 pid/同时间窗的多脚本一起发起）。
+
+**目标 ① 流量/性能**：
+```bash
+bash scripts/arms_traces.sh "<pid>" <分钟> "<接口关键字>"
+```
+看 `调用次数`/`QPS` 是否为 0（有没有流量）、平均耗时、错误率、整体 P99。
+
+**目标 ② 链路**：先用 `arms_traces.sh` 或 `sls_query.sh logs` 拿到 traceId + 时间戳，再：
+```bash
+bash scripts/arms_trace.sh "<pid>" "<traceId>" <ts_ms>
+```
+输出 span 调用树、上下游、最慢 span（耗时点）。
+
+**目标 ③ 日志**：
+```bash
+bash scripts/sls_query.sh <env> logs all "<query>" <line>     # 默认 all 库
+bash scripts/sls_query.sh <env> count all "<query>"
+```
+`query` 支持 SLS 语法（如 `ERROR and "订单"`）。
+
+**目标 ④ 综合（从代码出发，默认路子）**：
+1. 读工程代码，提取**接口路径、类名、日志关键字、异常类型**
+2. 用关键字 `sls_query.sh logs` 搜日志
+3. 从命中日志取 traceId，`arms_trace.sh` 还原链路
+4. 代码位置 ↔ 日志 ↔ span 对应起来
+
+### 2.3 指出耗时点与异常点（带证据，不猜）
+
+- **耗时点**：从 `arms_trace.sh` 的 span 树里找 `<<< 耗时点` 标记（最慢 span），说明耗时花在哪类操作（HTTP/SQL/Kafka/Redis）
+- **异常点**：span 树里找 `<ERROR>` 标记，日志里找 ERROR/Exception 堆栈
+- **代码对应**（综合排查时）：异常堆栈/接口对应到具体文件:行号
+
+---
+
+## 阶段 3：结论输出
+
+输出汇总（带 banner）：
+
+```
+═══════════════════════════════════════════════════════════════
+【日志与链路分析完成】
+═══════════════════════════════════════════════════════════════
+
+目标服务：order-prod (prod)
+时间范围：最近 15 分钟
+
+接口性能：
+- /open/charging/updateOrderOfCharging：QPS 32418，平均 25ms，错误率 0%
+- 整体调用链 P99 = XXXms
+
+链路与耗时点：
+- 上下游：... → order-prod → ...
+- 耗时点：...
+
+日志证据：
+- ...
+
+根因假设与建议：
+- ...
+
+═══════════════════════════════════════════════════════════════
+```
+
+---
+
+## 索引维护与闭环
+
+索引（`ARMS_PID_CACHE.md` / `LOGSTORE_INDEX.md`）是**快照**，会随应用重建、新增服务、改库而过期。
+
+**记录不符**：排查时发现索引与实际对不上（pid 查出链路空 / 专属库查不到 / 应用或库不存在 / 新服务未收录），**记一笔到 `../USAGE_NOTES.md`「未分析」区**（格式：`[日期] [log] 现象 | 建议`）。能当场改的直接改。
+
+**定期重建**（积累几条或收工时）：
+```bash
+bash scripts/rebuild_index.sh     # 重跑 arms_apps + sls list(prod/uat) 重建 ARMS_PID_CACHE.md
+```
+`LOGSTORE_INDEX.md` 的库分类/四层表变动少，按 `sls_query.sh list` 手动更新。
+
+> **跨 skill 闭环**：所有 cwork skill 的使用记录 + 日终分析都走 `../USAGE_NOTES.md`（一天最多分析一次，见该文件说明）。
+> **pid 过期信号**：`arms_traces.sh` / `arms_trace.sh` 返回空或鉴权错 → 先怀疑 pid 失效，重跑 rebuild。
+
+---
+
+## 密钥配置（首次使用）
+
+密钥与配置存于 `scripts/config.local.sh`（**本工程内，已 gitignore，不依赖任何外部工程**）。
+- 首次使用：`cp scripts/config.example.sh scripts/config.local.sh`，填入阿里云 AK/SK 和各环境 SLS project
+- 环境变量（`ALIBABA_CLOUD_ACCESS_KEY_ID/SECRET` 等同名）可临时覆盖 config.local.sh 的值
+- 未配置时脚本会 fail 并提示配置方法
+
+---
+
+## 反模式
+
+- **不分情况地反复确认**（自己能定的直接做；只在服务歧义/方向不明等决策点问）
+- **该问时不问、自己瞎猜**（需要用户拍板的地方不对话，容易查错方向）
+- **每次都 `sls_query.sh list` 让用户挑日志库**（用 logstore 映射，默认 `all`）
+- 臆造日志内容或链路数据（查询无结果就如实说，让用户调整条件）
+- 只看一个指标下结论（流量正常不代表链路正常，要交叉看）
+- 把耗时点/异常点藏在原始输出里不点明（必须显式指出耗时点和异常）
+- 代码排查时不读实际代码、只凭日志猜（要对应到具体文件:行号）
+
+---
+
+## 完成定义
+
+- 能自己定的已直接做（读代码、发查询），决策点已与用户简短确认
+- 目标应用 pid 已获取（唯一命中直接用，多命中已确认）
+- 按目标调用脚本拿到数据（流量/链路/日志）
+- 耗时点与异常点已显式指出（带 span/日志证据）
+- 结论已汇总输出（上下游、P99、耗时点、日志证据、根因假设）
+
+---
+
+## 自动衔接
+
+完成后不自动调起其他技能，等待用户确认是否需要进一步排查或换条件重查。
