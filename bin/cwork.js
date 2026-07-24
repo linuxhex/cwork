@@ -186,7 +186,7 @@ function detectTools(projectDir) {
 }
 
 function skillDirs() {
-  const allowed = ['init', 'implement', 'commit'];
+  const allowed = ['init', 'implement', 'commit', 'bug', 'doc', 'log', 'test'];
   return readdirSync(SKILLS_SRC, { withFileTypes: true })
     .filter((e) => e.isDirectory() && allowed.includes(e.name) && existsSync(join(SKILLS_SRC, e.name, 'SKILL.md')))
     .map((e) => e.name)
@@ -274,7 +274,7 @@ function installToTool(projectDir, toolKey, opts) {
   }
 
   const bootstrapPath = resolve(projectDir, cfg.bootstrap);
-  const bootstrap = `# cwork 技能已安装\n\n## 对话语言硬约束\n- 默认使用中文对话、中文分析、中文结论。\n- 除命令/路径/参数名外，不使用英文整句。\n- 若出现 en-us/English 偏好提示，仍直接中文继续，不输出英文解释。\n\n## 主流程技能（用户可见）\n- cwork-init — 初始化（可选，用于多服务场景）\n- cwork-implement — 完整实现流程\n- cwork-commit — 提交代码\n\n## 内部技能（不暴露）\n- cwork-brainstorming（由 implement 内部调用）\n- cwork-writing-plans（由 implement 内部调用）\n- cwork-executing-plans（由 implement 内部调用）\n- cwork-loop-refined（由 implement 内部调用）\n\n## 阶段自动衔接硬约束\n- cwork-init 结束后自动进入 cwork-implement。\n- cwork-implement 结束后自动进入 cwork-commit。\n- 全流程禁止让用户手动发起下一 skill。`;
+  const bootstrap = `# cwork 技能已安装\n\n## 对话语言硬约束\n- 默认使用中文对话、中文分析、中文结论。\n- 除命令/路径/参数名外，不使用英文整句。\n- 若出现 en-us/English 偏好提示，仍直接中文继续，不输出英文解释。\n\n## 主流程技能（用户可见）\n- cwork-init — 初始化（可选，用于多服务场景）\n- cwork-implement — 完整实现流程\n- cwork-test — 页面自动化测试（条件触发，非必经）\n- cwork-commit — 提交代码\n\n## 内部技能（不暴露）\n- cwork-brainstorming（由 implement 内部调用）\n- cwork-writing-plans（由 implement 内部调用）\n- cwork-executing-plans（由 implement 内部调用）\n- cwork-loop-refined（由 implement 内部调用）\n\n## 阶段自动衔接硬约束\n- cwork-init 结束后自动进入 cwork-implement。\n- cwork-implement 结束后，评估是否需要 cwork-test（条件见下方），需要则进入，不需要则进入 cwork-commit。\n- cwork-test 结束后自动进入 cwork-commit。\n- 全流程禁止让用户手动发起下一 skill。\n\n## cwork-test 触发条件（implement 结束后评估）\n满足以下全部条件才进入 cwork-test，否则跳过直接进 commit：\n1. 有前端代码改动（新增/修改 .vue/.jsx/.tsx/.svelte 等前端文件）\n2. 改动涉及新页面或核心交互流程（非纯样式微调、非纯数据字段增删、非纯后端接口对接）\n3. 用户确认需要跑测试（简短询问，回车跳过=不跑）`;
 
   appendOrCreateBootstrap(bootstrapPath, bootstrap, opts.dryRun);
 
