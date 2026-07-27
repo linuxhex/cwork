@@ -8,6 +8,15 @@
 
 # cwork-log 本地密钥配置(含 AK/SK, 勿提交)
 skills/log/scripts/config.local.sh
+.claude/skills/cwork-log/scripts/config.local.sh
+
+# 通用敏感文件（全局兜底）
+*.local.sh
+*.local
+.env
+.env.*
+**/secrets/**
+**/credentials/**
 
 # cwork 闭环机制临时文件
 skills/.last_analysis_date
