@@ -185,25 +185,69 @@ description: 快速修复bug，对话式问题定位 + 修复 + 推演验证
    - 分析代码逻辑，找出 bug 根因
    - 确认是逻辑错误、边界条件、空指针等
 
-3. **提出修复方案**
+3. **后端日志联动（cwork-log）**
+
+   当 bug 涉及后端接口异常（接口报错/超时/空数据/空指针等），仅看代码无法确认根因时，调用 `cwork-log` 查后端日志和链路：
+
+   **触发条件**：问题现象含以下任一 → 联动 cwork-log
+   - 接口返回 4xx/5xx/超时/空响应
+   - 后端日志有异常堆栈（ERROR/WARN）
+   - 数据异常但前端传参无误，疑似后端逻辑问题
+   - 性能问题需看链路 P99/最慢 span
+
+   **联动流程**：
+   ```
+   bug 涉及后端接口异常？
+     │
+     ├─ 否 → 纯前端/纯逻辑 bug：直接分析代码定位修复
+     │
+     └─ 是 → 调用 cwork-log 查后端：
+              1. 从报错信息取 traceId（若有）/ 接口路径 / 时间戳
+              2. sls_query.sh logs all 搜该接口/traceId 的日志
+              3. arms_trace.sh 还原链路，找耗时点/异常点
+              4. 拿到异常堆栈 + 文件:行号，定位根因
+   ```
+
+   **调用示例**：
+   ```bash
+   # 1. 拿 pid（先查 ARMS_PID_CACHE.md，索引失效才跑 arms_apps.sh）
+   bash scripts/arms_apps.sh cn-hangzhou "order"
+
+   # 2. 用 traceId 查链路
+   bash scripts/arms_trace.sh "<pid>" "<traceId>" <ts_ms>
+
+   # 3. 或用接口关键字 + 时间窗查 SLS 日志
+   bash scripts/sls_query.sh <env> logs all "order/submit and ERROR" 100
+   ```
+
+   **联动原则**：cwork-bug 负责"定位问题并修复"，cwork-log 负责"深挖后端根因"。拿到后端日志证据（异常堆栈 + 文件:行号）后，回到代码定位修复。
+
+   > **注意**：调用 cwork-log 需阿里云密钥已配置（`scripts/config.local.sh` 或环境变量），未配置时跳过后端日志查询，仅从代码层面分析。
+
+4. **提出修复方案**
    - 提出 1-2 种修复方案
    - 说明每种方案的优缺点
    - 推荐一种方案
 
-4. **向用户确认**
+5. **向用户确认**
    ```
    问题定位：
    - 位置：UserService.java:45
    - 根因：新用户第一次登录时，用户信息未初始化，导致获取用户等级时返回 null
-   
+
+   后端日志证据（cwork-log）：
+   - 日志：UserService.login 抛 NullPointerException
+   - 链路：user-prod → charge-server，最慢 span 在 charge 调用（2.3s）
+   - 代码位置：UserService.java:45
+
    修复方案：
    方案 1（推荐）：在获取用户等级前，先判断用户信息是否为空，为空则初始化默认值
    方案 2：在登录成功后，立即初始化用户信息
-   
+
    是否按方案 1 修复？
    ```
 
-等待用户确认后，进入修复阶段。
+   等待用户确认后，进入修复阶段。
 
 ---
 
