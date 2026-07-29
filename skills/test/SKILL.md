@@ -950,6 +950,8 @@ const miniProgram = await automator.launch({
 
 **launch 前必须关闭已有的 IDE 实例**，否则端口冲突。
 
+> **连接生命周期**：整个测试会话只 `launch`/`connect` 一次，所有场景复用同一连接，最后才 `disconnect`。不要每测一个场景就重连。
+
 ## 中文步骤 → 实际调用映射表（小程序）
 
 基于实测结果，agent 根据此表将中文测试步骤翻译为实际可用的调用：
@@ -1011,9 +1013,9 @@ const miniProgram = await automator.launch({
 3. 调用 `cli auto --port 9420` 开启自动化端口
 4. 确认端口已开启
 
-### 步骤 3：MCP 连接
+### 步骤 3：MCP 连接（整个测试会话只连一次）
 
-通过 MCP 工具连接开发者工具：
+通过 MCP 工具连接开发者工具，**整个测试会话只连接一次，所有场景复用同一连接**：
 
 ```
 connect_devtools({
@@ -1032,6 +1034,8 @@ connect_devtools({
 | `connect` | 仅连接已有实例（不启动） |
 
 **推荐 `auto`**：大多数场景下最稳定。
+
+> **关键原则**：连接一次，跑完所有场景，最后才断开。不要每测一个场景就重连/重启，这会极大拖慢测试速度且容易触发端口冲突。
 
 ### 步骤 4：确认小程序可操作
 
@@ -1110,12 +1114,23 @@ connect_devtools({
 
 ## 小程序阶段三：测试执行
 
+### 连接生命周期原则（关键）
+
+**整个测试会话：连接一次 → 跑完所有场景 → 最后断开。**
+
+```
+❌ 错误做法：每个场景都 disconnect → reconnect（慢 + 易端口冲突）
+✅ 正确做法：connect_devtools 一次 → 场景1 → 场景2 → ... → 场景N → disconnect_devtools
+```
+
+场景间切换用 `mp.evaluate(() => wx.reLaunch(...))` 重置页面栈即可，**不需要重新连接**。
+
 ### 执行流程
 
 ```
 对于每个测试场景：
     1. 输出当前场景名称
-    2. 导航到目标页面：navigate_to({ path })
+    2. 导航到目标页面：mp.evaluate(() => wx.navigateTo({ url: '{path}' })) 或 mp.evaluate(() => wx.reLaunch({ url: '{path}' }))
     3. 等待页面加载：wait_for({ selector: "page", timeout: 5000 })
     4. 根据测试步骤执行操作：
        - 点击：query_selector → click
@@ -1125,17 +1140,19 @@ connect_devtools({
        - 验证属性：assert_attribute
        - 验证状态：assert_state
        - 等待：wait_for
-       - 截图：screenshot
+       - 截图：screenshot（注意：可能卡住，优先用 data/元素断言）
        - 执行 JS：evaluate_script
     5. 每步执行后验证结果
     6. 记录通过/失败
     7. 失败时：
-       a. screenshot 截图
-       b. get_page_snapshot 获取页面快照
-       c. list_network_requests 检查网络请求
-       d. list_console_messages 检查 Console 错误
-       e. 诊断根因 → 尝试自动修复并重试（最多 3 次）
-    8. 场景完成后截图留证：screenshot({ path: "screenshots/{场景名}-最终.png" })
+       a. get_page_snapshot 获取页面快照
+       b. list_network_requests 检查网络请求
+       c. list_console_messages 检查 Console 错误
+       d. 诊断根因 → 尝试自动修复并重试（最多 3 次）
+    8. 场景间用 mp.evaluate(() => wx.reLaunch(...)) 重置页面栈（不要重连 MCP）
+
+全部场景完成后：
+    disconnect_devtools() 断开连接
 ```
 
 ### 执行输出格式
@@ -1176,8 +1193,8 @@ connect_devtools({
   → 结果：✗ 元素未找到
 
   诊断：
-  → 截图：screenshots/场景1-步骤3-fail.png
   → 页面快照：get_page_snapshot()
+  → 页面 data：evaluate_script({ script: "JSON.stringify(__page__.data)" })
   → 网络请求：list_network_requests()
   → Console 错误：list_console_messages()
   → 可见元素：debug_page_elements()
@@ -1188,16 +1205,18 @@ connect_devtools({
   → 重试结果：✓ 找到并点击成功
 ```
 
+> **注意**：失败诊断优先用 `get_page_snapshot()` + `evaluate_script` 读取 data/元素，避免 `screenshot` 卡住。
+
 ### 小程序失败诊断
 
 步骤失败时，收集全面诊断信息：
 
-1. **截图**：`screenshot({ path: "screenshots/{场景名}-步骤{N}-fail.png" })`
-2. **页面快照**：`get_page_snapshot()` — 获取当前 DOM 结构
+1. **页面快照**：`get_page_snapshot()` — 获取当前 DOM 结构（优先，不卡）
+2. **页面 data**：`evaluate_script({ script: "JSON.stringify(__page__.data)" })` — 读取页面数据
 3. **网络请求**：`list_network_requests()` — 检查是否有接口失败（4xx/5xx/超时）
 4. **Console 错误**：`list_console_messages()` — 检查 JS 报错
 5. **元素调试**：`debug_page_elements()` — 列出可见交互元素
-6. **连接诊断**：`diagnose_connection()` — 检查连接是否正常
+6. **连接诊断**：`diagnose_connection()` — 仅在怀疑连接断开时调用
 
 **诊断决策树**：
 
@@ -1516,7 +1535,7 @@ elif 有失败:
 
 ```
 if 测试失败:
-    1. 诊断（Web: drainEvents + captureScreenshot + snapshotText + pageInfo; 小程序: screenshot + get_page_snapshot + list_network_requests + list_console_messages）
+    1. 诊断（Web: drainEvents + captureScreenshot + snapshotText + pageInfo; 小程序: get_page_snapshot + evaluate_script 读 data + list_network_requests + list_console_messages）
     2. 若有后端接口失败 → 调用 cwork-log 查后端日志/链路，拿到异常堆栈 + 文件:行号
     3. 综合前后端证据定位根因：
        - 纯前端：修前端代码
