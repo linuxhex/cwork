@@ -187,30 +187,90 @@ weixin-devtools-mcp 暴露的 31 个工具，按类别分组：
 | `debug_page_elements` | 调试页面元素 |
 | `debug_connection_flow` | 调试连接流程 |
 
-## 中文步骤 → MCP 工具调用映射表
+## miniprogram-automator 已知问题与绕行方案
 
-agent 根据此表将中文测试步骤翻译为 MCP 工具调用：
+### 导航 API 卡住问题（关键）
 
-| 中文测试步骤 | MCP 操作序列 | 说明 |
+`miniprogram-automator` 的 `navigateTo`/`switchTab`/`reLaunch`/`navigateBack`/`screenshot` 在某些小程序项目上会**永久卡住**（Promise 不 resolve 也不 reject）。这是微信开发者工具 WebSocket 通信层的已知问题。
+
+**绕行方案**：用 `miniProgram.evaluate()` 调用 `wx.*` API 间接导航，**所有导航操作必须走 evaluate**：
+
+```javascript
+// ❌ 直接调用（会卡住）
+await miniProgram.navigateTo({ url: '/pages/station/index' });
+
+// ✅ 用 evaluate 绕行（稳定）
+await miniProgram.evaluate(() => { wx.navigateTo({ url: '/pages/station/index' }) });
+await miniProgram.evaluate(() => { wx.switchTab({ url: '/pages/home/index/index' }) });
+await miniProgram.evaluate(() => { wx.reLaunch({ url: '/pages/testExp/index' }) });
+await miniProgram.evaluate(() => { wx.navigateBack() });
+```
+
+**实测结果**（2026-07-29）：
+
+| API | 直接调用 | evaluate 绕行 |
+|-----|---------|-------------|
+| `launch` / `currentPage` | ✅ | — |
+| `page.data` / `page.setData` | ✅ | — |
+| `page.$` / `page.$$` | ✅ | — |
+| `page.callMethod` | ✅ | — |
+| `mp.evaluate` / `mp.callWxMethod` | ✅ | — |
+| `navigateTo` / `switchTab` / `reLaunch` / `navigateBack` | ❌ 卡住 | ✅ |
+| `screenshot` | ❌ 卡住 | ⚠️ 需调试 |
+
+### 截图替代方案
+
+`screenshot` 也可能卡住，替代方案：
+1. 用 `page.$$` 获取页面元素结构，做结构化断言
+2. 用 `page.data` 读取页面数据，做数据断言
+3. 用开发者工具手动截图
+
+### 超时保护（强制）
+
+**所有 automator 调用必须加超时保护**，防止 Promise 永久挂起：
+
+```javascript
+function withTimeout(promise, ms, label) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(label + ' 超时')), ms))
+  ]);
+}
+```
+
+### 连接方式
+
+推荐用 `automator.launch`（自动启动 IDE + 开启自动化端口）：
+
+```javascript
+const miniProgram = await automator.launch({
+  cliPath: '/Applications/wechatwebdevtools.app/Contents/MacOS/cli',
+  projectPath: '/path/to/mini',
+});
+```
+
+**launch 前必须关闭已有的 IDE 实例**，否则端口冲突。
+
+## 中文步骤 → 实际调用映射表
+
+基于实测结果，agent 根据此表将中文测试步骤翻译为实际可用的调用：
+
+| 中文测试步骤 | 实际调用 | 说明 |
 |---|---|---|
-| 打开页面 {path} | `navigate_to({ path })` | 小程序页面路径，如 pages/index/index |
-| 点击 {元素描述} | `query_selector({ selector })` → `click({ uid })` | 先查再点 |
-| 在 {输入框} 输入 {文本} | `query_selector({ selector })` → `input_text({ uid, text })` | 先查再输 |
-| 长按 {元素} | `query_selector({ selector })` → `click({ uid, longpress: true })` | 长按 |
-| 选择 {picker} 为 {值} | `set_form_control({ uid, value })` | picker/switch/slider |
-| 验证 {元素} 显示 {文本} | `assert_text({ uid, textContains: text })` | 文本包含断言 |
-| 验证 {元素} 文本精确为 {文本} | `assert_text({ uid, text: text })` | 文本精确断言 |
-| 验证 {元素} 可见 | `assert_state({ uid, visible: true })` | 可见性断言 |
-| 验证 {元素} 属性 {attr} 为 {val} | `assert_attribute({ uid, attribute: attr, value: val })` | 属性断言 |
-| 等待 {元素} 出现 | `wait_for({ selector, timeout: 5000 })` | 等待条件 |
-| 返回上一页 | `navigate_back()` | 页面回退 |
-| 切换到 Tab {name} | `switch_tab({ tabName })` | TabBar 切换 |
-| 重启到页面 {path} | `relaunch({ path })` | reLaunch |
-| 截图 | `screenshot({ path })` | 保存截图到指定路径 |
-| 执行 JS {code} | `evaluate_script({ script: code })` | 小程序上下文执行 JS |
-| 查看网络请求 | `list_network_requests({ urlPattern })` | 按 URL 模式过滤 |
-| 查看页面数据 | `evaluate_script({ script: "JSON.stringify(__page__.data)" })` | 读取页面 data |
-| 查看页面快照 | `get_page_snapshot()` | 获取 DOM 结构 |
+| 打开页面 {path} | `mp.evaluate(() => wx.navigateTo({ url: '{path}' }))` | **必须走 evaluate** |
+| 切换 Tab {url} | `mp.evaluate(() => wx.switchTab({ url: '{url}' }))` | **必须走 evaluate** |
+| 重启到页面 {path} | `mp.evaluate(() => wx.reLaunch({ url: '{path}' }))` | **必须走 evaluate** |
+| 返回上一页 | `mp.evaluate(() => wx.navigateBack())` | **必须走 evaluate** |
+| 获取当前页面 | `mp.currentPage()` | 直接调用可用 |
+| 读取页面 data | `page.data` | 直接调用可用 |
+| 设置页面 data | `page.setData({ key: value })` | 直接调用可用 |
+| 调用页面方法 | `page.callMethod('methodName', ...args)` | 直接调用可用 |
+| 查找元素 | `page.$(selector)` / `page.$$(selector)` | 直接调用可用 |
+| 点击元素 | `element.tap()` | 直接调用可用 |
+| 输入文本 | `element.input(text)` | 直接调用可用 |
+| 执行 JS | `mp.evaluate(() => { ... })` | 直接调用可用 |
+| 调用 wx API | `mp.callWxMethod('methodName', ...args)` | 直接调用可用 |
+| 截图 | `mp.screenshot({ path })` | ⚠️ 可能卡住，优先用 data/元素断言 |
 
 ## 内部阶段一：环境准备
 
