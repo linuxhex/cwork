@@ -42,6 +42,8 @@ get_sls_project() {  # $1=环境 test/uat/prod, 或直接传 project 名
 
 # ---- SLS ROA 签名 ----
 # 用法: sls_call <project> <GET|POST> <resource含query>
+#   resource 中的 query 值应为 URL 编码后的值（curl 发请求用）
+#   签名时自动将 query 值解码回原始值（SLS ROA 签名规范：签名用未编码的 resource）
 sls_call() {
   require_cmd python3; require_cmd curl
   load_credentials
@@ -49,12 +51,24 @@ sls_call() {
   local endpoint; endpoint=$(get_sls_endpoint)
   local date; date=$(LC_ALL=C TZ=GMT date '+%a, %d %b %Y %H:%M:%S GMT')
   # AK 经环境变量传给 python(避免出现在 ps 的 argv); 签名也由 python 计算
+  # 签名时：resource 中的 URL 编码值解码回原始值（SLS ROA 签名要求用未编码的 resource）
   local auth
   auth=$(AK_ID="$AK_ID" AK_SECRET="$AK_SECRET" python3 - "$verb" "$date" "$resource" <<'PY'
-import sys, os, hmac, hashlib, base64
+import sys, os, hmac, hashlib, base64, urllib.parse
 ak_id, ak_secret = os.environ['AK_ID'], os.environ['AK_SECRET']
 verb, date, resource = sys.argv[1:4]
-sts = "%s\n\n\n%s\nx-log-apiversion:0.6.0\nx-log-signaturemethod:hmac-sha1\n%s" % (verb, date, resource)
+# SLS ROA 签名规范：签名用未编码的 resource（将 URL 编码的 query 值解码回原始值）
+# 只解码 query 值，不解码 query key 和路径
+if '?' in resource:
+    path, query = resource.split('?', 1)
+    pairs = []
+    for part in query.split('&'):
+        k, _, v = part.partition('=')
+        pairs.append(k + '=' + urllib.parse.unquote_plus(v) if _ else part)
+    resource_for_sign = path + '?' + '&'.join(pairs)
+else:
+    resource_for_sign = resource
+sts = "%s\n\n\n%s\nx-log-apiversion:0.6.0\nx-log-signaturemethod:hmac-sha1\n%s" % (verb, date, resource_for_sign)
 sig = base64.b64encode(hmac.new(ak_secret.encode(), sts.encode(), hashlib.sha1).digest()).decode()
 print("LOG %s:%s" % (ak_id, sig))
 PY
