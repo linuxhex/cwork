@@ -60,8 +60,8 @@ description: 日志与链路分析，对话式查 SLS 日志 + ARMS 链路，看
 
 **不要每次 `sls_query.sh list` 再挑日志库。** prod 有 212 个库、uat 143 个，但命名规律明确。完整分类索引（按域/厂商/接口分类 + 高频服务→库速查 + pid 速查）见同目录 **`LOGSTORE_INDEX.md`**，定位库时先查它。核心规则：
 
-- **`all` = 聚合库，默认入口**：绝大多数业务服务的**结构化**运行日志都在这（含 `trace`/`logger`/`level`/`message`）。先查 `all`，用工程的 **spring.name 作关键字**精确锁定（如 `DeviceBusinessServer`、`orderserver`，含连字符的 `payment-server` 也行，**不带引号**）。实测 `__tag__:_container_name_:` / `__path__:` 等 tag 语法 SLS 会报错、不能用；容器名当关键字也搜不到——只有 spring.name（在每条日志 `__path__` 里）全文搜可靠。device 协议日志常不在 all（查 `device-*` 专属库）。日志里的 `trace` 字段 = traceId，可直接喂 `arms_trace.sh`。
-- **专属库按域分**：对外接口出入站 `<服务>3-out`；充电桩 `device-<厂商>`（`device-shenghong`盛弘/`device-shenrui`施恩/`device-huawei`华为/`device-luneng`鲁能/`device-wm`/`device-ykc1`）；运维桩 `device-ykcoms`；车队 `ctp-*`；能源 `emp-*`/`ems-*`；运维 `xuzhu-omp-*`/`omp-*`/`feomp-*`；开放 `osp-*`；ZDL `zdl-*`；系统 `k8s-event`/`gc_log`/`sentinel-*`。
+- **`all` = 聚合库，默认入口**：绝大多数业务服务的**结构化**运行日志都在这（含 `trace`/`logger`/`level`/`message`）。先查 `all`，用工程的 **spring.name 作关键字**精确锁定（如 `DeviceBusinessServer`、`orderserver`，含连字符的 `payment-server` 也行，**不带引号**）。实测 `__tag__:_container_name_:` / `__path__:` 等 tag 语法 SLS 会报错、不能用；容器名当关键字也搜不到——只有 spring.name（在每条日志 `__path__` 里）全文搜可靠。device 协议日志常不在 all（查 `device-*` 专属库）。**CTP 车队日志也不在 all**（查 `ctp-*` 专属库，CTP 未接入 ARMS 链路追踪）。日志里的 `trace` 字段 = traceId，可直接喂 `arms_trace.sh`。
+- **专属库按域分**：对外接口出入站 `<服务>3-out`；充电桩 `device-<厂商>`（`device-shenghong`盛弘/`device-shenrui`施恩/`device-huawei`华为/`device-luneng`鲁能/`device-wm`/`device-ykc1`）；运维桩 `device-ykcoms`；车队 `ctp-*`（⚠️ 不在 all，未接入 ARMS）；能源 `emp-*`/`ems-*`；运维 `xuzhu-omp-*`/`omp-*`/`feomp-*`；开放 `osp-*`；ZDL `zdl-*`；系统 `k8s-event`/`gc_log`/`sentinel-*`。
 - **命名换算**：ARMS 应用名去掉 `-prod/-uat` ≈ logstore 前缀。`all` 查不到再试 `<前缀>-server` / `<前缀>3-out`；uat 业务专属库很少，查 uat 业务日志基本只查 `all`。
 - **不确定库是否存在** → `count` 试探（比 `list` 省事），不要一上来就 `list` 全部。
 

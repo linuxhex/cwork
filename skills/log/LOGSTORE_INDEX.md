@@ -1,7 +1,7 @@
 # SLS 日志库索引（cwork-log）
 
 > **用途**：查某服务日志前，先按本索引定位 logstore，**不要在 200+ 个库里盲目 `list`/试探**。
-> **生成依据**：prod 212 库 / uat 143 库实际 `list` + 命名规律 + 采样验证（2026-07-23）。
+> **生成依据**：prod 212 库 / uat 143 库实际 `list` + 命名规律 + 采样验证（2026-07-30）。
 > **更新方法**：库变更时重跑 `bash scripts/sls_query.sh <env> list`，按下述前缀重新归类。
 
 ---
@@ -22,7 +22,7 @@
 | 对外接口出入站（openapi / 网关转发） | `<服务>3-out` | `gateway-*` |
 | 充电桩 / 设备协议 | `device-<厂商>` | `device-business` / `device-collection` / `device-post` |
 | 运维桩（设备 coms） | `device-ykcoms`（prod 和 uat 均用此库） | |
-| 车队链路 | `ctp-<服务>` | |
+| 车队链路 | `ctp-<服务>`（**不在 all**，只能查专属库） | |
 | 能源管理 | `emp-*` / `ems-*` | |
 | 运维平台 OMP | `xuzhu-omp-*` / `omp-*` / `feomp-*` | |
 | 开放服务 OSP | `osp-*` | |
@@ -49,6 +49,15 @@
 
 ⚠️ **device 协议日志常不在 all**（在 `device-*` 专属库）：如 `device-coms-server` 在 all 搜不到（0命中），要去 `device-ykcoms` 等专属库查。
 
+⚠️ **CTP 车队日志不在 all**（在 `ctp-*` 专属库）：与 device 域类似，车队是独立采集域，`all` 库搜不到车队日志。查车队日志直接去对应 `ctp-*` 库：
+- `ctp-activity-server`：车队活动/优惠消费（spring.name=`ctp_activity_server`，容器=`ctp-activity-server`）
+- `ctp-finance-server`：车队财务/额度（spring.name=`ctp_finance_server`，容器=`ctp-finance-server`）
+- `ctp-order-server`：车队订单（spring.name=`ctp-order-server`，容器=`ctp-order-server`）⚠️ prod 空（90天无数据），uat 有
+- `ctp-gateway3-out`：车队网关出入站（spring.name=`gateway-service-ost`，容器=`ctp-gateway-server`）
+- `ctp-base3-out`：车队基础服务出入站（spring.name=`CTP-BASE-SERVER`，容器=`ctp-base-server`）
+- `ctp-finance3-out`：车队财务出入站 ⚠️ prod 空（90天无数据）
+- `ctp-order3-out`：车队订单出入站 ⚠️ prod 空（90天无数据）
+
 > 日志里**能看到但不能直接 query** 的字段：`__tag__:_container_name_`(容器名)、`__tag__:_pod_name_`、`__tag__:__path__`(含spring.name)、`__tag__:_namespace_`、顶层 `trace`(=traceId，可直接喂 `arms_trace.sh`)。
 
 ---
@@ -65,6 +74,9 @@
 > 厂商对照：`device-shenghong`盛弘 / `device-shenrui`施恩 / `device-huawei`华为 / `device-luneng`鲁能 / `device-wm` / `device-ykc1`；`device-ykcoms`=运维桩
 
 **车队 CTP** · 7：`ctp-activity-server ctp-base3-out ctp-finance-server ctp-finance3-out ctp-gateway3-out ctp-order-server ctp-order3-out`
+> ⚠️ **CTP 日志不在 `all` 聚合库**（独立采集域，与 device 类似），查车队日志**只能查 `ctp-*` 专属库**，不要先查 `all`。
+> ⚠️ **CTP 未接入 ARMS 链路追踪**（185 个 ARMS 应用中无 ctp 相关），无法用 `arms_traces.sh` / `arms_trace.sh` 查链路，只能查 SLS 日志。
+> 空库（90 天无数据）：`ctp-order-server`、`ctp-finance3-out`、`ctp-order3-out`——可能未启用采集或流量为 0。
 
 **能源 EMP/EMS** · 11：`emp-business3-out emp-digital-business-server emp-digital-business-server-new emp-emulator-server emp-gateway3-out emp-strategy-server emp-task3-out emp-yems-business-server ems-device-yst3-out ems-device3-out ems-local-device-server`
 
@@ -115,6 +127,11 @@
 | device/device_business | `device-business` | device-business-prod | 查表 | all / device-business |
 | support/ykc-osp | `ospServer` | osp-prod | 查表 | all / osp-server |
 | basic/osp-backend | `ospBackend` | **无独立 ARMS 应用**（归 osp-prod 或未接入链路监控） | 查表 | osp-backend / all |
+| trade/ctp_order_server | `ctp-order-server` | **无 ARMS 应用**（CTP 未接入链路追踪） | — | ctp-order-server / ctp-order3-out |
+| trade/ctp_base_server | `CTP-BASE-SERVER` | **无 ARMS 应用** | — | ctp-base3-out |
+| trade/ctp_finance_server | `ctp_finance_server` | **无 ARMS 应用** | — | ctp-finance-server / ctp-finance3-out |
+| trade/ctp_activity_server | `ctp_activity_server` | **无 ARMS 应用** | — | ctp-activity-server |
+| trade/ctp_gateway_server | `gateway-service-ost` | **无 ARMS 应用** | — | ctp-gateway3-out |
 
 **换算规则**：
 - **工程目录名 → ARMS 应用**：去 `_server` 后缀、下划线变连字符，加 `-prod/-uat`（`order_server`→`order-prod`，`cloud_api_server`→`cloud-api-prod`）。
@@ -124,6 +141,8 @@
 
 > 注：`zsh/` 域工程（`*_mos_server` 等）多为蓄柱 OMP fork，对应 `xuzhu-omp-*` 应用；部分工程 `spring.name` 在 Nacos（本地 bootstrap 提取不到），按目录名规则推导即可。
 
+> ⚠️ **CTP 车队域特殊**：CTP 全部 7 个 logstore 都是独立采集域，**日志不在 `all` 聚合库**；CTP 也**未接入 ARMS 链路追踪**（185 个应用中无 ctp 相关），只能查 SLS 日志、无法查 ARMS 链路。CTP 工程目录在 `trade/ctp_*_server`，spring.name 大小写不统一（`ctp-order-server`/`CTP-BASE-SERVER`/`ctp_finance_server`/`ctp_activity_server`/`gateway-service-ost`）。
+
 ---
 
 ## 6. uat 差异要点
@@ -131,6 +150,7 @@
 - uat 仅 143 库，**业务专属运行库只有 10 个**（clearing/cloud-api/external/foundation-c/new-base/payment/push/reconciliation/station-site-server）→ **查 uat 业务日志基本只查 `all`**。
 - uat **设备测试库更多（40 个）**，多了 `device-ocpp` / `device-portal` / `device-xj` / 各 `*-tool` 调试库。
 - uat 多 `unionpay-acquire` / `electric-meter` / `skill-hub` / `cloud-eyes`。
+- uat **CTP 库与 prod 相同**（7 个 `ctp-*` 库），但 `ctp-order-server` 仅 uat 有数据（prod 空）。
 
 ---
 
@@ -163,3 +183,5 @@
 | cloud-api-prod | `gb7wlo91dj@2dde8d90c331396` |
 | mq-consumer-order-prod | `gb7wlo91dj@ef99265defb0042` |
 | alarm-prod | `gb7wlo91dj@b1893987d820904` |
+
+> ⚠️ **CTP 车队无 ARMS 应用**（未接入链路追踪），无法用 `arms_traces.sh` / `arms_trace.sh` 查链路，只能查 SLS 日志。
