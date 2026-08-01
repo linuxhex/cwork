@@ -232,6 +232,29 @@ description: 快速修复bug，对话式问题定位 + 修复 + 推演验证
 
    > **注意**：调用 cwork-log 需阿里云密钥已配置（`scripts/.config.local.sh` 或环境变量），未配置时跳过后端日志查询，仅从代码层面分析。
 
+**数据查询联动（cwork-data）** — 用数仓数据佐证 bug
+
+修 bug 常需核对业务数据（数据量/订单状态/金额/某条记录字段），仅看代码或日志无法确认时，调用 `cwork-data` 查数仓（Doris，只读）：
+
+**触发条件**（任一）：需确认某条记录真实字段值、查某表数据量、核对订单状态/金额、验证数据一致性。
+**联动流程**：
+```
+bug 涉及具体业务数据？
+  ├─ 否 → 纯逻辑/前端 bug：直接分析代码
+  └─ 是 → 调用 cwork-data 查数仓：
+           1. 从问题取订单号/用户号/时段等线索
+           2. 选表（订单明细优先 internal.dwd.dwd_order_settle_model）
+           3. mcp_client.py query 查数据（带分区过滤）
+           4. 数据 ↔ 代码逻辑对应，定位根因
+```
+**调用示例**：
+```bash
+cd skills/data/scripts/mcp-client
+python3 mcp_client.py query --sql "SELECT * FROM internal.dwd.dwd_order_settle_model WHERE dt='<日期>' AND <条件> LIMIT 10"
+```
+**联动原则**：cwork-bug 管「定位并修复」，cwork-data 管「数据佐证」。拿到数据证据后回到代码定位修复。
+> **注意**：调用 cwork-data 需 `skills/data/scripts/mcp-client/.mcp_config.json` 已配置，未配置时仅从代码/日志层面分析。
+
 4. **提出修复方案**
    - 提出 1-2 种修复方案
    - 说明每种方案的优缺点

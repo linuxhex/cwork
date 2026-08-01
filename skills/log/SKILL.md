@@ -202,6 +202,36 @@ bash scripts/sls_query.sh <env> count all "<query>"
 
 ---
 
+## 联动：查业务数据 / 查 Nacos 配置（cwork-data / cwork-config）
+
+排查中常需用数据或配置佐证根因。**触发条件命中即调起**（主 agent 用 Skill 工具触发），写法对齐 cwork-bug 的「后端日志联动」。
+
+**① 数据查询联动（cwork-data）** — 用数仓数据佐证
+- 触发条件（任一）：需核对业务数据（订单状态/金额/库存/某用户数据）、查某时段数据量、数据一致性存疑、日志看到数据异常需数仓佐证。
+- 流程：从链路/日志拿到线索（订单号/用户号/时段）→ 调 cwork-data 查对应数仓表（DWD 宽表优先）→ 数据 ↔ 日志/链路对应。
+- 调用示例：
+  ```bash
+  cd skills/data/scripts/mcp-client
+  python3 mcp_client.py query --sql "SELECT * FROM internal.dwd.dwd_order_settle_model WHERE dt='<日期>' AND order_no='<订单号>' LIMIT 10"
+  ```
+- 联动原则：cwork-log 管「链路/日志根因」，cwork-data 管「业务数据佐证」；拿到数据证据后回到链路分析下结论。
+
+**② 配置查询联动（cwork-config）** — 核对 Nacos 配置真值
+- 触发条件（任一）：需确认某服务某环境实际配置（开关/阈值/地址/参数）、怀疑配置变更引发问题、日志显示参数与预期不符要核对 Nacos 真值。
+- 流程：定 env + 服务名 → 调 cwork-config 查配置（不知 dataId 先 `search`）→ 配置真值 ↔ 现象对应。
+- 调用示例：
+  ```bash
+  cd skills/config/scripts
+  bash nacos_query.sh test search <服务名>                  # 定位 dataId
+  bash nacos_query.sh test get <dataId> DEFAULT_GROUP       # 取配置
+  bash nacos_query.sh diff <dataId> DEFAULT_GROUP uat prod  # 多环境对比
+  ```
+- 联动原则：cwork-log 管「现象与链路」，cwork-config 管「核对 Nacos 配置真值」；确认配置后回到链路分析。
+
+> **凭证注意**：cwork-data 需 `skills/data/scripts/mcp-client/.mcp_config.json` 已配置；cwork-config 需 `skills/config/scripts/.config.local.sh` 已配置对应集群。未配置时跳过对应联动，仅基于日志/链路分析。
+
+---
+
 ## 索引维护与闭环
 
 索引（`ARMS_PID_CACHE.md` / `LOGSTORE_INDEX.md`）是**快照**，会随应用重建、新增服务、改库而过期。
