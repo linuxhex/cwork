@@ -1567,7 +1567,7 @@ if 测试失败:
 - 测试规划未经用户确认，禁止执行
 - 所有 P0 场景必须通过才能进入 cwork-commit
 - P1/P2 场景失败可记录但不阻塞提交
-- 调用 cwork-log 查后端日志需阿里云密钥已配置（`scripts/config.local.sh` 或环境变量），未配置时跳过后端诊断，仅保留前端证据
+- 调用 cwork-log 查后端日志需阿里云密钥已配置（`scripts/.config.local.sh` 或环境变量），未配置时跳过后端诊断，仅保留前端证据
 
 ## 与 cwork-implement 的衔接
 
