@@ -186,7 +186,7 @@ function detectTools(projectDir) {
 }
 
 function skillDirs() {
-  const allowed = ['init', 'implement', 'commit', 'bug', 'doc', 'log', 'test'];
+  const allowed = ['init', 'implement', 'commit', 'bug', 'doc', 'log', 'test', 'data', 'config'];
   return readdirSync(SKILLS_SRC, { withFileTypes: true })
     .filter((e) => e.isDirectory() && allowed.includes(e.name) && existsSync(join(SKILLS_SRC, e.name, 'SKILL.md')))
     .map((e) => e.name)

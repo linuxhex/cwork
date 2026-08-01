@@ -10,6 +10,12 @@
 skills/log/scripts/.config.local.sh
 .claude/skills/cwork-log/scripts/.config.local.sh
 
+# cwork-data Doris 查询凭证(含账号密码, 勿提交)
+skills/data/scripts/mcp-client/.mcp_config.json
+
+# cwork-config Nacos 凭证(含 AK/SK, 勿提交; *.local.sh 已覆盖, 显式再加)
+skills/config/scripts/.config.local.sh
+
 # 通用敏感文件（全局兜底）
 *.local.sh
 *.local

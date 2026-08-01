@@ -26,6 +26,8 @@ cwork-commit     → 提交所有工程
 cwork-doc        → 生成技术方案文档（两种模式：已有需求文档 / 对话式需求分析）
 cwork-bug        → 快速修复bug（对话式，5阶段：代码分析→问题咨询→问题定位→修复代码→推演验证）
 cwork-log        → 日志与链路分析（SLS 日志 + ARMS 链路，查接口流量/上下游/P99/耗时点，排查问题）
+cwork-data       → 数仓数据查询（Doris 只读 SQL，查业务数据/表结构/指标，排查时数据佐证）
+cwork-config     → Nacos 配置只读查询（多环境配置内容/清单/差异，排查时核对配置真值）
 ```
 
 ---
@@ -414,6 +416,78 @@ while round <= 5:
 - 不臆造数据，查询无结果就如实说
 
 **注意**：cwork-log 是独立工具（和 bug/doc 同级），不进 init→implement→commit 自动衔接链。随安装发布需在 `bin/cwork.js` 的白名单加 `'log'`。
+
+---
+
+### 3.7 cwork-data
+
+**作用**：数仓数据查询，对话式查 Doris 数仓跑只读 SQL，查业务数据/表结构/指标/数据量，排查问题时用数据佐证根因。
+
+**能力**：
+- 查业务数据（订单状态/金额/库存/数据量，DWD 宽表优先）
+- 查表结构/分区键/索引（DESC / SHOW CREATE TABLE）
+- 查数据量（count，不拉明细）
+- 大结果集异步导出 OSS
+- 自带 SQL 前置校验：分区过滤 / 关键词反引号 / 只读 / 日期≤3月 / ODS·JDBC 替代表建议
+
+**数据源**：内部 query-server 服务（Doris 数仓），`mcp_client.py` 经 HTTP JSON-RPC 直连（**不依赖 Claude MCP 注册**），凭证 `scripts/mcp-client/.mcp_config.json`（本工程内，已 gitignore）。
+
+**脚本**（`skills/data/scripts/mcp-client/`）：
+- `mcp_client.py` — 统一入口（setup-check / query / count / show-create / export-async / export-status）
+- `precheck_sql.py` — SQL 前置校验
+
+**使用示例**：
+```bash
+/cwork-data 查订单 OMJF-xxx 的结算金额（internal.dwd.dwd_order_settle_model）
+阶段1：选表 + 确认分区键（show-create）
+阶段2：mcp_client.py query 跑 SQL（自带 precheck）
+阶段3：数据 ↔ 问题对应，下结论
+```
+
+**核心原则**：
+- 强制只读（SELECT/SHOW/DESC/EXPLAIN），永不写库
+- 必须命中真实分区键，日期范围≤3个月，关键词字段加反引号
+- 默认展示前 10 行；大结果集先 count 分级，>1000 走异步导出
+- 不臆造数据，查询无结果如实说
+
+**注意**：cwork-data 是独立工具（和 log/bug/doc/config 同级），不进主流程衔接链。可被 cwork-log/bug 联动调起（查数据佐证）。需在 `bin/cwork.js` 白名单加 `'data'`。
+
+---
+
+### 3.8 cwork-config
+
+**作用**：Nacos 配置只读查询，对话式查多环境(dev/test/uat/prod)的 Nacos 配置内容/清单/差异，排查问题时核对某服务某环境的配置真值。
+
+**能力**：
+- 取配置内容（按 dataId + group）
+- 列命名空间下配置清单
+- 模糊搜（匹配 dataId / group）
+- 多环境配置对比（diff）
+
+**数据源**：阿里云 MSE Nacos，`nacos_query.sh` 经 Nacos OpenAPI + Spas AK/SK 签名（HmacSHA1，python3 算 + curl 发）直连。凭证 `scripts/.config.local.sh`（本工程内，已 gitignore，从 devops 工程 `NacosConfig.java` 拷贝）。
+
+**脚本**（`skills/config/scripts/`）：
+- `nacos_query.sh` — 主脚本（get / list / search / diff）
+- `_common.sh` — Spas 签名 + 只读 `nacos_call` 封装
+- `config.example.sh` → `.config.local.sh` — 多环境凭证模板（NONPROD / PROD 两组）
+
+**多环境映射**：`dev/opendev/test/uat` → 非生产集群；`prod` → 生产集群（独立凭证）。env 用简写，脚本内部映射 namespace。
+
+**使用示例**：
+```bash
+/cwork-config 查 order-service 在 test 环境的配置
+阶段1：定 env + dataId（不知先 search）
+阶段2：nacos_query.sh get / list / diff（纯 GET）
+阶段3：配置真值 ↔ 现象对应，下结论
+```
+
+**核心原则**：
+- ⚠️ **绝对只读（仅 GET），永不写**——代码结构上不存在写路径；即使用户要求写也拒绝（写走 devops 工程受控路径）
+- prod 只查不改
+- env 用简写（dev/test/uat/prod/opendev）
+- 不臆造配置，查不到如实说
+
+**注意**：cwork-config 是独立工具（和 log/bug/doc/data 同级），不进主流程衔接链。可被 cwork-log 联动调起（核对配置真值）。需在 `bin/cwork.js` 白名单加 `'config'`。
 
 ---
 
