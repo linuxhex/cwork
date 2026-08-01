@@ -156,7 +156,12 @@ description: 对话式初始化，自动查找工程路径，多服务分支切�
 
 ## 路径查找逻辑
 
-用户输入目录名，脚本自动向上查找：
+用户输入目录名后，**优先用服务地图定位**（最准），查不到再向上查找兜底：
+
+**1. 优先（最准）**：Read `/Users/caomunian/Study/cwork/.services-map.md`，按服务名/目录名匹配绝对路径，命中即用。
+- 命中后校验路径是 git 仓库；地图里标 `[需确认]`、没有该服务、或地图文件不存在 → 走第 2 步兜底。
+
+**2. 兜底（向上查找）**：从当前目录逐级向上找：
 
 ```
 当前目录: /Users/dev/project/main/src/service
@@ -166,10 +171,12 @@ description: 对话式初始化，自动查找工程路径，多服务分支切�
 查找顺序:
 1. 同级目录: ./user-service
 2. 上级目录: ../user-service
-3. 上上级目录: ../../user-service
+3. 上级目录: ../../user-service
 4. 上上上级目录: ../../../user-service
 5. 找到 git 仓库则返回，找不到则报错
 ```
+
+> **自更新**：若通过 git 远程地址 / Nacos / `bootstrap*.properties` 确认了某服务真实路径，且地图里是 `[需确认]` 或缺失，按 `.services-map.md` 头部「自更新机制」回写（B 级机器配置可写，标来源）。
 
 ## 分支命名规则
 - 格式：`{type}/{YYYYMMDD}_{description}`

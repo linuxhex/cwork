@@ -378,7 +378,7 @@ while round <= 5:
 - 查/搜 SLS 日志（关键字排查）
 - 从当前工程代码出发，提取接口/类名/关键字搜日志，综合链路排查问题
 
-**数据源**：阿里云 SLS（日志）+ ARMS（链路/指标），脚本内置 HMAC 签名，直接 curl 调用。密钥配置在 `scripts/config.local.sh`（本工程内，已 gitignore，复制自 `config.example.sh`），可用 `ALIBABA_CLOUD_ACCESS_KEY_ID/SECRET` 环境变量覆盖。
+**数据源**：阿里云 SLS（日志）+ ARMS（链路/指标），脚本内置 HMAC 签名，直接 curl 调用。密钥配置在 `scripts/.config.local.sh`（本工程内，已 gitignore，复制自 `config.example.sh`），可用 `ALIBABA_CLOUD_ACCESS_KEY_ID/SECRET` 环境变量覆盖。
 
 **脚本**（`skills/log/scripts/`）：
 - `sls_query.sh` — SLS list/logs/count
@@ -391,15 +391,15 @@ while round <= 5:
 - `device-*` — 运营桩；`device-ykcoms` — 运维桩
 - `ctp-*` — 车队日志
 
-**代码工作区 + 服务地图**（主动读代码的前提；**路径仅供参考，先确认存在，不存在则忽略、回退当前目录**）：
+**代码工作区 + 服务地图**（主动读代码的前提；**服务地图为本地隐藏配置，不入库，按需加载**）：
 - 代码根目录 `/Users/caomunian/Work/code-projects`；最近需求工程 `brook-content`
-- 服务地图 `/Users/caomunian/Work/code-projects/services.md`（服务→目录→领域边界），定位服务目录的第一手依据（cwork-log/doc/implement 共用）
+- 服务地图 `/Users/caomunian/Study/cwork/.services-map.md`（服务→路径→领域边界→下游依赖），定位服务目录的第一手依据（cwork 各技能按需共用；读代码确认的真实依赖可回写，见文件头部「自更新机制」）
 
 **使用示例**（主动排查：读代码+搜日志+分析，决策点才对话）：
 ```bash
 /cwork-log 查 order-prod 最近15分钟 /xxx 接口耗时
 
-阶段 1：探查代码 + 锁定目标（读 services.md/工程代码提取线索；服务歧义/方向不明才问一句）
+阶段 1：探查代码 + 锁定目标（读 .services-map.md/工程代码提取线索；服务歧义/方向不明才问一句）
 阶段 2：查询与分析（arms_apps.sh 拿 pid 唯一命中直接用 → arms_traces.sh/arms_trace.sh/sls_query.sh）
   → 指出耗时点/异常点（带 span/日志证据）
 阶段 3：结论输出（汇总上下游、P99、耗时点、根因建议）

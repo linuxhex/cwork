@@ -36,21 +36,23 @@ description: 日志与链路分析，对话式查 SLS 日志 + ARMS 链路，看
 
 ## HARD GATE
 
-- 缺少阿里云密钥（`scripts/config.local.sh` 未配置且无 `ALIBABA_CLOUD_ACCESS_KEY_ID/SECRET` 环境变量），**禁止执行**，先提示配置方法
+- 缺少阿里云密钥（`scripts/.config.local.sh` 未配置且无 `ALIBABA_CLOUD_ACCESS_KEY_ID/SECRET` 环境变量），**禁止执行**，先提示配置方法
 - 查询无结果，提示用户调整时间范围/服务名/关键字，**不臆造数据**
 - 链路 span 树里的耗时点是事实，根因分析必须基于 span + 日志证据，**不猜**
 
 ## 代码工作区 + 服务地图（主动读代码的前提）
 
-> **前提**：以下路径仅为参考默认值，使用前先确认目录/文件存在；**不存在则忽略本节**，回退到当前目录或询问用户。
-> **跨 skill 共享**：cwork-implement、cwork-doc、cwork-log 三个技能共用此配置，修改时需同步。
+> 本机工作区默认值；**服务地图为本地隐藏配置，不入库**。
 
 - **代码根目录**：`/Users/caomunian/Work/code-projects`（所有后端/前端工程都在这）
 - **最近需求工程**：`/Users/caomunian/Work/code-projects/brook-content`（用户没指明工程时，默认从这里探查）
-- **服务地图**：`/Users/caomunian/Work/code-projects/services.md` —— 完整的"服务 → 目录 → 领域边界"对照表（YKC 工作区指引），**定位工程的第一手依据**
+- **服务地图（按需加载 + 自更新）**：`/Users/caomunian/Study/cwork/.services-map.md` —— cwork **唯一权威**服务地图（路径 + 领域边界 + 下游依赖），**定位工程的第一手依据**。
+  - **何时 Read**：用户说了服务名/领域要定位目录、查上下游依赖时。不需要则不读（各技能可单独使用）。
+  - **文件不存在则回退**：当前目录 / 询问用户。
+  - **自更新**：读代码确认了真实下游依赖且地图里是 `[待验证]`/`[需确认]`/缺失，按 `.services-map.md` 头部「自更新机制」回写（A 级读代码可写，标来源，不确定不写）。
 
 **定位工程的动作**（别问用户目录在哪，自己查）：
-1. 用户说了服务名/领域（如"订单"、"charge"、"车队"）→ 读 `services.md` 找对应目录
+1. 用户说了服务名/领域（如"订单"、"charge"、"车队"）→ 按需 Read `.services-map.md` 找对应目录
 2. 目录可能按域分组嵌套（如 `trade/order-server/`），顶层没有就用 `find`/`grep` 在 code-projects 下定位
 3. 找到目录后直接读代码，提取接口/类名/日志关键字
 
@@ -219,9 +221,9 @@ bash scripts/rebuild_index.sh     # 重跑 arms_apps + sls list(prod/uat) 重建
 
 ## 密钥配置（首次使用）
 
-密钥与配置存于 `scripts/config.local.sh`（**本工程内，已 gitignore，不依赖任何外部工程**）。
-- 首次使用：`cp scripts/config.example.sh scripts/config.local.sh`，填入阿里云 AK/SK 和各环境 SLS project
-- 环境变量（`ALIBABA_CLOUD_ACCESS_KEY_ID/SECRET` 等同名）可临时覆盖 config.local.sh 的值
+密钥与配置存于 `scripts/.config.local.sh`（**本工程内，已 gitignore，不依赖任何外部工程**）。
+- 首次使用：`cp scripts/config.example.sh scripts/.config.local.sh`，填入阿里云 AK/SK 和各环境 SLS project
+- 环境变量（`ALIBABA_CLOUD_ACCESS_KEY_ID/SECRET` 等同名）可临时覆盖 .config.local.sh 的值
 - 未配置时脚本会 fail 并提示配置方法
 
 ---

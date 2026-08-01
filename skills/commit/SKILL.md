@@ -26,6 +26,11 @@ description: 推演收敛后自动提交所有服务工程，不确认
 - 分支不一致，禁止提交
 - 任一工程有未完成的任务，禁止提交
 
+## 服务工程路径（按需）
+
+多服务提交时，各服务工程路径**以 `workflow-state.json` 的 `main_dir`/`deps` 为准**（init 已写入）。
+若 workflow-state 缺失某服务路径（独立模式补提依赖工程、或路径失效），按需 Read `/Users/caomunian/Study/cwork/.services-map.md` 兜底定位（含路径+领域+下游依赖，本机隐藏不入库）。不需要则不读。
+
 ## 独立执行模式（不依赖 workflow-state）
 
 **当 workflow-state.json 不存在时，以独立模式执行**：

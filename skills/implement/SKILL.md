@@ -197,7 +197,7 @@ description: 需求分析（对话式）+ 编写计划 + 执行计划 + 推演�
 **处理步骤：**
 
 1. **立即暂停当前操作**
-2. **列出所有涉及的服务**（用 `services.md` 服务地图定位每个服务的目录与职责）
+2. **列出所有涉及的服务**（按需 Read `/Users/caomunian/Study/cwork/.services-map.md` 定位每个服务的目录与职责）
 3. **为每个服务创建独立的文档目录**：
    - 主服务：`主工程/docs/requirements/{requirement_key}/`
    - 依赖服务：`依赖工程/docs/requirements/{requirement_key}/`
@@ -285,17 +285,14 @@ description: 需求分析（对话式）+ 编写计划 + 执行计划 + 推演�
 
 ## 代码工作区 + 服务地图（需求分析/多服务识别时借鉴）
 
-> **前提**：以下路径仅为参考默认值，使用前先确认目录/文件存在；**不存在则忽略本节**，回退到当前目录或询问用户。
-> **跨 skill 共享**：cwork-implement、cwork-doc、cwork-log 三个技能共用此配置，修改时需同步。
+> 本机工作区默认值；**服务地图为本地隐藏配置，不入库**。
 
 - **代码根目录**：`/Users/caomunian/Work/code-projects`（多服务聚合，无统一根 pom，改哪个服务进哪个目录）
 - **最近需求工程**：`/Users/caomunian/Work/code-projects/brook-content`（用户没指明工程时默认从这里分析）
-- **服务地图**：`/Users/caomunian/Work/code-projects/services.md` —— "服务 → 目录 → 领域边界"对照表（YKC 工作区指引），**多服务识别的第一手依据**
-
-**何时用**：
-- 需求分析"探索项目上下文"时，读 `services.md` 摸清涉及哪些服务、各自目录、职责边界
-- 多服务识别：需求提到某服务/领域 → 查 `services.md` 定位目录与上下游依赖
-- 定位工程目录：服务名 → `services.md` → 目录（可能按域嵌套如 `trade/order-server/`，顶层没有就 `find`/`grep`）
+- **服务地图（按需加载 + 自更新）**：`/Users/caomunian/Study/cwork/.services-map.md` —— cwork **唯一权威**服务地图（路径 + 领域边界 + 下游依赖），**多服务识别的第一手依据**。
+  - **何时 Read**：需求分析探索项目上下文、识别涉及哪些服务、按服务名定位目录、查上下游依赖时。不需要则不读（各技能可单独使用）。
+  - **文件不存在则回退**：询问用户 / 当前目录。
+  - **自更新**：读代码/机器配置确认了地图中 `[需确认]`/`[待验证]` 的准确值、或已有值与代码不符时，按 `.services-map.md` 头部「自更新机制」回写（A 读代码 / B 机器配置 可写；只改验证过的字段，标来源，不确定不写）。
 
 ## 需求ID检查（强制）
 

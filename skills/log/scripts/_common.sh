@@ -6,15 +6,15 @@
 # 配置来源(优先级, 高 -> 低):
 #   1. 环境变量(同名): ALIBABA_CLOUD_ACCESS_KEY_ID/SECRET, SLS_ENDPOINT,
 #      SLS_PROJECT_TEST/UAT/PROD, ARMS_REGION
-#   2. 同目录 config.local.sh(本工程内, 已 gitignore, 复制自 config.example.sh)
+#   2. 同目录 .config.local.sh(本工程内, 已 gitignore, 复制自 config.example.sh)
 #   缺失则 fail 提示配置方法
 # =============================================================================
 
 # 本地配置(基于本文件位置定位, 与调用者工作目录无关)
-# config.local.sh 内用 ${VAR:=值} 语法: 环境变量同名时优先, 否则用配置值
+# .config.local.sh 内用 ${VAR:=值} 语法: 环境变量同名时优先, 否则用配置值
 _COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=config.local.sh
-[ -f "$_COMMON_DIR/config.local.sh" ] && source "$_COMMON_DIR/config.local.sh"
+# shellcheck source=.config.local.sh
+[ -f "$_COMMON_DIR/.config.local.sh" ] && source "$_COMMON_DIR/.config.local.sh"
 
 fail() { echo "ERROR: $*" >&2; exit 1; }
 require_cmd() { command -v "$1" >/dev/null 2>&1 || fail "缺少命令: $1 (请先安装)"; }
@@ -23,7 +23,7 @@ load_credentials() {
   AK_ID="${ALIBABA_CLOUD_ACCESS_KEY_ID:-}"
   AK_SECRET="${ALIBABA_CLOUD_ACCESS_KEY_SECRET:-}"
   [[ -n "$AK_ID" && -n "$AK_SECRET" ]] || \
-    fail "未配置阿里云密钥: 请执行 cp scripts/config.example.sh scripts/config.local.sh 并填入 AK/SK, 或 export ALIBABA_CLOUD_ACCESS_KEY_ID / ALIBABA_CLOUD_ACCESS_KEY_SECRET"
+    fail "未配置阿里云密钥: 请执行 cp scripts/config.example.sh scripts/.config.local.sh 并填入 AK/SK, 或 export ALIBABA_CLOUD_ACCESS_KEY_ID / ALIBABA_CLOUD_ACCESS_KEY_SECRET"
 }
 
 get_sls_endpoint() { echo "${SLS_ENDPOINT:-cn-hangzhou.log.aliyuncs.com}"; }
@@ -36,7 +36,7 @@ get_sls_project() {  # $1=环境 test/uat/prod, 或直接传 project 名
     prod) v="${SLS_PROJECT_PROD:-}" ;;
     *)    v="$env" ;;
   esac
-  [[ -n "$v" ]] || fail "未配置环境 [$env] 的 SLS project: 请在 scripts/config.local.sh 设置 SLS_PROJECT_$(echo "$env" | tr '[:lower:]' '[:upper:]')"
+  [[ -n "$v" ]] || fail "未配置环境 [$env] 的 SLS project: 请在 scripts/.config.local.sh 设置 SLS_PROJECT_$(echo "$env" | tr '[:lower:]' '[:upper:]')"
   echo "$v"
 }
 
