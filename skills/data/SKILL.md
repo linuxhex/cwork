@@ -74,7 +74,7 @@ description: 数仓数据查询，对话式查 Doris 数仓（internal/hive/JDBC
 | `export-async` | 大结果集异步导出 OSS | `python3 mcp_client.py export-async --sql "..."` |
 | `export-status` | 查导出任务状态 | `python3 mcp_client.py export-status --task-id xxx` |
 
-> cwork-data **不依赖 Claude 的 MCP 注册**——`mcp_client.py` 是 HTTP 直连 query-server 服务（默认 `http://10.20.0.2:8081/mcp`），与 cwork-log 用 bash 直连阿里云同一性质。
+> cwork-data **不依赖 Claude 的 MCP 注册**——`mcp_client.py` 是 HTTP 直连 query-server 服务（地址在 `.mcp_config.json` 的 `base_url` 或环境变量 `MCP_BASE_URL` 配置），与 cwork-log 用 bash 直连阿里云同一性质。
 
 ---
 
@@ -159,7 +159,7 @@ JDBC/ODS 点查耗时 **>1s** 必须诊断，**不靠调大超时绕过**：① 
 ## 密钥配置（首次使用）
 
 凭证存于 `scripts/mcp-client/.mcp_config.json`（**本工程内，已 gitignore，不提交**）。
-- 首次：`python3 mcp_client.py init-config --user <用户名> --password <密码>`（账号在统一自助查询平台获取）
+- 首次：`python3 mcp_client.py init-config --base-url <query-server地址> --user <用户名> --password <密码>`（账号在统一自助查询平台获取）
 - 验证：`python3 mcp_client.py setup-check`
 - 环境变量（`MCP_BASE_URL`/`MCP_USER`/`MCP_PASS`/`MCP_TIMEOUT`）可临时覆盖 `.mcp_config.json`
 - 未配置时 `setup-check` 返回 `{"ready": false}` 并给 `action`

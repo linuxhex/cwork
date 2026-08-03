@@ -7,7 +7,7 @@ query-server MCP 通用调用脚本（HTTP + JSON-RPC + SSE 兼容解析）。
 - 统一返回结构，避免各自实现导致行为不一致
 
 环境变量：
-- MCP_BASE_URL: 默认 http://10.20.0.2:8081
+- MCP_BASE_URL: query-server 地址（如 http://host:port）
 - MCP_USER:     MCP 鉴权用户名（对应 X-User-Name）
 - MCP_PASS:     MCP 鉴权密码（对应 X-Password）
 """
@@ -37,7 +37,7 @@ except ModuleNotFoundError:  # pragma: no cover - used in minimal Python runtime
     httpx = None  # type: ignore[assignment]
 
 
-DEFAULT_BASE_URL = "http://10.20.0.2:8081"
+DEFAULT_BASE_URL = ""
 DEFAULT_CONFIG_FILENAME = ".mcp_config.json"  # 点开头, 本地凭证, 已 gitignore
 
 
@@ -53,12 +53,12 @@ class MCPConfig:
         """
         配置优先级：
         1) 环境变量（MCP_BASE_URL/MCP_USER/MCP_PASS/MCP_TIMEOUT）
-        2) config_file JSON（默认 scripts/query-server-mcp-client/mcp_config.json，仅 user/password/timeout）
-        3) 内置默认值（base_url 固定默认）
+        2) config_file JSON（默认 .mcp_config.json，含 base_url/user/password/timeout）
+        3) 内置默认值
         """
         file_cfg = _load_config_file(config_file)
         return cls(
-            base_url=os.getenv("MCP_BASE_URL", DEFAULT_BASE_URL).rstrip("/"),
+            base_url=(os.getenv("MCP_BASE_URL") or file_cfg.get("base_url", "") or DEFAULT_BASE_URL).rstrip("/"),
             user=os.getenv("MCP_USER", file_cfg.get("user", "")),
             password=os.getenv("MCP_PASS", file_cfg.get("password", "")),
             timeout=int(os.getenv("MCP_TIMEOUT", str(file_cfg.get("timeout", 30)))),
@@ -88,12 +88,14 @@ def _load_config_file(config_file: Optional[str] = None) -> Dict[str, Any]:
 def init_config_file(
     user: str,
     password: str,
+    base_url: str = "",
     timeout: int = 30,
     config_file: Optional[str] = None,
 ) -> Path:
     """首次初始化本地配置文件（由 agent/用户执行一次即可）。"""
     path = Path(config_file) if config_file else _default_config_path()
-    payload = {
+    payload: Dict[str, Any] = {
+        "base_url": base_url,
         "user": user,
         "password": password,
         "timeout": timeout,
@@ -650,6 +652,7 @@ def _build_cli() -> argparse.ArgumentParser:
     p_init = sub.add_parser("init-config", help="初始化本地配置文件")
     p_init.add_argument("--user", required=True, help="MCP 用户名")
     p_init.add_argument("--password", required=True, help="MCP 密码")
+    p_init.add_argument("--base-url", default="", help="query-server 地址，如 http://host:port")
     p_init.add_argument("--timeout", type=int, default=30, help="请求超时秒数")
     p_init.add_argument("--config-file", default="", help="配置文件路径（可选）")
 
@@ -700,6 +703,7 @@ if __name__ == "__main__":
         saved = init_config_file(
             user=args.user,
             password=args.password,
+            base_url=args.base_url or "",
             timeout=args.timeout,
             config_file=args.config_file or None,
         )
