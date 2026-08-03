@@ -145,6 +145,9 @@ bash scripts/arms_traces.sh "<pid>" <分钟> "<接口关键字>"
 看 `调用次数`/`QPS` 是否为 0（有没有流量）、平均耗时、错误率、整体 P99。
 
 **目标 ② 链路**：先用 `arms_traces.sh` 或 `sls_query.sh logs` 拿到 traceId + 时间戳，再：
+
+> **traceId 从一条日志里怎么抠**（拿到后直接喂 `arms_trace.sh`）：一条结构化日志里的链路 id 有两个来源——① 字段 `trace`：32 位 hex（如 `fa7257a48b04b586826e3eca84cac497`），标准 traceId；② `message` 开头第三段方括号里的纯数字（如 `[NONE][0][11381236262484628996096]` 中的 `11381236262484628996096`，Feign/接口日志里的 eagleeye/rpc 上下文 id）。**两者都不是每条都有**——有的日志无 `trace` 字段、有的 message 没第三段方括号，拿到哪个用哪个；都没有就退回用 spring.name 或业务单号（订单号/枪码）搜关联日志再找。
+
 ```bash
 bash scripts/arms_trace.sh "<pid>" "<traceId>" <ts_ms>
 ```
