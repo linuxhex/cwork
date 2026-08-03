@@ -1,4 +1,5 @@
 {
+  "base_url": "http://YOUR_QUERY_SERVER_HOST:PORT",
   "user": "YOUR_QUERY_PLATFORM_USERNAME",
   "password": "YOUR_QUERY_PLATFORM_PASSWORD",
   "timeout": 30

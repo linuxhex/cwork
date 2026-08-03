@@ -456,6 +456,7 @@ implement 过程中**禁止提交代码**，最终由 cwork-commit 统一提交�
 - 文档（仅供参考，以实际代码为准）
 - 最近的 commit
 - 现有代码模式
+- **代码图谱（可选）**：工程已用 codegraph 索引时，优先 `codegraph explore "<要理解的流程>"` / `codegraph query <符号>` 摸现状，比散乱 grep+Read 更省 context；未索引（`codegraph status` 无符号输出）→ 回退 grep/Read，不阻塞
 
 **重要原则**：
 - 注释和文档可能过时或不准确，实际运行的代码才是最真实的
@@ -565,6 +566,7 @@ implement 过程中**禁止提交代码**，最终由 cwork-commit 统一提交�
    - 检查主服务的调用契约和依赖服务的响应契约是否一致
    - 检查字段名、类型、必填性是否匹配
    - 发现不一致时协调修正
+   - **代码图谱核对（可选）**：已索引时用 `codegraph callers`/`callees`/`node` 验证主服务调用的符号与依赖服务提供的符号真实对得上（不只看文档契约）；未索引跳过
 
 ---
 
@@ -858,6 +860,10 @@ def function(input):
 | SQL 注入 | SQL 拼接是否使用参数化查询，是否存在注入风险 |
 | XSS 风险 | 前端是否使用 `v-html`/`dangerouslySetInnerHTML` 等不安全渲染 |
 
+### 过度工程审查（可选，来自 ponytail）
+
+审 plan.md 有没有"能删的复杂度"，和上面正确性/安全审查**正交**，只盯冗余。每条一行，标签：`delete`/`stdlib`/`native`/`yagni`/`shrink`，结尾 `净: 可 -<N> 行`；无可删：跳过。完整说明见 `review-checklist.md` 的「过度工程检查」。
+
 ### 审查流程
 
 ```
@@ -866,9 +872,10 @@ def function(input):
 3. 逐项执行技术方案审查
 4. 逐项执行执行可行性审查
 5. 逐项执行安全审查（依赖安全+敏感信息+权限控制+SQL注入+XSS）
-6. 记录审查结果到 changes.md
-7. 如发现问题，提出修正建议，等待用户确认后修改 plan.md
-8. 审查通过后，进入执行计划阶段
+6. （可选）逐项执行过度工程审查（delete/stdlib/native/yagni/shrink）
+7. 记录审查结果到 changes.md
+8. 如发现问题，提出修正建议，等待用户确认后修改 plan.md
+9. 审查通过后，进入执行计划阶段
 ```
 
 ### 审查结果记录
@@ -1060,6 +1067,14 @@ List<Order> orders = new ArrayList<>();
 **每个工程必须从自己的定位视角写文档，不得遗漏。**
 
 主 agent 负责主工程文档，每个依赖工程 agent 负责对应工程文档。
+
+### 触发图谱更新（可选）
+
+本阶段改完了代码，进入推演收敛（要用 `codegraph impact` / `callers` 查影响范围）前，先增量 sync 一次（未装 / 未索引 / 锁占用则跳过，不阻塞）：
+
+```bash
+codegraph sync /Users/caomunian/Work/code-projects -q
+```
 
 ---
 

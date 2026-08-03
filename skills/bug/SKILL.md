@@ -255,6 +255,24 @@ python3 mcp_client.py query --sql "SELECT * FROM internal.dwd.dwd_order_settle_m
 **联动原则**：cwork-bug 管「定位并修复」，cwork-data 管「数据佐证」。拿到数据证据后回到代码定位修复。
 > **注意**：调用 cwork-data 需 `skills/data/scripts/mcp-client/.mcp_config.json` 已配置，未配置时仅从代码/日志层面分析。
 
+**代码结构联动（codegraph，可选）** — 代码侧定位根因
+
+bug 涉及调用链 / 接口实现 / 要追"谁调用了这个方法" / 怀疑根因在共享方法被多方调用时，优先用 codegraph 精确定位（比散乱 grep+Read 更准，能抓 Spring 接口→实现、回调等 grep 漏点）。
+
+**前置探测**（优雅降级，未索引/未装就跳过，不阻塞）：
+```bash
+codegraph status            # 已索引（有符号数）→ 用；无索引 → 回退 grep/Read，继续分析
+```
+
+**定位命令**：
+```bash
+codegraph callers <方法名>                    # 所有调用方——根因常在共享方法，逐个调用方确认
+codegraph explore "<入口> 怎么到 <嫌疑点>"      # 一次还原调用链 + 源码，定位根因路径
+codegraph node <类|接口>                      # 接口/实现源码（抓 接口→实现、动态分派）
+```
+
+**联动原则**：codegraph 是**代码侧**定位，和 cwork-log（**运行时侧**）、cwork-data（**数据侧**）互补；拿到调用方/调用链证据后，回到代码定位根因。未索引/未安装：跳过，继续用 grep + Read + 服务地图，不报错。
+
 4. **提出修复方案**
    - 提出 1-2 种修复方案
    - 说明每种方案的优缺点
@@ -323,6 +341,14 @@ if (userInfo == null) {
 ---
 
 ## 阶段 5：推演验证
+
+### 触发图谱更新（可选）
+
+刚改完代码，本阶段 `codegraph affected` / 推演查图谱前，先增量 sync 一次（未装 / 未索引 / 锁占用则跳过，不阻塞）：
+
+```bash
+codegraph sync /Users/caomunian/Work/code-projects -q
+```
 
 ### 逻辑推演
 
@@ -407,6 +433,12 @@ it('新用户首次登录 - 用户信息为空时应显示默认等级', () => {
 ```
 
 **回归测试位置**：与修复文件同目录的测试文件中（如 `UserService.java` → `UserServiceTest.java`）。
+
+**优先用 codegraph 找全牵连测试**（避免漏测回归）：
+```bash
+codegraph affected <改动文件>      # 已索引时，直接列出该改动牵连的测试文件
+# 未索引：回退到"修复文件同目录测试 + 推演发现的边界场景"
+```
 
 **运行回归测试**：
 ```bash

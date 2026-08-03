@@ -66,6 +66,12 @@ description: 推演收敛后自动提交所有服务工程，不确认
 
 ## 执行逻辑（不问问题，直接执行）
 
+**提交前触发图谱更新（可选）**：代码已改完，提交前增量 sync 一次，保证图谱新鲜供后续查询（未装 / 未索引 / 锁占用则跳过，不阻塞）：
+
+```bash
+codegraph sync /Users/caomunian/Work/code-projects -q
+```
+
 ### 单服务场景
 
 1. 检查 workflow-state 是否为 commit

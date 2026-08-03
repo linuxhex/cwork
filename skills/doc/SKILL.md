@@ -420,6 +420,17 @@ description: 根据代码改动生成技术方案文档（两种模式：已有�
 
 ## 接口提取逻辑
 
+**代码图谱辅助（codegraph，可选）** — 接口/数据模型/调用链/影响范围，优先用图谱，未索引降级：
+
+```bash
+codegraph status                       # 探测：已索引→用；否则回退 git diff + Read 手抠
+codegraph node <类|接口>                # 取接口/数据模型的带行号源码（替代手抠，更准）
+codegraph callees <Controller 方法>      # 还原 Controller→Service→Mapper/Feign 调用链（喂下方自动架构图）
+codegraph impact <改动符号>             # 改动影响范围评估的实证（爆炸半径）
+```
+
+未索引/未安装：跳过，回退现有 `git diff` + Read 方式，不阻塞。
+
 ### 自动架构图生成
 
 **从代码调用链自动生成 Mermaid 图，替代手动写占位符。**
