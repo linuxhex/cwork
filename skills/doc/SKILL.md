@@ -429,6 +429,8 @@ codegraph callees <Controller 方法>      # 还原 Controller→Service→Mappe
 codegraph impact <改动符号>             # 改动影响范围评估的实证（爆炸半径）
 ```
 
+🔍 **输出标签（强制）**：每次调 codegraph 必须在对话里打一行 `[codegraph]` 标签让走向可见——探测后 `🔍 [codegraph] status → 已索引(N符号)，用图谱` 或 `→ 未索引，回退 git diff+Read`；查询时 `🔍 [codegraph] <命令> <目标> → <目的>`。**无 `[codegraph]` 标签 = 没走 codegraph，视为偷懒。**
+
 未索引/未安装：跳过，回退现有 `git diff` + Read 方式，不阻塞。
 
 ### 自动架构图生成
