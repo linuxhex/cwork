@@ -458,6 +458,8 @@ implement 过程中**禁止提交代码**，最终由 cwork-commit 统一提交�
 - 现有代码模式
 - **代码图谱（必须先探测）**：进入探索后，第一步跑 `codegraph status`（在 `/Users/caomunian/Work/code-projects` 下执行）。有符号数（已索引）→ **必须用** `codegraph explore "<要理解的流程>"` / `codegraph query <符号>` 摸现状，比散乱 grep+Read 更省 context、更准确；无符号（未索引）→ 回退 grep/Read，不阻塞
 
+🔍 **输出标签（强制）**：每次调 codegraph 必须在对话里打一行 `[codegraph]` 标签让走向可见——探测后 `🔍 [codegraph] status → 已索引(N符号)，用图谱` 或 `→ 未索引，回退 grep+Read`；查询时 `🔍 [codegraph] <命令> <目标> → <目的>`。**无 `[codegraph]` 标签 = 没走 codegraph，视为偷懒。**
+
 **重要原则**：
 - 注释和文档可能过时或不准确，实际运行的代码才是最真实的
 - 分析需求时，优先阅读和理解实际代码逻辑

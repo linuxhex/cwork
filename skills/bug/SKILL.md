@@ -264,6 +264,8 @@ bug 涉及调用链 / 接口实现 / 要追"谁调用了这个方法" / 怀疑�
 cd /Users/caomunian/Work/code-projects && codegraph status            # 已索引（有符号数）→ 必须用；无索引 → 回退 grep/Read，继续分析
 ```
 
+🔍 **输出标签（强制）**：每次调 codegraph 必须在对话里打一行 `[codegraph]` 标签让走向可见——探测后 `🔍 [codegraph] status → 已索引(N符号)，用图谱` 或 `→ 未索引，回退 grep+Read`；查询时 `🔍 [codegraph] <命令> <目标> → <目的>`。**无 `[codegraph]` 标签 = 没走 codegraph，视为偷懒。**
+
 **定位命令**：
 ```bash
 codegraph callers <方法名>                    # 所有调用方——根因常在共享方法，逐个调用方确认

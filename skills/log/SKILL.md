@@ -94,6 +94,8 @@ description: 日志与链路分析，对话式查 SLS 日志 + ARMS 链路，看
    cd /Users/caomunian/Work/code-projects && codegraph status            # 有符号数（已索引）→ 必须用下方图谱命令；无索引 → 回退 grep/Read，继续提取
    ```
 
+   🔍 **输出标签（强制）**：每次调 codegraph 必须在对话里打一行 `[codegraph]` 标签让走向可见——探测后 `🔍 [codegraph] status → 已索引(N符号)，用图谱` 或 `→ 未索引，回退 grep+Read`；查询时 `🔍 [codegraph] <命令> <目标> → <目的>`。**无 `[codegraph]` 标签 = 没走 codegraph，视为偷懒。**
+
    **已索引 → 用图谱提取线索**（比散乱 grep+Read 更准、更省 context，能抓 Spring 接口→实现、Feign 调用链等 grep 漏点）：
    ```bash
    codegraph node <类|接口>                    # 带行号源码：抠接口路径（@RequestMapping）、类名、log.info/error 关键字字面量
