@@ -2,6 +2,7 @@
 
 > **用途**：查某服务日志前，先按本索引定位 logstore，**不要在 200+ 个库里盲目 `list`/试探**。
 > **生成依据**：prod 212 库 / uat 143 库实际 `list` + 命名规律 + 采样验证（2026-07-30）。
+> **⚠️ 2026-08-04 重新实测**：prod 业务专属库大面积空（详见 §4 末「prod 专属库数据现状」），查业务日志**主链路 = `all` + spring.name 关键字**，专属库仅少数有数据。
 > **更新方法**：库变更时重跑 `bash scripts/sls_query.sh <env> list`，按下述前缀重新归类。
 
 ---
@@ -10,6 +11,7 @@
 
 - **`all` = 聚合库（默认入口）**：采集绝大多数业务服务的 `spring_app_logs`，且是**结构化 JSON**（含 `trace` / `logger` / `level` / `message` / `thread` / `line`）。排查业务运行日志、报错、慢调用、关联 traceId，**先查 `all`**。
 - **专属库 = 按"域 / 厂商 / 接口"分库**：`<服务>-server`（运行日志补充）、`<服务>3-out`（对外接口出入站）、`device-<厂商>`（桩协议）、`ctp-*`（车队）等。`all` 查不到、或要专门维度时再用。
+- **⚠️ prod 业务专属库大面积空（2026-08-04 实测 90 天）**：66 个 `*-server`/`*-out` 业务专属库只有 ~14 个有数据，其余 50+（含 finance/order/charge/base/poly/clearing 等核心服务专属库）**90 天 0 条**。所以 **prod 查业务日志先 `all`（spring.name 关键字）**，别默认去 `<服务>-server`。有数据的专属库名单见 §4 末。
 - **一个服务常散落多个库**：如 order 运行日志在 `all` / `order-server`，对外接口在 `order3-out`，MQ 消费在 `mq-consumer-order`。**不是"一服务一库"**。
 
 ---
@@ -70,6 +72,13 @@
 
 **接口出站(*-out)** · 37：`activity3-out barrierjs3-out barrierkt3-out basejur3-out charge3-out crm3-out data3-acc data3-out device3-out entryside3-out export3-out external3-out finance3-acc finance3-out flowside3-out gateway-op3-out gw3-other-out gw3-zdl-out ljc3-out maintenance3-out ngw3-out om-task3-out ombase3-out order3-out ots-base-out ots-finance-out ots-gw-out ots-order-out ots-task-out parking-lock3-out poly3-out reconciliation3-out safeguard3-out statistics3-out superwarehouse3-out task3-out ykc-admin3-out`
 
+> **⚠️ prod 专属库数据现状（2026-08-04 实测 90 天，cn-hangzhou）** —— 业务专属库大面积空，**查业务日志先 `all`+spring.name**，仅下列「有数据」的值得单独查：
+> - **运行库 `*-server` 有数据(7)**：`payment-server`(12.1亿，与 all 双写)、`foundation-c`(1.98亿)、`external-server`(1.11亿)、`cloud-api-server`(9047万)、`new-base`(1699万)、`station-site-server`(120万)、`reconciliation-server`(72万)
+> - **出站 `*-out`/`*-acc` 有数据(8)**：`task3-out`(7.85亿)、`flowside3-out`(1788万)、`gateway-op3-out`(309万)、`ots-base-out`(48万)、`ots-order-out`(4.1万)、`ots-gw-out`/`ots-task-out`/`ots-finance-out`(千级)
+> - **无索引不可查(2)**：`crm3-out`、`data3-acc`（库存在但未建索引，count 报 `IndexConfigNotExist`）
+> - **90 天全空(50+)**：其余全部，含 `finance-server`/`finance3-acc`/`finance3-out`、`order-server`/`order3-out`、`charge-server`/`charge-business`/`charge3-out`、`base-server`、`poly-server`/`poly3-out`、`clearing-server`、`alarm-server`、`push-server`、`invoice-server`、`activity-server` 等 → 这些服务日志**只在 `all`**
+> - **payment 特殊**：spring.name = `payment-server`（连字符，非驼峰 `paymentServer`）；prod 专属库与 `all` 双写
+
 **设备/充电桩** · 32：`device-1x device-1x-encryption device-2x device-2x-encryption device-3x1 device-3x1-out device-adapter-tool device-adapter-tool-encrypt18 device-business device-collection device-custom device-huawei device-ln3-out device-luneng device-maint device-monitoring device-msg device-new-th-out device-new3-out device-post device-server-jsc device-server-ykc-encryption device-sh-channel-out device-sh3-out device-shenghong device-shenrui device-shenrui2 device-th-one-out device-wm device-ykc1 device-ykcoms device-ykr3-out`
 > 厂商对照：`device-shenghong`盛弘 / `device-shenrui`施恩 / `device-huawei`华为 / `device-luneng`鲁能 / `device-wm` / `device-ykc1`；`device-ykcoms`=运维桩
 
@@ -113,7 +122,7 @@
 | trade/charge-business-server | `CHARGEBUSINESSSERVER` | charge-business-prod | 查表 | all（关键字 `CHARGEBUSINESSSERVER`）/ charge-business |
 | basic/base_server | `BaseServer1` | base-prod | 查表 | all / base-server |
 | basic/poly_server | `PolyServer` | poly-prod | 查表 | all / poly-server / poly3-out |
-| finance/finance_server | `financeServer` | finance-prod | 查表 | all / finance-server / finance3-out |
+| finance/finance_server | `financeServer` | finance-prod | 查表 | **`all`（financeServer，2.46亿/7天）**；专属库 finance-server/finance3-acc/finance3-out **全空⚠️** |
 | finance/clearing_server | `clearingserver` | clearing-prod | 查表 | all / clearing-server |
 | basic/cloud_api_server | `cloudApiServer` | cloud-api-prod | 查表 | all / cloud-api-server |
 | basic/price_center_server | `priceCenterServer` | price-center-prod | 查表 | all / price-center-server |

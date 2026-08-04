@@ -15,7 +15,8 @@
 
 ## 未分析
 
-（暂无）
+- [2026-08-04] [log] prod 业务专属库大面积空（66 个 `*-server`/`*-out` 仅 ~14 有数据，finance/order/charge/base/poly/clearing 等核心服务专属库 90 天全空），原索引把空库当可用库列了误导 → 已修正：LOGSTORE_INDEX.md §1/§4 + ARMS_PID_CACHE.md 加「prod 专属库数据现状」清单，主链路改 `all`+spring.name，finance 四层表/ARMS 行标注全空；uat 侧基本准确未动
+- [2026-08-04] [log] cwork-log 阶段 1 缺 codegraph（bug/implement/doc 都有，独 log 没有）→ 已补：阶段 1 第 2 步加 codegraph 优先探测（status→node/callees/callers/explore），核心原则+反模式呼应
 
 ## 已归档（最近一轮）
 

@@ -3,7 +3,8 @@
 > 一键重建: `bash scripts/rebuild_index.sh`（重跑 arms_apps + sls list 两环境并匹配）。
 
 > **主库 `all`**（业务结构化日志都在这）；**例外：`device-*` 应用协议日志常只在专属库、不在 all**，主库标 `专属库优先`，查不到去专属库；**`ctp-*` 车队日志也不在 all**，只能查 `ctp-*` 专属库。
-> `专属库` 按应用名前缀匹配：prod 应用匹配 prod 库、uat 应用匹配 uat 库；流量低时专属库可能空，回退 all。
+> `专属库` 按应用名前缀匹配：prod 应用匹配 prod 库、uat 应用匹配 uat 库。
+> **⚠️ prod 业务专属库大面积空（2026-08-04 实测）**：下表「专属库」列**仅作命名参考**——除 `payment-server`/`foundation-c`/`external-server`/`cloud-api-server`/`new-base`/`station-site-server`/`reconciliation-server`/`task3-out`/`flowside3-out`/`gateway-op3-out` 等少数外，其余业务专属库（finance/order/charge/base/poly/clearing 等）90 天 0 条。**查业务日志先 `all`+spring.name**，完整有数据名单见 `LOGSTORE_INDEX.md` §4 末。
 > pid 为重建时刻快照，应用重建后失效（信号：arms_traces/arms_trace 返回空或鉴权错 → 重跑本脚本）。
 
 | 应用 | pid | 环境 | 专属库(可选) | 主库 |
@@ -79,7 +80,7 @@
 | export-cache-uat | gb7wlo91dj@77233b2a2b24ec1 | uat | — | all |
 | external-prod | gb7wlo91dj@23d86c4d63f6d39 | prod | external-server, external3-out | all |
 | external-uat | gb7wlo91dj@7f72f8fdd47ee72 | uat | external-server, external3-out | all |
-| finance-prod | gb7wlo91dj@607b3edaf26ed41 | prod | finance-server, finance3-acc, finance3-out | all |
+| finance-prod | gb7wlo91dj@607b3edaf26ed41 | prod | ⚠️ finance-server/finance3-acc/finance3-out 全空(90天0条) | **all**（financeServer） |
 | finance-server-uat | gb7wlo91dj@b7b4948c6ce28a8 | uat | — | all |
 | finance-tob-prod | gb7wlo91dj@16d340bb17c309e | prod | — | all |
 | finance-tob-uat | gb7wlo91dj@354ba8975b96ea6 | uat | — | all |
