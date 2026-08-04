@@ -20,7 +20,7 @@ description: 日志与链路分析，对话式查 SLS 日志 + ARMS 链路，看
 - **自己能定的直接做**：环境/时间/日志库默认值、代码线索、工程定位、发查询——不问
 - **决策点才问**：服务歧义、排查方向、先深挖哪条线索——简短问一次，问就问全，不挤牙膏
 - 接口性能（平均/QPS/流量）用 ARMS 指标接口精确值，耗时点用链路 span 树
-- 从代码出发排查：读工程代码提取接口/类名/关键字，再去 SLS 搜日志
+- 从代码出发排查：先 `codegraph status` 探测，已索引用图谱（node/callees/callers/explore）抠接口/类名/关键字/上下游，未索引回退 Read/grep，再去 SLS 搜日志
 - 不臆造数据：查询无结果就如实说，换条件再查
 
 ## 语言约束（强制）
@@ -87,7 +87,22 @@ description: 日志与链路分析，对话式查 SLS 日志 + ARMS 链路，看
 **自己能定的先做掉，别预审；只在决策点停一下。**
 
 1. **定位工程**（直接做）：按"代码工作区 + 服务地图"自己查目录；用户没指明 → 默认 `brook-content`；问题明显属于别的服务再切。
-2. **读代码提取线索**（直接做）：接口路径、Controller/Service 类名、日志打印关键字、异常类型、Feign 调用的上下游。
+2. **读代码提取线索（先 codegraph 探测，已索引必须用）**：提取接口路径、Controller/Service 类名、日志打印关键字、异常类型、Feign 调用的上下游——这些线索直接喂阶段 2 的日志/链路查询。
+
+   **前置探测（直接做）**：
+   ```bash
+   cd /Users/caomunian/Work/code-projects && codegraph status            # 有符号数（已索引）→ 必须用下方图谱命令；无索引 → 回退 grep/Read，继续提取
+   ```
+
+   **已索引 → 用图谱提取线索**（比散乱 grep+Read 更准、更省 context，能抓 Spring 接口→实现、Feign 调用链等 grep 漏点）：
+   ```bash
+   codegraph node <类|接口>                    # 带行号源码：抠接口路径（@RequestMapping）、类名、log.info/error 关键字字面量
+   codegraph callees <Controller 方法>         # 这个方法调了哪些下游（Feign 上下游、Mapper）—— 排查链路耗时/异常必看下游
+   codegraph callers <方法>                    # 谁调了它（上游入口、跨服务调用方）—— 定位流量从哪进来
+   codegraph explore "<入口> 怎么到 <嫌疑点>"   # 一次还原完整调用链 + 源码，顺带看沿路日志埋点
+   ```
+
+   **未索引 / 未安装** → 回退 `grep` + `Read` 直接读源码提取，不阻塞、不报错。
 3. **默认值补全**（直接做）：环境=prod、时间=最近 15 分钟、日志库=`all`（需求里给了别的才覆盖）。
 
 **决策点（这里才对话，简短一次问全）**：
@@ -269,6 +284,7 @@ bash scripts/rebuild_index.sh     # 重跑 arms_apps + sls list(prod/uat) 重建
 - 臆造日志内容或链路数据（查询无结果就如实说，让用户调整条件）
 - 只看一个指标下结论（流量正常不代表链路正常，要交叉看）
 - 把耗时点/异常点藏在原始输出里不点明（必须显式指出耗时点和异常）
+- 已索引却散乱 grep+Read、不用 codegraph（阶段 1 探查代码先 `codegraph status`，已索引必须用 node/callees/callers/explore 抠线索）
 - 代码排查时不读实际代码、只凭日志猜（要对应到具体文件:行号）
 
 ---
