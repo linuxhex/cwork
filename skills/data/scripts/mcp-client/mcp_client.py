@@ -196,10 +196,8 @@ class QueryServerMCPClient:
         self._headers = {
             "Content-Type": "application/json",
             "Accept": "application/json, text/event-stream",
-            # HTTP header 仅允许 ascii；中文用户名的 str 会触发 ascii 编码报错(httpx/urllib 均如此)。
-            # 用 utf-8 bytes 传输：httpx 直接发 bytes；服务端按 iso-8859-1 收字节后 utf-8 还原(Java/Spring 中文 header 惯例)。
-            "X-User-Name": self.cfg.user.encode("utf-8"),
-            "X-Password": self.cfg.password.encode("utf-8"),
+            "X-User-Name": self.cfg.user,
+            "X-Password": self.cfg.password,
         }
         self._schema_cache: Dict[str, Set[str]] = {}
 
