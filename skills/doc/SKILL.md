@@ -422,8 +422,14 @@ description: 根据代码改动生成技术方案文档（两种模式：已有�
 
 **代码图谱辅助（codegraph，必须先探测）** — 接口/数据模型/调用链/影响范围，先跑 `codegraph status` 确认已索引，然后**必须用**图谱替代手抠，未索引降级：
 
+**⚠️ 关键：不是只探测一次，而是每次找代码都要探测**
+
+- **错误理解**：开始时探测一次，后面就可以随便用 grep+Read
+- **正确理解**：生成文档过程中，**每次**查接口、查调用链、查影响范围，都要先探测 codegraph，已索引就必须用
+- **持续监督**：每一步输出都必须有 `[codegraph]` 标签，没有就是偷懒
+
 ```bash
-cd /Users/caomunian/Work/code-projects && codegraph status                       # 探测（必须执行）：已索引→用；否则回退 git diff + Read 手抠
+cd /Users/caomunian/Work/code-projects && codegraph status                       # 探测（每次找代码都必须执行）：已索引→用；否则回退 git diff + Read 手抠
 codegraph node <类|接口>                # 取接口/数据模型的带行号源码（替代手抠，更准）
 codegraph callees <Controller 方法>      # 还原 Controller→Service→Mapper/Feign 调用链（喂下方自动架构图）
 codegraph impact <改动符号>             # 改动影响范围评估的实证（爆炸半径）
