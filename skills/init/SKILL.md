@@ -76,8 +76,9 @@ description: 对话式初始化，自动查找工程路径，多服务分支切�
 2. 校验工程是否为 git 仓库
 3. 备份本地改动（git stash）
 4. 切换分支
-5. 写 workflow-state.json
-6. 自动进入 implement
+5. 触发 codegraph 图谱更新（保证后续 implement/bug 能用最新图谱）
+6. 写 workflow-state.json
+7. 自动进入 implement
 
 ### 多服务场景
 
@@ -88,9 +89,10 @@ description: 对话式初始化，自动查找工程路径，多服务分支切�
    - 备份本地改动（git stash）
    - 创建/切换到同一 feature 分支
    - 创建需求文档目录 `docs/requirements/{requirement_key}/{service_name}/`
-5. 写主工程 workflow-state.json
-6. 写各依赖工程 workflow-state.json
-7. 自动进入 implement
+5. 触发 codegraph 图谱更新（保证后续 implement/bug 能用最新图谱）
+6. 写主工程 workflow-state.json
+7. 写各依赖工程 workflow-state.json
+8. 自动进入 implement
 
 ## 多服务执行流程图
 
@@ -139,6 +141,14 @@ description: 对话式初始化，自动查找工程路径，多服务分支切�
 │    → git stash（备份本地改动）                                    │
 │    → git checkout -b feature/20260529_user_export（创建分支）        │
 │    → mkdir -p docs/requirements/user-export/order-service/      │
+└─────────────────────────────────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  触发 codegraph 图谱更新                                          │
+├─────────────────────────────────────────────────────────────────┤
+│  codegraph sync /Users/caomunian/Work/code-projects -q          │
+│  （未装 / 锁占用则跳过，不阻塞）                                    │
 └─────────────────────────────────────────────────────────────────┘
                          │
                          ▼
@@ -199,6 +209,14 @@ git stash pop
 
 # 或查看备份日志
 cat .cwork/backup-log.json
+```
+
+## codegraph 图谱更新
+
+分支切换完成后，**必须**触发 codegraph 增量同步，保证后续 implement/bug 阶段的图谱查询基于最新代码（未装 / 锁占用则跳过，不阻塞）：
+
+```bash
+codegraph sync /Users/caomunian/Work/code-projects -q
 ```
 
 ## 产物

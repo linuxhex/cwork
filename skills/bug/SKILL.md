@@ -255,13 +255,13 @@ python3 mcp_client.py query --sql "SELECT * FROM internal.dwd.dwd_order_settle_m
 **联动原则**：cwork-bug 管「定位并修复」，cwork-data 管「数据佐证」。拿到数据证据后回到代码定位修复。
 > **注意**：调用 cwork-data 需 `skills/data/scripts/mcp-client/.mcp_config.json` 已配置，未配置时仅从代码/日志层面分析。
 
-**代码结构联动（codegraph，可选）** — 代码侧定位根因
+**代码结构联动（codegraph，必须先探测）** — 代码侧定位根因
 
-bug 涉及调用链 / 接口实现 / 要追"谁调用了这个方法" / 怀疑根因在共享方法被多方调用时，优先用 codegraph 精确定位（比散乱 grep+Read 更准，能抓 Spring 接口→实现、回调等 grep 漏点）。
+bug 涉及调用链 / 接口实现 / 要追"谁调用了这个方法" / 怀疑根因在共享方法被多方调用时，**必须**用 codegraph 精确定位（比散乱 grep+Read 更准，能抓 Spring 接口→实现、回调等 grep 漏点）。
 
-**前置探测**（优雅降级，未索引/未装就跳过，不阻塞）：
+**前置探测（必须执行）**：
 ```bash
-codegraph status            # 已索引（有符号数）→ 用；无索引 → 回退 grep/Read，继续分析
+cd /Users/caomunian/Work/code-projects && codegraph status            # 已索引（有符号数）→ 必须用；无索引 → 回退 grep/Read，继续分析
 ```
 
 **定位命令**：
@@ -342,9 +342,9 @@ if (userInfo == null) {
 
 ## 阶段 5：推演验证
 
-### 触发图谱更新（可选）
+### 触发图谱更新（必须）
 
-刚改完代码，本阶段 `codegraph affected` / 推演查图谱前，先增量 sync 一次（未装 / 未索引 / 锁占用则跳过，不阻塞）：
+刚改完代码，本阶段 `codegraph affected` / 推演查图谱前，**必须**先增量 sync 一次，保证推演用的是最新图谱（未装 / 锁占用则跳过，不阻塞）：
 
 ```bash
 codegraph sync /Users/caomunian/Work/code-projects -q
@@ -434,9 +434,9 @@ it('新用户首次登录 - 用户信息为空时应显示默认等级', () => {
 
 **回归测试位置**：与修复文件同目录的测试文件中（如 `UserService.java` → `UserServiceTest.java`）。
 
-**优先用 codegraph 找全牵连测试**（避免漏测回归）：
+**必须用 codegraph 找全牵连测试**（避免漏测回归）：
 ```bash
-codegraph affected <改动文件>      # 已索引时，直接列出该改动牵连的测试文件
+codegraph affected <改动文件>      # 已索引时（必须先用 codegraph status 确认），直接列出该改动牵连的测试文件
 # 未索引：回退到"修复文件同目录测试 + 推演发现的边界场景"
 ```
 
