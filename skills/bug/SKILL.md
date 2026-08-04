@@ -303,7 +303,13 @@ python3 mcp_client.py query --sql "SELECT * FROM internal.dwd.dwd_order_settle_m
 
 bug 涉及调用链 / 接口实现 / 要追"谁调用了这个方法" / 怀疑根因在共享方法被多方调用时，**必须**用 codegraph 精确定位（比散乱 grep+Read 更准，能抓 Spring 接口→实现、回调等 grep 漏点）。
 
-**前置探测（必须执行）**：
+**⚠️ 关键：不是只探测一次，而是每次找代码都要探测**
+
+- **错误理解**：开始时探测一次，后面就可以随便用 grep+Read
+- **正确理解**：排查过程中，**每次**查调用链、查接口实现、查上下游，都要先探测 codegraph，已索引就必须用
+- **持续监督**：排查的每一步输出都必须有 `[codegraph]` 标签，没有就是偷懒
+
+**前置探测（每次找代码都必须执行）**：
 ```bash
 cd /Users/caomunian/Work/code-projects && codegraph status            # 已索引（有符号数）→ 必须用；无索引 → 回退 grep/Read，继续分析
 ```
