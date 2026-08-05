@@ -18,19 +18,21 @@
 
 ## 2. 查询决策树（查什么 → 去哪个库）
 
-| 要查的东西 | 首选 logstore | 备选 |
-|---|---|---|
-| 业务运行日志 / 报错 / 慢 / traceId | **`all`**（用 `_container_name_` 锁定服务） | `<服务>-server` / `<服务>-business` |
-| 对外接口出入站（openapi / 网关转发） | `<服务>3-out` | `gateway-*` |
-| 充电桩 / 设备协议 | `device-<厂商>` | `device-business` / `device-collection` / `device-post` |
-| 运维桩（设备 coms） | `device-ykcoms`（prod 和 uat 均用此库） | |
-| 车队链路 | `ctp-<服务>`（**不在 all**，只能查专属库） | |
-| 能源管理 | `emp-*` / `ems-*` | |
-| 运维平台 OMP | `xuzhu-omp-*` / `omp-*` / `feomp-*` | |
-| 开放服务 OSP | `osp-*` | |
-| ZDL / DMP / IOP | `zdl-*` / `dmp-*` / `iop-*` | |
-| 银行/支付通道 | `bank-*` / `bankpay3-out` | |
-| 系统 / 审计 | `k8s-event` / `gc_log` / `sentinel-*` / `audit-*` / `internal-*` | |
+| 要查的东西 | 首选 logstore | 备选 | 备注 |
+|---|---|---|---|
+| 业务运行日志 / 报错 / 慢 / traceId | **`all`**（用 spring.name 锁定服务） | `payment-server`（双写） | 业务专属库大面积空，优先 all |
+| 对外接口出入站 | `task3-out` / `flowside3-out` / `gateway-op3-out` | `ots-*-out` | 其他出站库空 |
+| 充电桩 / 设备协议 | `device-shenghong` / `device-<厂商>` | `device-business` | 设备日志常不在 all |
+| 运维桩（设备 coms） | `device-ykcoms` | | **不在 all**，只能查此库 |
+| 车队活动 | `ctp-activity-server` | | **车队其他库全空**，只查 activity |
+| 能源管理 | ⚠️ 无索引/空 | | `emp-gateway3-out` 无索引，其余空 |
+| 运维平台 OMP | ⚠️ 全空 | | 14 个库 90 天无数据 |
+| 开放服务 OSP | `osp-server` | | 其他 OSP 库空 |
+| ZDL | `zdl-server` | | 其他 ZDL 库空 |
+| DMP | `dmp-tag` | | 其他 DMP 库空（含 dmp-query-server） |
+| IOP | `iop-gateway` | | 其他 IOP 库空 |
+| 银行/支付通道 | `bank-ability-center` | | 其他银行库空 |
+| 系统 / 审计 | `k8s-event` / `gc_log` / `sentinel-*` | | |
 
 ---
 
@@ -81,21 +83,38 @@
 
 **设备/充电桩** · 32：`device-1x device-1x-encryption device-2x device-2x-encryption device-3x1 device-3x1-out device-adapter-tool device-adapter-tool-encrypt18 device-business device-collection device-custom device-huawei device-ln3-out device-luneng device-maint device-monitoring device-msg device-new-th-out device-new3-out device-post device-server-jsc device-server-ykc-encryption device-sh-channel-out device-sh3-out device-shenghong device-shenrui device-shenrui2 device-th-one-out device-wm device-ykc1 device-ykcoms device-ykr3-out`
 > 厂商对照：`device-shenghong`盛弘 / `device-shenrui`施恩 / `device-huawei`华为 / `device-luneng`鲁能 / `device-wm` / `device-ykc1`；`device-ykcoms`=运维桩
+> **有数据**：`device-shenghong`（~2.7亿/90天）、`device-ykcoms`（~2万/90天）、`device-business`、`device-collection`、`device-post`
 
 **车队 CTP** · 7：`ctp-activity-server ctp-base3-out ctp-finance-server ctp-finance3-out ctp-gateway3-out ctp-order-server ctp-order3-out`
 > ⚠️ **CTP 日志不在 `all` 聚合库**（独立采集域，与 device 类似），查车队日志**只能查 `ctp-*` 专属库**，不要先查 `all`。
 > ⚠️ **CTP 未接入 ARMS 链路追踪**（185 个 ARMS 应用中无 ctp 相关），无法用 `arms_traces.sh` / `arms_trace.sh` 查链路，只能查 SLS 日志。
-> 空库（90 天无数据）：`ctp-order-server`、`ctp-finance3-out`、`ctp-order3-out`——可能未启用采集或流量为 0。
+> **有数据**：`ctp-activity-server`（~7亿/90天）、`ctp-base3-out`、`ctp-gateway3-out`
+> **空库（勿查）**：`ctp-finance-server`、`ctp-order-server`、`ctp-finance3-out`、`ctp-order3-out`
 
 **能源 EMP/EMS** · 11：`emp-business3-out emp-digital-business-server emp-digital-business-server-new emp-emulator-server emp-gateway3-out emp-strategy-server emp-task3-out emp-yems-business-server ems-device-yst3-out ems-device3-out ems-local-device-server`
+> ⚠️ **无索引（不可查）**：`emp-gateway3-out`（库存在但未建索引，count 报 `IndexConfigNotExist`）
+> **空库（勿查）**：其余 10 个库 90 天无数据
 
 **开放服务 OSP** · 4：`osp-backend osp-customer osp-front osp-server`
+> **有数据**：`osp-server`（~22亿/90天）
+> **空库（勿查）**：`osp-backend`、`osp-customer`、`osp-front`
 
 **运维 OMP** · 14：`feomp-base feomp-bigscreen feomp-main omp-poly-center omp-poly-center3-out omp-superwarehouse-server omp-superwarehouse3-out xuzhu-omp xuzhu-omp-device xuzhu-omp-poly xuzhu-omp-resource xuzhu-omp-statistics xuzhu-omp-trading xuzhu-omp-zdl`
+> **空库（勿查）**：全部 14 个库 90 天无数据，运维日志可能未接入 SLS 或在其他采集系统
 
 **ZDL** · 11：`zdl-base-server zdl-external zdl-ploy zdl-portal zdl-push zdl-server zdl-task zdl-tomcat3-out zdl3-out zdlploy3-out zdlsupervise3-out`
+> **有数据**：`zdl-server`（~9亿/90天）
+> **空库（勿查）**：`zdl-base-server`、`zdl-external`、`zdl-ploy`、`zdl-portal`、`zdl-push`、`zdl-task`、`zdl-tomcat3-out`、`zdl3-out`、`zdlploy3-out`、`zdlsupervise3-out`
 
-**DMP** · 4：`dmp-admin dmp-query-server dmp-tag dmp-web` ｜ **IOP** · 4：`iop-base iop-gateway iop-poly iop-station-auth` ｜ **银行/支付通道** · 3：`bank-ability-center bank-front bankpay3-out`
+**DMP** · 4：`dmp-admin dmp-query-server dmp-tag dmp-web`
+> **有数据**：`dmp-tag`（~5万/90天）
+> **空库（勿查）**：`dmp-admin`、`dmp-query-server`、`dmp-web`
+｜ **IOP** · 4：`iop-base iop-gateway iop-poly iop-station-auth`
+> **有数据**：`iop-gateway`（~2万/90天）
+> **空库（勿查）**：`iop-base`、`iop-poly`、`iop-station-auth`
+｜ **银行/支付通道** · 3：`bank-ability-center bank-front bankpay3-out`
+> **有数据**：`bank-ability-center`（~3.6亿/90天）
+> **空库（勿查）**：`bank-front`、`bankpay3-out`
 
 **SLB/负载均衡** · 8：`slb_device slb_device3 slb_device_3 slb_geo2 slb_gw3 slb_level7 slb_level7_intranet slb_zdl_om`
 
@@ -104,6 +123,7 @@
 **系统/审计** · 13：`aliyun-prom-* audit-* config-operation-log event-trace event-tracing gc_log internal-alert-history internal-diagnostic_log internal-etl-log k8s-event mse-log sentinel-plus sentinel-token-server`
 
 **其他业务** · 31：`access adapter-device-181 adapter-device-1x adapter-device-210 adapter-tool-2x adapter-tool-2x1-encryption agent-foundation etl-device-1x flow-charge gateway-app gateway-huawei gateway-maint gateway-omp-admin gateway-service-other gateway-zdl guan-zhong hangu message-push mq-consumer-order mq-consumer-order2 new-maint open-platform order-foundation order-foundation-new price-center-serve sso-inside station-site-algo trade-sync xuzhu-m-web ykc-admin yunbao-llm`
+> **空库（勿查）**：`message-push`（文档误标双写，实测空）、`mq-consumer-order`、`mq-consumer-order2`
 
 ---
 
@@ -151,6 +171,8 @@
 > 注：`zsh/` 域工程（`*_mos_server` 等）多为蓄柱 OMP fork，对应 `xuzhu-omp-*` 应用；部分工程 `spring.name` 在 Nacos（本地 bootstrap 提取不到），按目录名规则推导即可。
 
 > ⚠️ **CTP 车队域特殊**：CTP 全部 7 个 logstore 都是独立采集域，**日志不在 `all` 聚合库**；CTP 也**未接入 ARMS 链路追踪**（185 个应用中无 ctp 相关），只能查 SLS 日志、无法查 ARMS 链路。CTP 工程目录在 `trade/ctp_*_server`，spring.name 大小写不统一（`ctp-order-server`/`CTP-BASE-SERVER`/`ctp_finance_server`/`ctp_activity_server`/`gateway-service-ost`）。
+
+> 📌 **message-push 消息推送服务**：工程目录 `basic/message_push_server`，spring.name=`messagePushServer`，ARMS 应用=`message-push-prod`。日志分布在两个库：**`message-push`**（专属库）和 **`all`**（聚合库，用关键字 `messagePushServer` 搜索）。**messagePushServer 服务在所有环境（prod/uat/test）都优先查 `message-push` 专属库**，查不到再查 `all`。
 
 ---
 
