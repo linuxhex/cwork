@@ -290,6 +290,26 @@ function installToTool(projectDir, toolKey, opts) {
     mkdirSync(dirname(manifestPath), { recursive: true });
     writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n', 'utf8');
   }
+
+  // Qoder CLI 从全局 ~/.qoder/skills/ 读取技能，需要同步到全局目录
+  if (toolKey === 'qoder' && !opts.dryRun) {
+    const globalQoderSkills = resolve(homedir(), '.qoder', 'skills');
+    mkdirSync(globalQoderSkills, { recursive: true });
+    for (const s of skills) {
+      const prefixed = `cwork-${s}`;
+      const globalDest = resolve(globalQoderSkills, prefixed);
+      rmSync(globalDest, { recursive: true, force: true });
+      if (opts.mode === 'link') {
+        const linkType = process.platform === 'win32' ? 'junction' : 'dir';
+        symlinkSync(resolve(SKILLS_SRC, s), globalDest, linkType);
+      } else {
+        cpSync(resolve(SKILLS_SRC, s), globalDest, { recursive: true, force: true });
+      }
+      const skillMd = resolve(globalDest, 'SKILL.md');
+      const txt = readFileSync(skillMd, 'utf8');
+      writeFileSync(skillMd, patchSkillName(txt, prefixed), 'utf8');
+    }
+  }
 }
 
 function uninstallFromTool(projectDir, toolKey, opts) {
