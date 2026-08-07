@@ -323,6 +323,31 @@ codegraph explore "<入口> 怎么到 <嫌疑点>"      # 一次还原调用链 
 codegraph node <类|接口>                      # 接口/实现源码（抓 接口→实现、动态分派）
 ```
 
+**多入口自动提示（新增，关键）**：
+
+**当用 `codegraph callers` 发现方法被多个调用方调用时，必须提示用户排查所有入口，避免遗漏：**
+
+```bash
+# 示例：排查"车牌数据异常"
+codegraph callers setPlateNumber
+
+# 输出：
+# UserService.setPlateNumber (调用方 1)
+# OrderService.updateOrder (调用方 2)
+# SettlementService.settle (调用方 3)
+
+if 调用方数量 > 1：
+  echo "【多入口提示】检测到方法被多个调用方调用"
+  echo "  → 调用方 1：UserService.setPlateNumber"
+  echo "  → 调用方 2：OrderService.updateOrder"
+  echo "  → 调用方 3：SettlementService.settle"
+  echo ""
+  echo "建议：排查所有调用方，确认数据是从哪个入口写入的"
+  echo "  → 当前排查：UserService"
+  echo "  → 待排查：OrderService, SettlementService"
+fi
+```
+
 **联动原则**：codegraph 是**代码侧**定位，和 cwork-log（**运行时侧**）、cwork-data（**数据侧**）互补；拿到调用方/调用链证据后，回到代码定位根因。未索引/未安装：跳过，继续用 grep + Read + 服务地图，不报错。
 
 4. **提出修复方案**
@@ -449,6 +474,31 @@ for each 修复:
 ### 回归测试（强制）
 
 **修复 bug 时必须同步编写回归测试，防止同一问题再次出现。**
+
+#### 强制检查机制（新增，关键）
+
+**修复完成后，必须检查是否编写了回归测试，禁止跳过：**
+
+```bash
+# 检查修复文件对应的测试文件是否存在
+# 示例：修复了 UserService.java → 检查 UserServiceTest.java 是否存在
+
+if 测试文件不存在：
+  echo "【回归测试检查】未检测到回归测试文件"
+  echo "  → 修复文件：UserService.java"
+  echo "  → 期望测试：UserServiceTest.java"
+  echo "  → 必须编写回归测试后才能结束"
+  # 强制编写测试，不允许跳过
+
+elif 测试文件存在但未运行：
+  # 运行测试
+  mvn test -Dtest=UserServiceTest
+  if 测试失败：
+    echo "【回归测试失败】必须修复测试后才能结束"
+  else：
+    echo "【回归测试通过】✓"
+fi
+```
 
 **回归测试要求**：
 1. **覆盖问题场景** — 测试用例必须覆盖阶段 2 中用户描述的问题现象
