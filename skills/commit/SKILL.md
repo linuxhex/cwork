@@ -76,6 +76,39 @@ description: 推演收敛后自动提交所有服务工程，不确认
 codegraph sync /Users/caomunian/Work/code-projects -q
 ```
 
+### 提交前多服务检查（新增，关键）
+
+**多服务场景下，提交前必须检查所有服务是否都有提交，避免漏提：**
+
+```bash
+# 检查所有服务的 git status
+for service in 主工程 依赖工程1 依赖工程2 ...; do
+  cd "$service_path"
+  git status --porcelain
+  
+  if 有未提交改动：
+    echo "【待提交】$service：发现未提交改动"
+    未提交列表+=("$service")
+  else：
+    echo "【已提交】$service：无未提交改动"
+  fi
+done
+
+if 未提交列表非空：
+  echo "═══════════════════════════════════════════════════════════════"
+  echo "【多服务提交检查】"
+  echo "═══════════════════════════════════════════════════════════════"
+  echo "以下服务有未提交改动，必须提交："
+  for service in 未提交列表; do
+    echo "  → $service"
+  done
+  echo "═══════════════════════════════════════════════════════════════"
+  # 继续执行提交
+else：
+  echo "【多服务提交检查】所有服务已提交或无改动 ✓"
+fi
+```
+
 ### 单服务场景
 
 1. 检查 workflow-state 是否为 commit

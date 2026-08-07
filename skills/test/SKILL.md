@@ -525,6 +525,33 @@ EOF
 
 当失败诊断显示**后端接口异常**或**疑似配置问题**时，单看前端无法定位根因，需调用相关技能。
 
+#### 自动联动机制（新增，关键）
+
+**失败诊断后自动检查是否需要联动，无需人工判断：**
+
+```javascript
+// 失败诊断时自动执行
+const events = await drainEvents();
+const failedRequests = events
+  .filter(e => e.type === 'network' || e.request || e.response)
+  .filter(e => e.failed || e.errorText || (e.response?.status >= 400));
+
+if (failedRequests.length > 0) {
+  // 自动联动 cwork-log
+  console.log('【自动联动】检测到后端接口失败，调用 cwork-log');
+  for (const req of failedRequests) {
+    const traceId = req.response?.headers?.['x-trace-id'] || req.response?.headers?.['trace-id'];
+    const url = req.request?.url || req.url;
+    const status = req.response?.status;
+    console.log(`  → 接口：${url}，状态：${status}，traceId：${traceId}`);
+  }
+  // 触发 cwork-log 查询（见下方调用示例）
+} else {
+  // 纯前端问题
+  console.log('【诊断结论】纯前端问题，查前端代码');
+}
+```
+
 #### 诊断决策树
 
 ```
@@ -978,6 +1005,26 @@ const miniProgram = await automator.launch({
 | 执行 JS | `mp.evaluate(() => { ... })` | 直接调用可用 |
 | 调用 wx API | `mp.callWxMethod('methodName', ...args)` | 直接调用可用 |
 | 截图 | `mp.screenshot({ path })` | ⚠️ 可能卡住，优先用 data/元素断言 |
+
+**导航操作强制 evaluate 规则（新增，关键）**：
+
+所有导航操作（navigateTo/switchTab/reLaunch/navigateBack）**必须**通过 `mp.evaluate` 调用 `wx.*` API，**禁止直接调用** automator 的导航方法：
+
+```javascript
+// ❌ 禁止：直接调用（会永久卡住）
+await miniProgram.navigateTo({ url: '/pages/station/index' });
+await miniProgram.switchTab({ url: '/pages/home/index/index' });
+await miniProgram.reLaunch({ url: '/pages/testExp/index' });
+await miniProgram.navigateBack();
+
+// ✅ 正确：通过 evaluate 绕行（稳定）
+await miniProgram.evaluate(() => { wx.navigateTo({ url: '/pages/station/index' }) });
+await miniProgram.evaluate(() => { wx.switchTab({ url: '/pages/home/index/index' }) });
+await miniProgram.evaluate(() => { wx.reLaunch({ url: '/pages/testExp/index' }) });
+await miniProgram.evaluate(() => { wx.navigateBack() });
+```
+
+**翻译时自动检测**：当测试步骤包含"打开页面"/"切换Tab"/"重启到"/"返回"时，自动翻译为 `mp.evaluate(() => wx.xxx(...))`，不翻译为 automator 的直接调用。
 
 ## 小程序阶段一：环境准备
 
