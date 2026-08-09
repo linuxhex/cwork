@@ -29,3 +29,4 @@ skills/.last_analysis_date
 
 # cwork 技能本地配置（点开头隐藏文件，每人本机，勿提交）
 .services-map.md
+skills/data/references/.source-table-mapping.md
