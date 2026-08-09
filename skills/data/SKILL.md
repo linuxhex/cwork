@@ -168,6 +168,7 @@ JDBC/ODS 点查耗时 **>1s** 必须诊断，**不靠调大超时绕过**：① 
 
 | 文件 | 何时读 |
 |---|---|
+| `source-table-mapping.md` | 源表反查数仓表（代码里看到源表名，查大数据等价表） |
 | `catalog-detail.md` | 选 catalog / 找表全路径 / JDBC 列表 |
 | `core-tables.md` | 订单明细选表 / 字段口径 / 来源表 |
 | `jdbc-fallback.md` | 查 JDBC 业务库前探等价表 |
