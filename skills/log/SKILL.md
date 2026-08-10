@@ -155,20 +155,34 @@ bash scripts/sls_query.sh prod count all "<关键字2>" <from> <to>
 
 **前提**：阶段 0 已拿到首轮日志结果，知道了相关服务和关键参数。
 
-### 1.1 深入日志（用首轮提取的参数继续搜）
+### 1.1 深入日志（用首轮提取的参数继续搜，2-3 轮内锁定）
+
+**关键字构造（一次搜到位，别试关键字）**：
+- **关联 ID 优先**：用首轮提取的 recordId/gunId/tradeSeq/uid 作主关键字（零噪音），spring.name 作过滤
+- **业务关键字从用户现象直接映射，不要自己发明**：不停充→`BalanceCheck/停充/余额校验`；金额异常→`chargedAmount/amount`；状态异常→`status/状态`
+- **一条查询同时带 spring.name + 关联 ID + 业务关键字**，一次搜到位：`<spring.name> and <关联ID> and <业务关键字>`
 
 ```bash
-# 用首轮提取的 uid/gunId/tradeSeq 搜特定业务日志
-bash scripts/sls_query.sh prod logs all "<spring.name> and <业务关键字> and <uid/tradeSeq>" 30 <from> <to>
-
-# 搜特定 Pod 的日志（排查 Pod 级别问题）
-bash scripts/sls_query.sh prod logs all "<pod-name> and <关键字>" 20 <from> <to>
-
-# 统计某类日志的数量（判断是否整体异常）
-bash scripts/sls_query.sh prod count all "<关键字>" <from> <to>
+# 深入搜：spring.name + 关联ID + 业务关键字 一次带齐
+bash scripts/sls_query.sh prod logs all "<spring.name> and <关联ID> and <业务关键字>" 30 <from> <to>
+# 统计某类日志数量（判断是整体异常还是个例）
+bash scripts/sls_query.sh prod count all "<spring.name> and <业务关键字>" <from> <to>
 ```
 
-### 1.2 代码验证（已拿到数据证据，读代码解释原因）
+**轮次目标**：阶段 1 最多 2-3 轮日志。超过 3 轮还没锁定 → 停下来问自己"是不是方向错了"（触发「不确定时探讨」），不要在日志里无限深挖。
+
+### 1.2 搜日志 → 读代码的转换判据（什么时候停搜日志）
+
+**满足任一即可转读代码**：
+- 已拿到异常值的具体字段 + 该字段来自哪个服务/方法（异常值 + 来源 + 时间三要素齐全）
+- 已拿到 traceId 且链路异常点定位到具体 span
+- 连续 2 轮日志无新信息（没新异常、没新关联 ID、没新字段值）
+
+**继续搜日志的信号**：日志里出现新的关联 ID / 新的异常字段 / 链路指向上游服务还没查 → 还有线索，继续搜。
+
+**没判据时不要硬转**：不确定证据够不够 → 按「不确定时探讨」问用户，或再搜一轮确认，不要在"搜日志还是读代码"之间反复横跳。
+
+### 1.3 代码验证（已拿到数据证据，读代码解释原因）
 
 **⚠️ 只在已有日志证据后才读代码，且只读相关代码**：
 
@@ -264,6 +278,7 @@ bash scripts/arms_traces.sh "<pid>" <分钟> "<接口关键字>"
 2. 日志现象跟用户描述不一致 → 可能理解偏差 → 问用户核对现象细节
 3. 链路上下游不符合预期 → 可能调用链理解错了 → 问用户确认业务流程
 4. 多个候选根因无法确定 → 不要猜 → 问用户哪个更符合现象
+5. **阶段 1 超过 3 轮还没锁定** → 方向可能错了，停下来核对，不要在日志里无限深挖
 
 **怎么问**（grill-me 四原则）：
 - **问具体，不问泛**：问"报错信息是什么"，不问"有什么问题"
