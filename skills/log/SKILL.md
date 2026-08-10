@@ -351,42 +351,185 @@ bash scripts/arms_traces.sh "<pid>" 5 "<任意接口>"
 根据问题涉及的服务/域，自动路由到正确的日志库，减少人工判断：
 
 ```bash
-# 域路由规则（按服务名/关键词自动匹配）
+# 域路由规则（按服务名/关键词自动匹配，覆盖全部 16 个域）
+# ⚠️ 关键：查 all 库时必须设置 KEYWORD（spring.name），否则返回海量无关日志
 case "$服务或关键词" in
+  # === CTP 车队域（独立采集，不在 all，未接入 ARMS）===
   *"车队"*|*"ctp"*|*"CTP"*)
-    # CTP 车队域：日志不在 all，未接入 ARMS
     echo "【域感知】检测到车队域"
     echo "  → 日志库：ctp-* 专属库（不在 all）"
     echo "  → ARMS：未接入，无法查链路"
-    LOGSTORE="ctp-activity-server"  # 或其他 ctp-* 库
+    echo "  → 有数据：ctp-activity-server（7亿/90天）"
+    LOGSTORE="ctp-activity-server"
+    KEYWORD=""  # 专属库，关键字可选
     ARMS_ENABLED=false
     ;;
-  *"运维桩"*|*"device-ykcoms"*|*"coms"*)
-    # 运维桩：日志不在 all
-    echo "【域感知】检测到运维桩域"
-    echo "  → 日志库：device-ykcoms（不在 all）"
-    LOGSTORE="device-ykcoms"
+
+  # === Device 设备域（32 库，按厂商分）===
+  *"盛弘"*|*"shenghong"*)
+    echo "【域感知】检测到盛弘桩"
+    echo "  → 日志库：device-shenghong（2.7亿/90天）"
+    LOGSTORE="device-shenghong"
+    KEYWORD=""  # 专属库，关键字可选
     ;;
+  *"华为"*|*"huawei"*)
+    echo "【域感知】检测到华为桩"
+    echo "  → 日志库：device-huawei"
+    LOGSTORE="device-huawei"
+    KEYWORD=""
+    ;;
+  *"施恩"*|*"shenrui"*)
+    echo "【域感知】检测到施恩桩"
+    echo "  → 日志库：device-shenrui"
+    LOGSTORE="device-shenrui"
+    KEYWORD=""
+    ;;
+  *"鲁能"*|*"luneng"*)
+    echo "【域感知】检测到鲁能桩"
+    echo "  → 日志库：device-luneng"
+    LOGSTORE="device-luneng"
+    KEYWORD=""
+    ;;
+  *"运维桩"*|*"device-ykcoms"*|*"coms"*)
+    echo "【域感知】检测到运维桩"
+    echo "  → 日志库：device-ykcoms（2万/90天，不在 all）"
+    LOGSTORE="device-ykcoms"
+    KEYWORD=""
+    ;;
+  *"设备"*|*"桩"*|*"device"*)
+    echo "【域感知】检测到设备域，请选择厂商库："
+    echo "  1. device-shenghong（盛弘，2.7亿）✅"
+    echo "  2. device-ykcoms（运维桩，2万）✅"
+    echo "  3. device-business ✅"
+    echo "  4. device-huawei（华为）"
+    echo "  5. device-shenrui（施恩）"
+    echo "  6. device-luneng（鲁能）"
+    echo "  注：✅ 表示有数据"
+    LOGSTORE="device-shenghong"
+    KEYWORD=""
+    ;;
+
+  # === EMP/EMS 能源域（11 库，大部分空或无索引）===
+  *"能源"*|*"emp"*|*"EMP"*|*"ems"*|*"EMS"*)
+    echo "【域感知】检测到能源域"
+    echo "  → emp-gateway3-out：无索引（库存在但未建索引）"
+    echo "  → 其余 10 个库：90天全空"
+    echo "  → 建议：查 all 库 + spring.name 关键字"
+    LOGSTORE="all"
+    KEYWORD="empServer"  # ⚠️ all 库必须设置关键字
+    ;;
+
+  # === ZDL 域（11 库）===
+  *"ZDL"*|*"zdl"*)
+    echo "【域感知】检测到 ZDL 域"
+    echo "  → zdl-server：有数据（9亿/90天）✅"
+    echo "  → 其余 10 个库：90天全空"
+    LOGSTORE="zdl-server"
+    KEYWORD=""
+    ;;
+
+  # === DMP 域（4 库）===
+  *"DMP"*|*"dmp"*)
+    echo "【域感知】检测到 DMP 域"
+    echo "  → dmp-tag：有数据（5万/90天）✅"
+    echo "  → dmp-admin/dmp-query-server/dmp-web：全空"
+    LOGSTORE="dmp-tag"
+    KEYWORD=""
+    ;;
+
+  # === OSP 开放服务域（4 库）===
+  *"OSP"*|*"osp"*)
+    echo "【域感知】检测到 OSP 域"
+    echo "  → osp-server：有数据（22亿/90天）✅"
+    echo "  → osp-backend/osp-customer/osp-front：全空"
+    LOGSTORE="osp-server"
+    KEYWORD=""
+    ;;
+
+  # === IOP 域（4 库）===
+  *"IOP"*|*"iop"*)
+    echo "【域感知】检测到 IOP 域"
+    echo "  → iop-gateway：有数据（2万/90天）✅"
+    echo "  → iop-base/iop-poly/iop-station-auth：全空"
+    LOGSTORE="iop-gateway"
+    KEYWORD=""
+    ;;
+
+  # === 银行/支付通道域（3 库）===
+  *"银行"*|*"bank"*)
+    echo "【域感知】检测到银行域"
+    echo "  → bank-ability-center：有数据（3.6亿/90天）✅"
+    echo "  → bank-front/bankpay3-out：全空"
+    LOGSTORE="bank-ability-center"
+    KEYWORD=""
+    ;;
+
+  # === OMP 运维域（14 库，全部空）===
+  *"运维"*|*"OMP"*|*"omp"*|*"xuzhu-omp"*)
+    echo "【域感知】检测到运维 OMP 域"
+    echo "  ⚠️ 全部 14 个库 90天 0 条"
+    echo "  → 可能未接入 SLS 或在其他采集系统"
+    echo "  → 建议：查 all 库试试"
+    LOGSTORE="all"
+    KEYWORD="ompServer"  # ⚠️ all 库必须设置关键字
+    ;;
+
+  # === 出站日志（*-out 库）===
+  *"出站"*|*"out"*)
+    echo "【域感知】检测到出站日志查询，请选择："
+    echo "  1. task3-out（7.85亿）✅"
+    echo "  2. flowside3-out（1788万）✅"
+    echo "  3. gateway-op3-out（309万）✅"
+    echo "  4. ots-base-out（48万）✅"
+    echo "  5. 其他 *-out 库（大部分空）"
+    LOGSTORE="task3-out"
+    KEYWORD=""  # 出站库已按服务分，关键字可选
+    ;;
+
+  # === MQ 消费 ===
+  *"MQ"*|*"mq"*|*"消费"*)
+    echo "【域感知】检测到 MQ 消费日志"
+    echo "  ⚠️ mq-consumer-order/mq-consumer-order2：90天全空"
+    echo "  → 建议：查 all 库 + spring.name 关键字"
+    LOGSTORE="all"
+    KEYWORD="mq-consumer"  # ⚠️ all 库必须设置关键字
+    ;;
+
+  # === 订单域 ===
   *"订单"*|*"order"*)
-    # 订单服务：业务专属库空，查 all
     echo "【域感知】检测到订单域"
-    echo "  → 日志库：all（order-server 等90天0条）"
+    echo "  → 日志库：all（order-server/order3-out 等90天0条）"
     echo "  → 关键字：orderserver"
     LOGSTORE="all"
-    KEYWORD="orderserver"
+    KEYWORD="orderserver"  # ⚠️ all 库必须设置关键字
     ;;
+
+  # === 支付域 ===
   *"支付"*|*"payment"*)
-    # 支付服务：专属库与 all 双写
     echo "【域感知】检测到支付域"
-    echo "  → 日志库：all 或 payment-server（双写）"
+    echo "  → 日志库：all 或 payment-server（双写，12.1亿）"
     LOGSTORE="all"
-    KEYWORD="payment-server"
+    KEYWORD="payment-server"  # ⚠️ all 库必须设置关键字
     ;;
+
+  # === 默认 ===
   *)
-    # 默认：查 all + spring.name
+    echo "【域感知】未匹配到特定域，使用默认策略"
+    echo "  → 日志库：all（聚合库）"
+    echo "  ⚠️ 未设置关键字，查询前请提供 spring.name 或业务关键字"
+    echo "  → 提示：如查不到，请确认是否属于以下域："
+    echo "     CTP车队、Device设备、EMP能源、ZDL、DMP、OSP、IOP、OMP运维"
     LOGSTORE="all"
+    KEYWORD=""  # ⚠️ 默认无关键字，需用户补充
     ;;
 esac
+
+# 查询前检查：all 库必须有关键字
+if [ "$LOGSTORE" = "all" ] && [ -z "$KEYWORD" ]; then
+  echo "⚠️ 警告：查 all 库但未设置关键字，将返回海量无关日志"
+  echo "   → 请提供 spring.name 或业务关键字"
+  echo "   → 示例：orderserver / DeviceBusinessServer / payment-server"
+fi
 ```
 
 **路由输出示例**：

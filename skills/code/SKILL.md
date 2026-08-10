@@ -141,6 +141,12 @@ bash code_query.sh pull flow-charge-server
 bash code_query.sh sync
 ```
 
+**clone 关键约束（重要）**：
+- **⚠️ 绝对禁止 `--single-branch`**：会导致只跟踪默认分支，后续创建分支上游异常
+- 正确：`git clone -b <branch> <url>` —— 拉取所有分支历史，只检出指定分支
+- 错误：`git clone --single-branch -b <branch> <url>` —— 只拉取一个分支历史，后续无法 fetch 其他分支
+- 脚本已强制禁止 `--single-branch`，确保所有分支历史完整
+
 **鉴权失败排查**（返回 401/403）：1. `.config.local.sh` 的 GITLAB_TOKEN 是否正确；2. GITLAB_URL 是否可达（`curl -v` 实测）；3. Token 是否过期或被撤销。
 
 **clone 失败排查**：1. 网络是否通（GitLab 在内网 `172.16.98.176`）；2. Token 是否有 read_repository 权限；3. 目标目录是否已存在（已存在则自动 pull）。
