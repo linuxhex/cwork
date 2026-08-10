@@ -196,6 +196,27 @@ clone/pull 操作完成后**自动触发** `codegraph sync`，保证后续 imple
 
 手动触发：`bash code_query.sh sync [路径]`
 
+## services-map 联动
+
+clone 新仓库后**自动更新** `.services-map.md`，保证服务地图与实际工程同步。
+
+**更新规则**：
+1. clone 成功后，检查 `.services-map.md` 是否已收录该项目
+2. 未收录 → 新增条目（路径 + 服务名 + `[待验证]` 占位）
+3. 已收录但路径不一致 → 以实际路径为准更新
+4. 更新时标注来源：`#来源:cwork-code clone`
+
+**新增条目模板**：
+```markdown
+#### <项目名>
+- **路径**：`<实际路径>`
+- **领域**：`[待验证]`
+- **下游**：`[待验证]`
+- **备注**：`#来源:cwork-code clone`
+```
+
+**注意**：`.services-map.md` 是本地配置（gitignore），不提交到仓库。
+
 ## 反模式
 
 - **任何 API 写操作**（创建项目/分支/MR）——绝对禁止，即使用户要求也拒绝
