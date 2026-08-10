@@ -15,6 +15,9 @@
 
 ## 未分析
 
+- [2026-08-10] [code] clone 命令可能用了 --single-branch 参数（导致只跟踪默认分支，后续创建分支上游异常）→ 已修正：脚本明确禁止 --single-branch，SKILL.md 加约束说明
+- [2026-08-10] [log] 域感知路由覆盖不全（只 4 域：车队/运维桩/订单/支付），device 域只覆盖运维桩（1/32），导致盛弘/华为/施恩/鲁能等设备日志、EMP/ZDL/DMP/OSP/IOP/银行/OMP 等域日志查不到 → 已补全：SKILL.md 域路由覆盖全部 16 域（CTP/Device/EMP/ZDL/DMP/OSP/IOP/银行/OMP/出站/MQ等），LOGSTORE_INDEX.md §2 决策树同步，memory/cwork-log-guide.md 加路由触发词清单；同步更新 bug/test 技能联动说明
+- [2026-08-10] [log] 域感知路由未强制设置关键字，查 all 库返回海量无关日志 → 已修正：所有查 all 库的域都设置 KEYWORD（spring.name），专属库关键字可选，默认路由警告，查询前检查 all 库必须有关键字
 - [2026-08-04] [log] prod 业务专属库大面积空（66 个 `*-server`/`*-out` 仅 ~14 有数据，finance/order/charge/base/poly/clearing 等核心服务专属库 90 天全空），原索引把空库当可用库列了误导 → 已修正：LOGSTORE_INDEX.md §1/§4 + ARMS_PID_CACHE.md 加「prod 专属库数据现状」清单，主链路改 `all`+spring.name，finance 四层表/ARMS 行标注全空；uat 侧基本准确未动
 - [2026-08-04] [log] cwork-log 阶段 1 缺 codegraph（bug/implement/doc 都有，独 log 没有）→ 已补：阶段 1 第 2 步加 codegraph 优先探测（status→node/callees/callers/explore），核心原则+反模式呼应
 

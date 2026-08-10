@@ -254,14 +254,29 @@ description: 快速修复 bug。问题明确时直接修复，问题不明确时
      ├─ 否 → 纯前端/纯逻辑 bug：直接分析代码定位修复
      │
      └─ 是 → 调用 cwork-log 查后端：
-              1. 从报错信息取 traceId（若有）/ 接口路径 / 时间戳
-              2. sls_query.sh logs all 搜该接口/traceId 的日志
-              3. arms_trace.sh 还原链路，找耗时点/异常点
-              4. 拿到异常堆栈 + 文件:行号，定位根因
+              1. 从报错信息取 traceId（若有）/ 接口路径 / 时间戳 / 服务名
+              2. cwork-log 自动域感知路由（覆盖 16 域：CTP/Device/EMP/ZDL/DMP/OSP/IOP/银行/OMP/出站/MQ等）
+              3. sls_query.sh logs <logstore> 搜日志（logstore 已自动选择）
+              4. arms_trace.sh 还原链路，找耗时点/异常点
+              5. 拿到异常堆栈 + 文件:行号，定位根因
    ```
 
    **调用示例**：
    ```bash
+   # cwork-log 已内置域感知路由，直接调用即可：
+   # 示例 1：查订单服务日志（自动路由到 all）
+   /cwork-log
+   > 查订单服务最近报错
+
+   # 示例 2：查盛弘桩日志（自动路由到 device-shenghong）
+   /cwork-log
+   > 查盛弘桩最近 1 小时 ERROR
+
+   # 示例 3：查车队日志（自动路由到 ctp-activity-server）
+   /cwork-log
+   > 查车队活动服务日志
+
+   # 手动查（如需精确控制）：
    # 1. 拿 pid（先查 ARMS_PID_CACHE.md，索引失效才跑 arms_apps.sh）
    bash scripts/arms_apps.sh cn-hangzhou "order"
 

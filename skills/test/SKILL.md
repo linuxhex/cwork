@@ -563,10 +563,11 @@ if (failedRequests.length > 0) {
   │    ├─ 否 → 纯前端问题：查截图 + 可见元素 + JS 报错 → 修前端代码
   │    │
   │    └─ 是 → 调用 cwork-log 查后端：
-  │            1. 从失败请求取 traceId（若有）/ 接口路径 / 时间戳
-  │            2. sls_query.sh logs all 搜该接口/traceId 的日志
-  │            3. arms_trace.sh 还原链路，找耗时点/异常点
-  │            4. 判断：前端传参错？后端逻辑错？下游依赖超时？
+	  │            1. 从失败请求取 traceId（若有）/ 接口路径 / 时间戳 / 服务名
+	  │            2. cwork-log 自动域感知路由（覆盖 16 域：CTP/Device/EMP/ZDL/DMP/OSP/IOP/银行/OMP/出站/MQ等）
+	  │            3. sls_query.sh logs <logstore> 搜日志（logstore 已自动选择）
+	  │            4. arms_trace.sh 还原链路，找耗时点/异常点
+	  │            5. 判断：前端传参错？后端逻辑错？下游依赖超时？
   │
   └─ 是否疑似配置问题（开关未生效/阈值不对/行为与预期不符）？
        └─ 是 → 调用 cwork-config 查 Nacos 配置：

@@ -369,6 +369,7 @@ PY
     else
       echo ">>> Clone: $clone_url -> $repo_dir (branch=$branch)"
       mkdir -p "$target_dir"
+      # ⚠️ 绝对禁止 --single-branch：会导致只跟踪默认分支，后续创建分支上游异常
       git clone -b "$branch" "$clone_url" "$repo_dir" 2>&1
     fi
 
