@@ -86,6 +86,39 @@ function collectSkillFiles(skillName) {
 
 // ── Qoder installer ─────────────────────────────────────────────────
 
+// 敏感文件/目录过滤：拷贝时跳过凭证、备份、本地配置
+const SENSITIVE_PATTERNS = [
+  /\.config\.local\.sh$/,
+  /\.mcp_config\.json$/,
+  /\.bak$/,
+  /\.backup$/,
+  /\.last_analysis_date$/,
+];
+
+function isSensitive(relPath) {
+  return SENSITIVE_PATTERNS.some(re => re.test(relPath));
+}
+
+function copySkillFiltered(src, dest) {
+  mkdirSync(dest, { recursive: true });
+  function walk(dir, prefix = '') {
+    for (const entry of readdirSync(dir)) {
+      const full = join(dir, entry);
+      const rel = prefix + entry;
+      const stat = statSync(full);
+      if (stat.isDirectory()) {
+        walk(full, rel + '/');
+      } else {
+        if (isSensitive(rel)) continue;
+        const destFile = join(dest, rel);
+        mkdirSync(dirname(destFile), { recursive: true });
+        writeFileSync(destFile, readFileSync(full));
+      }
+    }
+  }
+  walk(src);
+}
+
 function installQoder() {
   console.log('\n📦 Qoder (~/.qoder/skills/)');
   const target = join(HOME, '.qoder', 'skills');
@@ -97,7 +130,7 @@ function installQoder() {
     const src = join(SKILLS_DIR, skill);
     const dest = join(target, skillName);
     rmSync(dest, { recursive: true, force: true });
-    cpSync(src, dest, { recursive: true });
+    copySkillFiltered(src, dest);
     log(skillName);
   }
 }
@@ -184,14 +217,20 @@ function buildCursorSkillRule(skillDir, skillName) {
   const md = readSkillMd(skillDir);
   const { meta, body } = parseFrontmatter(md);
 
-  // collect additional reference files
+  // 参考文件复制到 .cursor/rules/<skillName>/ 下，主规则不内联（避免超 40k 字符限制）
   const files = collectSkillFiles(skillDir);
-  let extraContent = '';
-  for (const f of files) {
-    if (f.relPath === 'SKILL.md') continue;
-    if (f.relPath.startsWith('scripts/')) continue; // scripts are referenced by path
-    const content = readFileSync(f.path, 'utf-8');
-    extraContent += `\n\n---\n## 参考文件: ${f.relPath}\n\n${content}`;
+  const refFiles = files.filter(f => f.relPath !== 'SKILL.md' && !f.relPath.startsWith('scripts/'));
+  let refIndex = '';
+  if (refFiles.length > 0) {
+    const refDir = join(PROJECT, '.cursor', 'rules', skillName);
+    rmSync(refDir, { recursive: true, force: true });
+    mkdirSync(refDir, { recursive: true });
+    for (const f of refFiles) {
+      const dest = join(refDir, f.relPath);
+      mkdirSync(dirname(dest), { recursive: true });
+      writeFileSync(dest, readFileSync(f.path, 'utf-8'));
+    }
+    refIndex = `\n\n---\n## 参考文件位置\n\n本技能的参考文件位于 \`.cursor/rules/${skillName}/\` 目录下，按 SKILL.md 内引用路径读取。例如 "见 \`references/catalog-detail.md\`" 对应 \`.cursor/rules/${skillName}/references/catalog-detail.md\`，"Read 同目录 \`design-guide.md\`" 对应 \`.cursor/rules/${skillName}/design-guide.md\`。\n`;
   }
 
   return `---
@@ -199,7 +238,7 @@ description: ${meta.description || skillName}
 alwaysApply: false
 ---
 
-${body}${extraContent}
+${body}${refIndex}
 `;
 }
 
@@ -366,16 +405,23 @@ ${cleaned}
     const md = readSkillMd(skill);
     const { body } = parseFrontmatter(md);
 
+    // 参考文件复制到 .trae/rules/<skillName>/ 下，主规则不内联（避免超 40k 字符限制）
     const files = collectSkillFiles(skill);
-    let extraContent = '';
-    for (const f of files) {
-      if (f.relPath === 'SKILL.md') continue;
-      if (f.relPath.startsWith('scripts/')) continue;
-      const content = readFileSync(f.path, 'utf-8');
-      extraContent += `\n\n---\n## 参考文件: ${f.relPath}\n\n${content}`;
+    const refFiles = files.filter(f => f.relPath !== 'SKILL.md' && !f.relPath.startsWith('scripts/'));
+    let refIndex = '';
+    if (refFiles.length > 0) {
+      const refDir = join(target, skillName);
+      rmSync(refDir, { recursive: true, force: true });
+      mkdirSync(refDir, { recursive: true });
+      for (const f of refFiles) {
+        const dest = join(refDir, f.relPath);
+        mkdirSync(dirname(dest), { recursive: true });
+        writeFileSync(dest, readFileSync(f.path, 'utf-8'));
+      }
+      refIndex = `\n\n---\n## 参考文件位置\n\n本技能的参考文件位于 \`.trae/rules/${skillName}/\` 目录下，按 SKILL.md 内引用路径读取。例如 "见 \`references/catalog-detail.md\`" 对应 \`.trae/rules/${skillName}/references/catalog-detail.md\`，"Read 同目录 \`design-guide.md\`" 对应 \`.trae/rules/${skillName}/design-guide.md\`。\n`;
     }
 
-    writeFileSync(join(target, `${skillName}.md`), `# ${skillName}\n\n${body}${extraContent}\n`);
+    writeFileSync(join(target, `${skillName}.md`), `# ${skillName}\n\n${body}${refIndex}\n`);
     log(`${skillName}.md`);
   }
 }
