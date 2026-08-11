@@ -33,19 +33,19 @@ trim() {
 validate_feature_branch() {
   local b="$1"
 
-  [[ "$b" =~ ^feature_[A-Za-z_]+$ ]] || fail "branch must start with feature_ and contain only letters/underscores: $b"
-  [[ ! "$b" =~ [0-9] ]] || fail "branch cannot contain digits: $b"
+  # 格式：{type}/{YYYYMMDD}_{description}
+  # type ∈ feature/hotfix/bugfix/refactor，YYYYMMDD 为 8 位日期，description 为小写字母/数字/下划线/连字符
+  [[ "$b" =~ ^(feature|hotfix|bugfix|refactor)/[0-9]{8}_[a-z0-9_-]+$ ]] \
+    || fail "branch must match {type}/{YYYYMMDD}_{description}, e.g. feature/20260720_render_change: $b"
 
-  IFS='_' read -r -a parts <<<"$b"
-  [[ "${parts[0]}" == "feature" ]] || fail "branch must start with feature_: $b"
-  (( ${#parts[@]} >= 2 )) || fail "branch must include at least one segment after feature_: $b"
+  local prefix="${b%%/*}"
+  local rest="${b#*/}"
+  local date_part="${rest%%_*}"
+  local desc_part="${rest#*_}"
 
-  local seg
-  local i
-  for (( i=1; i<${#parts[@]}; i++ )); do
-    seg="${parts[$i]}"
-    [[ "$seg" =~ ^[a-z][A-Za-z]*$ ]] || fail "each segment must be lowerCamel letters only: $seg"
-  done
+  [[ "$date_part" =~ ^[0-9]{8}$ ]] || fail "date segment must be 8 digits YYYYMMDD: $date_part"
+  [[ -n "$desc_part" ]] || fail "description segment cannot be empty: $b"
+  [[ ! "$desc_part" =~ [[:space:]] ]] || fail "description segment cannot contain whitespace: $b"
 }
 
 assert_dir() {

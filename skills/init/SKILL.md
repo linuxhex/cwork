@@ -195,9 +195,10 @@ description: 对话式初始化，自动查找工程路径，多服务分支切�
 ## 分支命名规则
 - 格式：`{type}/{YYYYMMDD}_{description}`
 - type 必须为 `feature`、`hotfix`、`bugfix`、`refactor` 之一
-- 日期为当天日期，格式 YYYYMMDD
-- description 使用下划线分隔的英文描述
-- 示例：`feature/20260529_user_export`、`feature/20260529_user_export_v2`、`hotfix/20260529_fix_log_url`、`refactor/20260529_auth`
+- 日期为当天日期，格式 YYYYMMDD（8 位数字）
+- description 为小写字母/数字/下划线/连字符，不能为空、不能含空格
+- 示例：`feature/20260720_render_change`、`feature/20260529_user_export`、`feature/20260529_user_export_v2`、`hotfix/20260529_fix_log_url`、`refactor/20260529_auth`
+- 脚本校验：`skills/init/scripts/init_requirement_workspace.sh` 的 `validate_feature_branch` 函数，格式不符直接 fail
 
 ## 安全保护
 
