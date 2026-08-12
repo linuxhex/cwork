@@ -66,7 +66,20 @@ class MCPConfig:
 
 
 def _default_config_path() -> Path:
-    return Path(__file__).resolve().parent / DEFAULT_CONFIG_FILENAME
+    """默认配置文件路径：同目录优先，没有则回 CWORK_HOME 源仓库。
+
+    IDE 安装场景下 bin/cwork.js 的 SENSITIVE_PATTERNS 过滤了 .mcp_config.json，
+    同目录没有凭证；此时若设了 CWORK_HOME，回源仓库读同一份，避免每个 IDE 重复配置。
+    """
+    local_path = Path(__file__).resolve().parent / DEFAULT_CONFIG_FILENAME
+    if local_path.exists():
+        return local_path
+    cwork_home = os.getenv("CWORK_HOME")
+    if cwork_home:
+        home_path = Path(cwork_home) / "skills" / "data" / "scripts" / "mcp-client" / DEFAULT_CONFIG_FILENAME
+        if home_path.exists():
+            return home_path
+    return local_path
 
 
 def _load_config_file(config_file: Optional[str] = None) -> Dict[str, Any]:
@@ -75,7 +88,8 @@ def _load_config_file(config_file: Optional[str] = None) -> Dict[str, Any]:
         import warnings
         warnings.warn(
             f"⚠️ {path} 不存在，请先执行: "
-            f"python mcp_client.py init-config --user <用户名> --password <密码>",
+            f"python mcp_client.py init-config --user <用户名> --password <密码>"
+            f"；或 export CWORK_HOME=<cwork 源仓库路径> 复用源仓库凭证",
             stacklevel=2,
         )
         return {}

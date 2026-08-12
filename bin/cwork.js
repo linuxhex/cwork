@@ -458,4 +458,12 @@ if (opts.tool && opts.tool !== 'auto') {
   }
 }
 
+// 装完提示设 CWORK_HOME（IDE 安装场景下 cwork-log/config/data 的凭证 fallback 依赖它）
+if (!opts.uninstall && !process.env.CWORK_HOME) {
+  console.log('\n💡 凭证复用提示：');
+  console.log('   cwork-log / cwork-config / cwork-data 在 IDE 安装目录里没有凭证（敏感文件已过滤）。');
+  console.log('   在 shell profile（~/.zshrc 或 ~/.bashrc）加一行，让所有 IDE 复用源仓库凭证，无需重复配置：');
+  console.log(`     export CWORK_HOME="${ROOT}"`);
+}
+
 console.log('\n✅ 完成！');

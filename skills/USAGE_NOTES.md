@@ -15,6 +15,7 @@
 
 ## 未分析
 
+- [2026-08-12] [log/config/data] IDE 安装场景凭证丢失：3b0110e 提交的 SENSITIVE_PATTERNS 过滤了 .config.local.sh/.mcp_config.json，装到 ~/.qoder/skills/ 等目录后 cwork-log/config/data 全部报"未配置密钥" → 已修正：三个脚本加 CWORK_HOME fallback（同目录无凭证时回 $CWORK_HOME/skills/<skill>/... 读源仓库同一份），bin/cwork.js 装完提示 export CWORK_HOME，三个 SKILL.md 密钥段补 IDE 安装场景说明
 - [2026-08-10] [log] 定位效率瓶颈：时间戳心算错误、搜索关键字发散、代码日志交替、路径混淆 → 已修正：新增时间戳命令驱动（禁止心算）、搜索关键字优先级（单号优先）、日志先行策略、工程路径验证
 - [2026-08-10] [log/bug] 定位问题时跑飞（找日志/服务找错方向）→ 已修正：新增"不确定时及时探讨"原则，列出跑飞高发场景
 - [2026-08-10] [bug] 问题定位时未调用 cwork-log，闷头查日志 → 已修正：明确触发条件，主动调用 cwork-log 定位问题

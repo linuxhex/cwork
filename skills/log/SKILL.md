@@ -390,6 +390,7 @@ bash scripts/rebuild_index.sh     # 重跑 arms_apps + sls list(prod/uat) 重建
 密钥与配置存于 `scripts/.config.local.sh`（**本工程内，已 gitignore，不依赖任何外部工程**）。
 - 首次使用：`cp scripts/config.example.sh scripts/.config.local.sh`，填入阿里云 AK/SK 和各环境 SLS project
 - 环境变量（`ALIBABA_CLOUD_ACCESS_KEY_ID/SECRET` 等同名）可临时覆盖 .config.local.sh 的值
+- **IDE 安装场景**：`bin/cwork.js` 的 `SENSITIVE_PATTERNS` 过滤了 `.config.local.sh`，IDE 目录里没有凭证；在 shell profile 加 `export CWORK_HOME=<cwork 源仓库路径>`，脚本同目录找不到时回源仓库读同一份，无需每个 IDE 重复配置
 - 未配置时脚本会 fail 并提示配置方法
 
 ---

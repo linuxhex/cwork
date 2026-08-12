@@ -137,6 +137,7 @@ bash nacos_query.sh diff order-service.yml DEFAULT_GROUP uat prod
 - 首次：`cp scripts/config.example.sh scripts/.config.local.sh`，填入 NONPROD/PROD 两组 AK/SK
 - **凭证来源**：devops 工程 `devops-server/src/main/java/com/ops/common/config/NacosConfig.java`（L46-76）——直接拷对应集群的 AccessKey/SecretKey
 - 环境变量（`NACOS_ADDR_<CLUSTER>`/`NACOS_AK_<CLUSTER>`/`NACOS_SK_<CLUSTER>`/`NACOS_CONTEXT_PATH`）可临时覆盖 `.config.local.sh`
+- **IDE 安装场景**：`bin/cwork.js` 的 `SENSITIVE_PATTERNS` 过滤了 `.config.local.sh`，IDE 目录里没有凭证；在 shell profile 加 `export CWORK_HOME=<cwork 源仓库路径>`，脚本同目录找不到时回源仓库读同一份，无需每个 IDE 重复配置
 - 未配置时脚本 fail 并提示配置方法
 
 > ⚠️ **凭证安全**：AK/SK 是阿里云控制台级别高权限凭证，**绝不写入 SKILL/config.example/git**，只进 `.config.local.sh`（gitignore）。
