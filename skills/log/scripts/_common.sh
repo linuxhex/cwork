@@ -14,7 +14,13 @@
 # .config.local.sh 内用 ${VAR:=值} 语法: 环境变量同名时优先, 否则用配置值
 _COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=.config.local.sh
-[ -f "$_COMMON_DIR/.config.local.sh" ] && source "$_COMMON_DIR/.config.local.sh"
+if [ -f "$_COMMON_DIR/.config.local.sh" ]; then
+  source "$_COMMON_DIR/.config.local.sh"
+elif [ -n "${CWORK_HOME:-}" ] && [ -f "$CWORK_HOME/skills/log/scripts/.config.local.sh" ]; then
+  # IDE 安装场景: 同目录无凭证(bin/cwork.js 的 SENSITIVE_PATTERNS 过滤了 .config.local.sh),
+  # 回 CWORK_HOME 源仓库读同一份, 避免每个 IDE 重复配置
+  source "$CWORK_HOME/skills/log/scripts/.config.local.sh"
+fi
 
 fail() { echo "ERROR: $*" >&2; exit 1; }
 require_cmd() { command -v "$1" >/dev/null 2>&1 || fail "缺少命令: $1 (请先安装)"; }
@@ -23,7 +29,7 @@ load_credentials() {
   AK_ID="${ALIBABA_CLOUD_ACCESS_KEY_ID:-}"
   AK_SECRET="${ALIBABA_CLOUD_ACCESS_KEY_SECRET:-}"
   [[ -n "$AK_ID" && -n "$AK_SECRET" ]] || \
-    fail "未配置阿里云密钥: 请执行 cp scripts/config.example.sh scripts/.config.local.sh 并填入 AK/SK, 或 export ALIBABA_CLOUD_ACCESS_KEY_ID / ALIBABA_CLOUD_ACCESS_KEY_SECRET"
+    fail "未配置阿里云密钥: 请执行 cp scripts/config.example.sh scripts/.config.local.sh 并填入 AK/SK, 或 export ALIBABA_CLOUD_ACCESS_KEY_ID / ALIBABA_CLOUD_ACCESS_KEY_SECRET; IDE 安装场景可 export CWORK_HOME=<cwork 源仓库路径> 复用源仓库凭证"
 }
 
 get_sls_endpoint() { echo "${SLS_ENDPOINT:-cn-hangzhou.log.aliyuncs.com}"; }

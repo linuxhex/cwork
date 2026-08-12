@@ -162,6 +162,7 @@ JDBC/ODS 点查耗时 **>1s** 必须诊断，**不靠调大超时绕过**：① 
 - 首次：`python3 mcp_client.py init-config --base-url <query-server地址> --user <用户名> --password <密码>`（账号在统一自助查询平台获取）
 - 验证：`python3 mcp_client.py setup-check`
 - 环境变量（`MCP_BASE_URL`/`MCP_USER`/`MCP_PASS`/`MCP_TIMEOUT`）可临时覆盖 `.mcp_config.json`
+- **IDE 安装场景**：`bin/cwork.js` 的 `SENSITIVE_PATTERNS` 过滤了 `.mcp_config.json`，IDE 目录里没有凭证；在 shell profile 加 `export CWORK_HOME=<cwork 源仓库路径>`，脚本同目录找不到时回源仓库读同一份，无需每个 IDE 重复配置
 - 未配置时 `setup-check` 返回 `{"ready": false}` 并给 `action`
 
 ## references 索引（按需读，别全读）
