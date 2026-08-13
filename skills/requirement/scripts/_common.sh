@@ -23,7 +23,13 @@
 # 本地配置(基于本文件位置定位, 与调用者工作目录无关)
 _COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=.config.local.sh
-[ -f "$_COMMON_DIR/.config.local.sh" ] && source "$_COMMON_DIR/.config.local.sh"
+if [ -f "$_COMMON_DIR/.config.local.sh" ]; then
+  source "$_COMMON_DIR/.config.local.sh"
+elif [ -n "${CWORK_HOME:-}" ] && [ -f "$CWORK_HOME/skills/requirement/scripts/.config.local.sh" ]; then
+  # IDE 安装场景: 同目录无凭证(bin/cwork.js 的 SENSITIVE_PATTERNS 过滤了 .config.local.sh),
+  # 回 CWORK_HOME 源仓库读同一份, 避免每个 IDE 重复配置
+  source "$CWORK_HOME/skills/requirement/scripts/.config.local.sh"
+fi
 
 fail() { echo "ERROR: $*" >&2; exit 1; }
 require_cmd() { command -v "$1" >/dev/null 2>&1 || fail "缺少命令: $1 (请先安装)"; }
