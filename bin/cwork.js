@@ -188,7 +188,7 @@ function buildCursorMainRule() {
   const cleaned = agentsMd.replace(/<!--\s*cwork-skills:begin\s*-->/, '').replace(/<!--\s*cwork-skills:end\s*-->/, '').trim();
 
   return `---
-description: cwork 工作流技能集主入口。当用户提到需求实现、bug修复、初始化、提交代码、查日志、查配置、查数仓、查代码仓库、查需求、生成文档、自动化测试时触发。
+description: cwork 工作流技能集主入口。当用户提到需求实现、bug修复、初始化、提交代码、查日志、查配置、查数仓、查代码仓库、查需求、生成文档、自动化测试、查监控指标时触发。
 alwaysApply: true
 ---
 
@@ -208,6 +208,7 @@ ${cleaned}
 - /cwork-data — 数仓数据查询
 - /cwork-doc — 技术方案生成
 - /cwork-requirement — 云效需求查询
+- /cwork-graf — Grafana 监控查询
 
 调用某个技能时，读取对应的 cwork-xxx.mdc 规则文件获取完整指令。
 `;
@@ -395,6 +396,7 @@ ${cleaned}
 - /cwork-data — 数仓数据查询
 - /cwork-doc — 技术方案生成
 - /cwork-requirement — 云效需求查询
+- /cwork-graf — Grafana 监控查询
 `;
   writeFileSync(join(target, 'cwork.md'), mainContent);
   log('cwork.md (主入口)');
