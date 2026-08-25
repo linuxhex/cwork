@@ -12,7 +12,7 @@
  *   node bin/cwork.js --uninstall --tool cursor
  */
 
-import { readFileSync, writeFileSync, mkdirSync, cpSync, rmSync, existsSync, readdirSync, statSync } from 'fs';
+import { readFileSync, writeFileSync, mkdirSync, cpSync, rmSync, existsSync, readdirSync, statSync, symlinkSync } from 'fs';
 import { join, resolve, dirname, basename } from 'path';
 import { homedir } from 'os';
 
@@ -131,6 +131,17 @@ function installQoder() {
     const dest = join(target, skillName);
     rmSync(dest, { recursive: true, force: true });
     copySkillFiltered(src, dest);
+    // 凭证软链：CWORK_HOME 源仓库有凭证时，自动链到安装目录，避免每次安装后凭证丢失
+    const cworkHome = process.env.CWORK_HOME;
+    if (cworkHome) {
+      const srcConfig = join(cworkHome, 'skills', skill, 'scripts', '.config.local.sh');
+      const destConfig = join(dest, 'scripts', '.config.local.sh');
+      if (existsSync(srcConfig) && !existsSync(destConfig)) {
+        try {
+          symlinkSync(srcConfig, destConfig);
+        } catch (_) { /* 软链失败不阻塞安装 */ }
+      }
+    }
     log(skillName);
   }
 }
