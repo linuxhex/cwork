@@ -1,0 +1,812 @@
+{
+  "swimDeploy": {
+    "dev": "dynamic-deployment_opendev",
+    "test": "dynamic-deployment_k8s-test",
+    "uat": "dynamic-deployment_k8s-uat"
+  },
+  "services": [
+    {
+      "appName": "base-server",
+      "buildJob": "base-server_3.0_dev",
+      "gitProjectName": "base_server",
+      "executeJob": {
+        "dev": "base-server_opendev",
+        "test": "base-server_k8s-test",
+        "uat": "base-server_k8s-uat"
+      },
+      "serviceName": "baseserver1",
+      "deployName": ""
+    },
+    {
+      "appName": "foundation",
+      "buildJob": "foundation_3.0_dev",
+      "gitProjectName": "foundation",
+      "executeJob": {
+        "dev": "foundation_opendev",
+        "test": "foundation_k8s-test",
+        "uat": "foundation_k8s-uat"
+      },
+      "serviceName": "foundation",
+      "deployName": ""
+    },
+    {
+      "appName": "order-server",
+      "buildJob": "order-server_3.0_dev",
+      "gitProjectName": "order_server",
+      "executeJob": {
+        "dev": "order-server_opendev",
+        "test": "order-server_k8s-test",
+        "uat": "order-server_k8s-uat"
+      },
+      "serviceName": "orderserver",
+      "deployName": ""
+    },
+    {
+      "appName": "order-server-tob",
+      "buildJob": "order-server_3.0_dev",
+      "gitProjectName": "order_server",
+      "executeJob": {
+        "dev": "order-server_opendev",
+        "test": "order-server_k8s-test",
+        "uat": "order-tob_k8s-uat"
+      },
+      "serviceName": "ctp-order-server",
+      "deployName": ""
+    },
+    {
+      "appName": "order-foundation",
+      "buildJob": "order-foundation_3.0_dev",
+      "gitProjectName": "order-foundation",
+      "executeJob": {
+        "dev": "order-foundation_opendev",
+        "test": "order-foundation_k8s-test",
+        "uat": "order-foundation_k8s-uat"
+      },
+      "serviceName": "order-foundation",
+      "deployName": ""
+    },
+    {
+      "appName": "poly-server",
+      "buildJob": "poly-server_3.0_dev",
+      "gitProjectName": "poly_server",
+      "executeJob": {
+        "dev": "poly-server_opendev",
+        "test": "poly-server_k8s-test",
+        "uat": "poly-server_k8s-uat"
+      },
+      "serviceName": "polyserver",
+      "deployName": ""
+    },
+    {
+      "appName": "charge-server",
+      "buildJob": "charge-server_3.0_dev",
+      "gitProjectName": "charge_server",
+      "executeJob": {
+        "dev": "charge-server_opendev",
+        "test": "charge-server_k8s-test",
+        "uat": "charge-server_k8s-uat"
+      },
+      "serviceName": "devicebusinessserver",
+      "deployName": ""
+    },
+    {
+      "appName": "device-server",
+      "buildJob": "device-server_3.0_dev",
+      "gitProjectName": "device_server_ykc_new",
+      "executeJob": {
+        "dev": "device-server_opendev",
+        "test": "device-server_k8s-test",
+        "uat": "device-server_k8s-uat"
+      },
+      "serviceName": "polyserver",
+      "deployName": ""
+    },
+    {
+      "appName": "statistics-server",
+      "buildJob": "statistics-server_3.0_dev",
+      "gitProjectName": "statistics_server",
+      "executeJob": {
+        "dev": "statistics-server_opendev",
+        "test": "statistics-server_k8s-test",
+        "uat": "statistics-server_k8s-uat"
+      },
+      "serviceName": "statisticsserver",
+      "deployName": ""
+    },
+    {
+      "appName": "gateway-server",
+      "buildJob": "gateway-app_3.0_dev",
+      "gitProjectName": "ngateway_service_center",
+      "executeJob": {
+        "dev": "gateway-app_opendev",
+        "test": "gateway-app_k8s-test",
+        "uat": "gateway-app_k8s-uat"
+      },
+      "serviceName": "ngetaware-service-center",
+      "deployName": "gateway-app"
+    },
+    {
+      "appName": "gateway-server-omp-admin",
+      "buildJob": "gateway-omp-admin_3.0_dev",
+      "gitProjectName": "ngateway_service_center",
+      "executeJob": {
+        "dev": "gateway-omp-admin_opendev",
+        "test": "gateway-omp-admin_k8s-test",
+        "uat": "gateway-omp-admin_k8s-uat"
+      },
+      "serviceName": "polyserver",
+      "deployName": ""
+    },
+    {
+      "appName": "zdl-server",
+      "buildJob": "zdl-server_3.0_dev",
+      "gitProjectName": "zdl_server",
+      "executeJob": {
+        "dev": "zdl-server_opendev",
+        "test": "zdl-server_k8s-test",
+        "uat": "zdl-server_k8s-uat"
+      },
+      "serviceName": "zdlserver",
+      "deployName": ""
+    },
+    {
+      "appName": "price-center-server",
+      "buildJob": "price-center-serve_3.0_dev",
+      "gitProjectName": "price_center_server",
+      "executeJob": {
+        "dev": "price-center-serve_opendev",
+        "test": "price-center-serve_k8s-test",
+        "uat": "price-center-serve_k8s-uat"
+      },
+      "serviceName": "pricecenterserver",
+      "deployName": "price-center-serve"
+    },
+    {
+      "appName": "price-center-server-tob",
+      "buildJob": "price-center-serve_3.0_dev",
+      "gitProjectName": "price_center_server",
+      "executeJob": {
+        "dev": "price-center-serve_opendev",
+        "test": "price-center-serve_k8s-test",
+        "uat": "price-center-tob_k8s-uat"
+      },
+      "serviceName": "polyserver",
+      "deployName": ""
+    },
+    {
+      "appName": "activity-server",
+      "buildJob": "activity-server_3.0_dev",
+      "gitProjectName": "activity_server",
+      "executeJob": {
+        "dev": "activity-server_opendev",
+        "test": "activity-server_k8s-test",
+        "uat": "activity-server_k8s-uat"
+      },
+      "serviceName": "activityserver",
+      "deployName": ""
+    },
+    {
+      "appName": "alarm-server",
+      "buildJob": "alarm-server_3.0_dev",
+      "gitProjectName": "alarm_server",
+      "executeJob": {
+        "dev": "alarm-server_opendev",
+        "test": "alarm-server_k8s-test",
+        "uat": "alarm-server_k8s-uat"
+      },
+      "serviceName": "alarmserver",
+      "deployName": ""
+    },
+    {
+      "appName": "zdl-supervise-server",
+      "buildJob": "zdl-supervise-server_3.0_dev",
+      "gitProjectName": "zdl_supervise_server",
+      "executeJob": {
+        "dev": "zdl-supervise-server_opendev",
+        "test": "zdl-supervise-server_k8s-test",
+        "uat": "zdl-supervise-server_k8s-uat"
+      },
+      "serviceName": "zdlsuperviseserver",
+      "deployName": ""
+    },
+    {
+      "appName": "zdl-ploy-server",
+      "buildJob": "zdl-ploy-server_3.0_dev",
+      "gitProjectName": "zdl_poly_server",
+      "executeJob": {
+        "dev": "zdl-ploy-server_opendev",
+        "test": "zdl-ploy-server_k8s-test",
+        "uat": "zdl-ploy-server_k8s-uat"
+      },
+      "serviceName": "zdlployserver",
+      "deployName": ""
+    },
+    {
+      "appName": "adapter-device-server-encrypt-tool",
+      "buildJob": "device-adapter-tool-encrypt18_3.0_dev",
+      "gitProjectName": "adapter_device_encryption_server_tool",
+      "executeJob": {
+        "dev": "device-adapter-tool-encrypt18_k8s-opendev",
+        "test": "device-adapter-tool-encrypt18_k8s-test",
+        "uat": "device-adapter-tool-encrypt18_k8s-uat"
+      },
+      "serviceName": "polyserver",
+      "deployName": ""
+    },
+    {
+      "appName": "new-main-tenance",
+      "buildJob": "new-maint_3.0_dev",
+      "gitProjectName": "new_maintenance",
+      "executeJob": {
+        "dev": "new-maint_opendev",
+        "test": "new-maint_k8s-test",
+        "uat": "new-maint_k8s-uat"
+      },
+      "serviceName": "polyserver",
+      "deployName": ""
+    },
+    {
+      "appName": "device-1x",
+      "buildJob": "device-server-ykc-new_3.0_dev",
+      "gitProjectName": "device_server_ykc_new",
+      "executeJob": {
+        "dev": "device-1x_opendev",
+        "test": "device-1x_k8s-test",
+        "uat": "device-1x_k8s-uat"
+      },
+      "serviceName": "deviceserverykcnew",
+      "deployName": ""
+    },
+    {
+      "appName": "adapter-device-new-encrypt-tool",
+      "buildJob": "adapter-tool-2x1-encryption_3.0_dev",
+      "gitProjectName": "adapter_device_new_encryption_server_tool",
+      "executeJob": {
+        "test": "adapter-tool-2x1-encryption_k8s-test",
+        "prod": "adapter-tool-2x1-encryption_k8s-prod"
+      },
+      "serviceName": "polyserver",
+      "deployName": ""
+    },
+    {
+      "appName": "device-ykc-new-encryption",
+      "buildJob": "device-1x-encryption_3.0_dev",
+      "gitProjectName": "device_server_ykc_new_encryption",
+      "executeJob": {
+        "dev": "device-server-ykc-encryption_opendev",
+        "test": "device-server-ykc-encryption_k8s-test",
+        "uat": "device-server-ykc-encryption_k8s-uat"
+      },
+      "serviceName": "polyserver",
+      "deployName": ""
+    },
+    {
+      "appName": "device-server-sr",
+      "buildJob": "device_server_3.0_dev",
+      "gitProjectName": "device_server_sr",
+      "executeJob": {
+        "dev": "device-shenrui_opendev",
+        "test": "device-shenrui_k8s-test",
+        "uat": "device-shenrui_k8s-uat"
+      },
+      "serviceName": "polyserver",
+      "deployName": ""
+    },
+    {
+      "appName": "device-server-jsc",
+      "buildJob": "device-server-jsc_3.0_dev",
+      "gitProjectName": "device_server_jsc",
+      "executeJob": {
+        "dev": "device-server-jsc_opendev",
+        "test": "device-server-jsc_k8s-test",
+        "uat": "device-server-jsc_k8s-uat"
+      },
+      "serviceName": "polyserver",
+      "deployName": ""
+    },
+    {
+      "appName": "parking-lock-server",
+      "buildJob": "parking_lock_server_3.0_dev",
+      "gitProjectName": "parking_lock_server",
+      "executeJob": {
+        "dev": "parking-lock-server_opendev",
+        "test": "parking-lock-server_k8s-test",
+        "uat": "parking-lock-server_k8s-uat"
+      },
+      "serviceName": "parkinglockserver",
+      "deployName": ""
+    },
+    {
+      "appName": "gateway-maint",
+      "buildJob": "gateway-maint_3.0_dev",
+      "gitProjectName": "gateway-service-maintenance",
+      "executeJob": {
+        "dev": "gateway-maint_opendev",
+        "test": "gateway-maint_k8s-test",
+        "uat": "gateway-maint_k8s-uat"
+      },
+      "serviceName": "polyserver",
+      "deployName": ""
+    },
+    {
+      "appName": "device-huawei",
+      "buildJob": "device-huawei_3.0_dev",
+      "gitProjectName": "device_hw",
+      "executeJob": {
+        "uat": "device-huawei_k8s-uat"
+      },
+      "serviceName": "polyserver",
+      "deployName": ""
+    },
+    {
+      "appName": "device-2x-encryption",
+      "buildJob": "device-2x-encryption_3.0_dev",
+      "gitProjectName": "device_server_ykc_2.1",
+      "executeJob": {
+        "uat": "device-2x-encryption_k8s-uat"
+      },
+      "serviceName": "polyserver",
+      "deployName": ""
+    },
+    {
+      "appName": "device-server",
+      "buildJob": "device_server_ykc_new_th_one_3.0_dev",
+      "gitProjectName": "device_server_ykc_3.1",
+      "executeJob": {
+        "dev": "device-3x1_opendev",
+        "test": "device-3x1_k8s-test",
+        "uat": "device-3x1_k8s-uat"
+      },
+      "serviceName": "polyserver",
+      "deployName": ""
+    },
+    {
+      "appName": "device-server-ykr",
+      "buildJob": "device-ykr_3.0_dev",
+      "gitProjectName": "device_server_ykr",
+      "executeJob": {
+        "dev": "device-ykr_opendev",
+        "test": "device-ykr_k8s-test",
+        "uat": "device-ykr_k8s-uat"
+      },
+      "serviceName": "polyserver",
+      "deployName": ""
+    },
+    {
+      "appName": "barrier-server-js",
+      "buildJob": "barrier-server-js_3.0_dev",
+      "gitProjectName": "barrier_server_js",
+      "executeJob": {
+        "dev": "barrier-server-js_opendev",
+        "test": "barrier-server-js_k8s-test",
+        "uat": "barrier-server-js_k8s-uat"
+      },
+      "serviceName": "barrierserver_js",
+      "deployName": "barrier-server-js"
+    },
+    {
+      "appName": "adapter-open-server",
+      "buildJob": "adapter-open-server_3.0_dev",
+      "gitProjectName": "adapter_open_server",
+      "executeJob": {
+        "test": "adapter-open-server_k8s-test",
+        "prod": "adapter-open-server_k8s-prod"
+      },
+      "serviceName": "polyserver",
+      "deployName": ""
+    },
+    {
+      "appName": "device-server-adapter-tool",
+      "buildJob": "device-adapter-tool_3.0_dev",
+      "gitProjectName": "adapter_device_server_tool",
+      "executeJob": {
+        "test": "device-adapter-tool_k8s-test",
+        "prod": "device-adapter-tool_k8s-prod"
+      },
+      "serviceName": "polyserver",
+      "deployName": ""
+    },
+    {
+      "appName": "adapter-device-new-tool-two",
+      "buildJob": "adapter-tool-2x_3.0_dev",
+      "gitProjectName": "adapter_device_server_tool_2.0",
+      "executeJob": {
+        "test": "adapter-tool-2x_k8s-test",
+        "prod": "adapter-tool-2x_k8s-prod"
+      },
+      "serviceName": "polyserver",
+      "deployName": ""
+    },
+    {
+      "appName": "barrier-server",
+      "buildJob": "barrier-server_3.0_dev",
+      "gitProjectName": "barrier_server",
+      "executeJob": {
+        "dev": "barrier-server_opendev",
+        "test": "barrier-server_k8s-test",
+        "uat": "barrier-server_k8s-uat"
+      },
+      "serviceName": "barrierserver",
+      "deployName": ""
+    },
+    {
+      "appName": "device-server-ln",
+      "buildJob": "device_server_ln_3.0_dev",
+      "gitProjectName": "device_server_ln",
+      "executeJob": {
+        "dev": "device-luneng_opendev",
+        "test": "device-luneng_k8s-test",
+        "uat": "device-luneng_k8s-uat"
+      },
+      "serviceName": "polyserver",
+      "deployName": ""
+    },
+    {
+      "appName": "device-server-wm",
+      "buildJob": "device-wm_3.0_dev",
+      "gitProjectName": "device_wm",
+      "executeJob": {
+        "dev": "device-wm_opendev",
+        "test": "device-wm_k8s-test",
+        "uat": "device-wm_k8s-uat"
+      },
+      "serviceName": "polyserver",
+      "deployName": ""
+    },
+    {
+      "appName": "gateway-huawei",
+      "buildJob": "gateway-huawei_3.0_dev",
+      "gitProjectName": "gateway-service-hw",
+      "executeJob": {
+        "uat": "gateway-huawei_k8s-uat"
+      },
+      "serviceName": "polyserver",
+      "deployName": ""
+    },
+    {
+      "appName": "device-server-sh",
+      "buildJob": "device_server_sh_3.0_dev",
+      "gitProjectName": "Device_Server_Sh",
+      "executeJob": {
+        "test": "device-shenghong_k8s-test",
+        "uat": "device-shenghong_k8s-uat"
+      },
+      "serviceName": "polyserver",
+      "deployName": ""
+    },
+    {
+      "appName": "device-server-sh-channel",
+      "buildJob": "device_server_sh_channel_3.0_dev",
+      "gitProjectName": "Device_Server_Sh_Channel",
+      "executeJob": {
+        "uat": "device-shenghong-channel_k8s-uat"
+      },
+      "serviceName": "polyserver",
+      "deployName": ""
+    },
+    {
+      "appName": "barrier-server-kt",
+      "buildJob": "barrier_server_kt_3.0_dev",
+      "gitProjectName": "barrier_server_kt",
+      "executeJob": {
+        "dev": "barrier-server-kt_opendev",
+        "test": "barrier-server-kt_k8s-test",
+        "uat": "barrier-server_kt_k8s-uat"
+      },
+      "serviceName": "brake",
+      "deployName": "barrier-server-kt"
+    },
+    {
+      "appName": "zdl-base-server",
+      "buildJob": "zdl-base-server_3.0_dev",
+      "gitProjectName": "zdl_base_server",
+      "executeJob": {
+        "dev": "zdl-base-server_opendev",
+        "test": "zdl-base-server_k8s-test",
+        "uat": "zdl-base-server_k8s-uat"
+      },
+      "serviceName": "zdlbaseserver",
+      "deployName": ""
+    },
+    {
+      "appName": "open-api-server",
+      "buildJob": "open-api-server_3.0_dev",
+      "gitProjectName": "open_api_server",
+      "executeJob": {
+        "dev": "open-api-server_opendev",
+        "test": "open-api-server_k8s-test",
+        "uat": "open-api-server_k8s-uat"
+      },
+      "serviceName": "openapiserver",
+      "deployName": ""
+    },
+    {
+      "appName": "zdl-portal",
+      "buildJob": "zdl-portal_3.0_dev",
+      "gitProjectName": "zdl-portal",
+      "executeJob": {
+        "dev": "zdl-portal_opendev",
+        "test": "zdl-portal_k8s-test",
+        "uat": "zdl-portal_k8s-uat"
+      },
+      "serviceName": "zdlportal",
+      "deployName": ""
+    },
+    {
+      "appName": "external-server",
+      "buildJob": "external-server_3.0_dev",
+      "gitProjectName": "zdl_external_server",
+      "executeJob": {
+        "dev": "external-server_opendev",
+        "test": "external-server_k8s-test",
+        "uat": "external-server_k8s-uat"
+      },
+      "serviceName": "externalserver",
+      "deployName": ""
+    },
+    {
+      "appName": "flow-side-server",
+      "buildJob": "flowside-server_3.0_dev",
+      "gitProjectName": "flow_side_server",
+      "executeJob": {
+        "dev": "flowside-server_opendev",
+        "test": "flowside-server_k8s-test",
+        "uat": "flowside-server_k8s-uat"
+      },
+      "serviceName": "flowsideserver",
+      "deployName": ""
+    },
+    {
+      "appName": "gateway-service-zdl",
+      "buildJob": "gateway_service_zdl_3.0_dev",
+      "gitProjectName": " gateway_service_zdl",
+      "executeJob": {
+        "dev": "gateway-zdl_opendev",
+        "test": "gateway-zdl_k8s-test",
+        "uat": "gateway-zdl_k8s-uat"
+      },
+      "serviceName": "gateway-service-zdl",
+      "deployName": ""
+    },
+    {
+      "appName": "ljc-order-server",
+      "buildJob": "ljc_order_server_3.0_dev",
+      "gitProjectName": "ljc_order_server",
+      "executeJob": {
+        "dev": "ljc-order-server_opendev",
+        "test": "ljc-order-server_k8s-test",
+        "uat": "ljc-order-server_k8s-uat"
+      },
+      "serviceName": "polyserver",
+      "deployName": ""
+    },
+    {
+      "appName": "flow-charge-server",
+      "buildJob": "flow-charge_3.0_dev",
+      "gitProjectName": "flow-charge-server",
+      "executeJob": {
+        "dev": "flow-charge_opendev",
+        "test": "flow-charge_k8s-test",
+        "uat": "flow-charge_k8s-uat"
+      },
+      "serviceName": "flow-charge-server",
+      "deployName": "flow-charge"
+    },
+    {
+      "appName": "ctp_finance_server",
+      "buildJob": "ctp-finance-server_3.0_dev",
+      "gitProjectName": "ct_finance_server",
+      "executeJob": {
+        "dev": "ctp-finance-server_opendev",
+        "test": "ctp-finance-server_k8s-test",
+        "uat": "ctp-finance-server_k8s-uat"
+      },
+      "serviceName": "ctpfinanceserver",
+      "deployName": ""
+    },
+    {
+      "appName": "clearing-server",
+      "buildJob": "clearing-server_3.0_dev",
+      "gitProjectName": "clearing_server",
+      "executeJob": {
+        "dev": "clearing-server_opendev",
+        "test": "clearing-server_k8s-test",
+        "uat": "clearing-server_k8s-uat"
+      },
+      "serviceName": "clearingserver",
+      "deployName": ""
+    },
+    {
+      "appName": "reconciliation-server",
+      "buildJob": "reconciliation_server_3.0_dev",
+      "gitProjectName": "reconciliation_server",
+      "executeJob": {
+        "dev": "reconciliation-server_opendev",
+        "test": "reconciliation-server_k8s-test",
+        "uat": "reconciliation-server_k8s-uat"
+      },
+      "serviceName": "polyserver",
+      "deployName": ""
+    },
+    {
+      "appName": "finance-server",
+      "buildJob": "finance-server_3.0_dev",
+      "gitProjectName": "finance_server",
+      "executeJob": {
+        "dev": "finance-server_opendev",
+        "test": "finance-server_k8s-test",
+        "uat": "finance-server_k8s-uat"
+      },
+      "serviceName": "financeserver",
+      "deployName": ""
+    },
+    {
+      "appName": "invoice-server",
+      "buildJob": "invoice-server_3.0_dev",
+      "gitProjectName": "invoice-server",
+      "executeJob": {
+        "dev": "invoice-server_opendev",
+        "test": "invoice-server_k8s-test",
+        "uat": "invoice-server_k8s-uat"
+      },
+      "serviceName": "invoice-server",
+      "deployName": ""
+    },
+    {
+      "appName": "bank-ability-center",
+      "buildJob": "bank-ability-center_3.0_dev",
+      "gitProjectName": "bank_ability_center",
+      "executeJob": {
+        "dev": "bank-ability-center_opendev",
+        "test": "bank-ability-center_k8s-test",
+        "uat": "bank-ability-center_k8s-uat"
+      },
+      "serviceName": "bankabilitycenterserver",
+      "deployName": ""
+    },
+    {
+      "appName": "event-tracing-server",
+      "buildJob": "event-tracing_3.0_dev",
+      "gitProjectName": "event_tracing_server",
+      "executeJob": {
+        "dev": "event-tracing_opendev",
+        "test": "event-tracing_k8s-test",
+        "uat": "event-tracing_k8s-uat"
+      },
+      "serviceName": "polyserver",
+      "deployName": ""
+    },
+    {
+      "appName": "omp-poly-center",
+      "buildJob": "omp-poly-center_3.0_dev",
+      "gitProjectName": "omp_poly_center",
+      "executeJob": {
+        "dev": "omp-poly-center_opendev",
+        "test": "omp-poly-center_k8s-test",
+        "uat": "omp-poly-center_k8s-uat"
+      },
+      "serviceName": "omp-poly-center",
+      "deployName": ""
+    },
+    {
+      "appName": "iop-base-server",
+      "buildJob": "iop-base_3.0_dev",
+      "gitProjectName": "iop_base",
+      "executeJob": {
+        "dev": "iop-base_opendev",
+        "test": "iop-base_k8s-test",
+        "uat": "iop-base_k8s-uat"
+      },
+      "serviceName": "polyserver",
+      "deployName": ""
+    },
+    {
+      "appName": "price-center-server",
+      "buildJob": "price-center-serve_3.0_dev",
+      "gitProjectName": "price_center_server",
+      "executeJob": {
+        "dev": "price-center-serve_opendev",
+        "test": "price-center-serve_k8s-test",
+        "uat": "price-center-serve_k8s-uat"
+      },
+      "serviceName": "pricecenterserver",
+      "deployName": ""
+    },
+    {
+      "appName": "ngetaware-service-center",
+      "buildJob": "gateway-omp-admin_3.0_dev",
+      "gitProjectName": "ngateway_service_center",
+      "executeJob": {
+        "dev": "gateway-omp-admin_opendev",
+        "test": "gateway-omp-admin_k8s-test",
+        "uat": "gateway-omp-admin_k8s-uat"
+      },
+      "serviceName": "gateway-omp-admin",
+      "deployName": ""
+    },
+    {
+      "appName": "cloud-api-server",
+      "buildJob": "cloud_api_server_3.0_dev",
+      "gitProjectName": "cloud_api_server",
+      "executeJob": {
+        "dev": "cloud-api-server_opendev",
+        "test": "cloud-api-server_k8s-test",
+        "uat": "cloud-api-server_k8s-uat"
+      },
+      "serviceName": "cloudapiserver",
+      "deployName": ""
+    },
+    {
+      "appName": "data-center-server",
+      "buildJob": "datacenter-server_3.0_dev",
+      "gitProjectName": "dataCenter_server",
+      "executeJob": {
+        "dev": "datacenter-server_opendev",
+        "test": "datacenter-server_k8s-test",
+        "uat": "datacenter-server_k8s-uat"
+      },
+      "serviceName": "datacenterserver",
+      "deployName": ""
+    },
+    {
+      "appName": "ctp-activity-server",
+      "buildJob": "ctp-activity-server_3.0_dev",
+      "gitProjectName": "ctp_activity_server",
+      "executeJob": {
+        "dev": "ctp-activity-server_opendev",
+        "test": "ctp-activity-server_k8s-test",
+        "uat": "ctp-activity-server_k8s-uat"
+      },
+      "serviceName": "ctpactivityserver",
+      "deployName": ""
+    },
+    {
+      "appName": "iop-poly-server",
+      "buildJob": "iop-poly_3.0_dev",
+      "gitProjectName": "iop_poly",
+      "executeJob": {
+        "dev": "iop-poly_opendev",
+        "test": "iop-poly_k8s-test",
+        "uat": "iop-poly_k8s-uat"
+      },
+      "serviceName": "polyserver",
+      "deployName": ""
+    },
+    {
+      "appName": "message-push-server",
+      "buildJob": "message-push_3.0_dev",
+      "gitProjectName": "message_push_server",
+      "executeJob": {
+        "dev": "message-push_opendev",
+        "test": "message-push_k8s-test",
+        "uat": "message-push_k8s-uat"
+      },
+      "serviceName": "messagepushserver",
+      "deployName": ""
+    },
+    {
+      "appName": "statistics-poly-server",
+      "buildJob": "statistics-poly-server_3.0_dev",
+      "gitProjectName": "poly_statistics_server",
+      "executeJob": {
+        "dev": "statistics-poly-server_opendev",
+        "test": "statistics-poly-server_k8s-test",
+        "uat": "statistics-poly-server_k8s-uat"
+      },
+      "serviceName": "polystatisticsserver",
+      "deployName": ""
+    },
+    {
+      "appName": "charge-business",
+      "buildJob": "charge-business_3.0_dev",
+      "gitProjectName": "charge_business_server",
+      "executeJob": {
+        "dev": "charge-business_opendev",
+        "test": "charge-business_k8s-test",
+        "uat": "charge-business_k8s-uat"
+      },
+      "serviceName": "chargebusinessserver",
+      "deployName": ""
+    }
+  ]
+}
