@@ -192,6 +192,12 @@ function installCursor() {
     writeFileSync(join(target, `${skillName}.mdc`), content);
     log(`${skillName}.mdc`);
   }
+
+  // 3) 同步全局 ~/.cursor/rules/cwork-skills.md（Cursor 全局规则，任意项目可见）
+  const globalTarget = join(HOME, '.cursor', 'rules');
+  mkdirSync(globalTarget, { recursive: true });
+  writeFileSync(join(globalTarget, 'cwork-skills.md'), mainRule);
+  log('~/.cursor/rules/cwork-skills.md (全局主入口)');
 }
 
 function buildCursorMainRule() {
@@ -267,6 +273,13 @@ function uninstallCursor() {
       rmSync(join(target, f));
       log(`删除 ${f}`);
     }
+  }
+
+  // 清理全局 ~/.cursor/rules/cwork-skills.md
+  const globalFile = join(HOME, '.cursor', 'rules', 'cwork-skills.md');
+  if (existsSync(globalFile)) {
+    rmSync(globalFile);
+    log('删除 ~/.cursor/rules/cwork-skills.md (全局)');
   }
 }
 
