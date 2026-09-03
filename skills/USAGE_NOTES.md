@@ -15,6 +15,8 @@
 
 ## 未分析
 
+- [2026-08-31] [installer] `~/.claude/skills/cwork-*` 靠手动拷贝维护，随源仓库更新漂移（实测 yunxiao_query.sh 还是 8-7 旧版 / _common.sh 是 8-13 新版混装，且无凭证）→ 已修正：`bin/cwork.js` 新增 `--sync-global` 独立命令，源仓库整目录覆盖同步（复用 SENSITIVE_PATTERNS 过滤凭证）+ 凭证软链（`scripts/.config.local.sh`、`scripts/mcp-client/.mcp_config.json`，源优先 CWORK_HOME 缺省 ROOT），配 `--sync-global --uninstall` 卸载；实测 /tmp 下跑全局技能直读软链凭证查询成功
+- [2026-08-31] [requirement] Claude Code 源仓库会话中误判"凭证未配置"：agent 预检查了 `~/.claude/skills/...` 和 `scripts/.config.local.sh` 等错误路径，实际凭证在 `skills/requirement/scripts/.config.local.sh`（源仓库本身），导致 Qoder 能用而 Claude Code"不能用" | 建议改法：SKILL.md 凭证/密钥配置段明确凭证唯一判据=直接试跑 `yunxiao_query.sh list 3`（脚本自带 CWORK_HOME fallback），agent 禁止自行预检文件路径下结论
 - [2026-08-12] [log/config/data] IDE 安装场景凭证丢失：3b0110e 提交的 SENSITIVE_PATTERNS 过滤了 .config.local.sh/.mcp_config.json，装到 ~/.qoder/skills/ 等目录后 cwork-log/config/data 全部报"未配置密钥" → 已修正：三个脚本加 CWORK_HOME fallback（同目录无凭证时回 $CWORK_HOME/skills/<skill>/... 读源仓库同一份），bin/cwork.js 装完提示 export CWORK_HOME，三个 SKILL.md 密钥段补 IDE 安装场景说明
 - [2026-08-10] [log] 定位效率瓶颈：时间戳心算错误、搜索关键字发散、代码日志交替、路径混淆 → 已修正：新增时间戳命令驱动（禁止心算）、搜索关键字优先级（单号优先）、日志先行策略、工程路径验证
 - [2026-08-10] [log/bug] 定位问题时跑飞（找日志/服务找错方向）→ 已修正：新增"不确定时及时探讨"原则，列出跑飞高发场景

@@ -10,6 +10,8 @@
  *   node bin/cwork.js --tool claude     # install to Claude Code only
  *   node bin/cwork.js --tool trae       # install to Trae only
  *   node bin/cwork.js --uninstall --tool cursor
+ *   node bin/cwork.js --sync-global     # sync skills to ~/.claude/skills/ (Claude Code 全局技能)
+ *   node bin/cwork.js --sync-global --uninstall
  */
 
 import { readFileSync, writeFileSync, mkdirSync, cpSync, rmSync, existsSync, readdirSync, statSync, symlinkSync } from 'fs';
@@ -31,10 +33,11 @@ function skip(msg) { console.log(`  - ${msg}`); }
 
 function parseArgs() {
   const args = process.argv.slice(2);
-  const opts = { tool: null, uninstall: false };
+  const opts = { tool: null, uninstall: false, syncGlobal: false };
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--tool') opts.tool = args[++i];
     if (args[i] === '--uninstall') opts.uninstall = true;
+    if (args[i] === '--sync-global') opts.syncGlobal = true;
   }
   return opts;
 }
@@ -199,7 +202,7 @@ function buildCursorMainRule() {
   const cleaned = agentsMd.replace(/<!--\s*cwork-skills:begin\s*-->/, '').replace(/<!--\s*cwork-skills:end\s*-->/, '').trim();
 
   return `---
-description: cwork 工作流技能集主入口。当用户提到需求实现、bug修复、初始化、提交代码、查日志、查配置、查数仓、查代码仓库、查需求、生成文档、自动化测试、查监控指标时触发。
+description: cwork 工作流技能集主入口。当用户提到需求实现、bug修复、初始化、提交代码、查日志、查配置、查数仓、查代码仓库、查需求、生成文档、自动化测试、查监控指标、构建部署时触发。
 alwaysApply: true
 ---
 
@@ -220,6 +223,7 @@ ${cleaned}
 - /cwork-doc — 技术方案生成
 - /cwork-requirement — 云效需求查询
 - /cwork-graf — Grafana 监控查询
+- /cwork-deploy — Jenkins + 云效构建部署触发
 
 调用某个技能时，读取对应的 cwork-xxx.mdc 规则文件获取完整指令。
 `;
@@ -363,6 +367,55 @@ function uninstallClaude() {
   }
 }
 
+// ── Claude Code global skills sync ──────────────────────────────────
+
+// ~/.claude/skills/cwork-* 是 Claude Code 全局技能目录（任意项目/窗口可见）。
+// 历史上靠手动拷贝维护，会随源仓库更新而漂移（脚本新旧版本混装）。
+// 此命令用源仓库整目录覆盖同步：① 凭证等敏感文件照常过滤（与 IDE 安装同一套规则）
+// ② 源仓库有凭证时自动软链过去，全局技能同目录即可读到凭证（不依赖 CWORK_HOME fallback）。
+
+let globalSyncCredLinks = 0;
+
+function syncClaudeGlobal() {
+  console.log('\n📦 Claude Code 全局技能同步 (~/.claude/skills/)');
+  const target = join(HOME, '.claude', 'skills');
+  mkdirSync(target, { recursive: true });
+  // 凭证软链源优先 CWORK_HOME，缺省回退安装器所在的源仓库（两者同一份凭证）
+  const credHome = process.env.CWORK_HOME || ROOT;
+  const skills = readSkillDirs();
+  for (const skill of skills) {
+    const skillName = `cwork-${skill}`;
+    const src = join(SKILLS_DIR, skill);
+    const dest = join(target, skillName);
+    rmSync(dest, { recursive: true, force: true });
+    copySkillFiltered(src, dest);
+    // 凭证软链：log/config/code/requirement/graf 用 .config.local.sh，data 用 .mcp_config.json
+    for (const credRel of ['scripts/.config.local.sh', 'scripts/mcp-client/.mcp_config.json']) {
+      const srcCred = join(credHome, 'skills', skill, credRel);
+      const destCred = join(dest, credRel);
+      if (existsSync(srcCred) && !existsSync(destCred)) {
+        try {
+          symlinkSync(srcCred, destCred);
+          globalSyncCredLinks++;
+        } catch (_) { /* 软链失败不阻塞，仍可走 CWORK_HOME fallback */ }
+      }
+    }
+    log(skillName);
+  }
+}
+
+function unsyncClaudeGlobal() {
+  console.log('\n📦 Claude Code 全局技能卸载');
+  const target = join(HOME, '.claude', 'skills');
+  if (!existsSync(target)) return skip('目录不存在');
+  for (const f of readdirSync(target)) {
+    if (f.startsWith('cwork-')) {
+      rmSync(join(target, f), { recursive: true, force: true });
+      log(`删除 ${f}`);
+    }
+  }
+}
+
 // ── Trae installer ──────────────────────────────────────────────────
 
 function installTrae() {
@@ -408,6 +461,7 @@ ${cleaned}
 - /cwork-doc — 技术方案生成
 - /cwork-requirement — 云效需求查询
 - /cwork-graf — Grafana 监控查询
+- /cwork-deploy — Jenkins + 云效构建部署触发
 `;
   writeFileSync(join(target, 'cwork.md'), mainContent);
   log('cwork.md (主入口)');
@@ -458,7 +512,10 @@ const uninstallers = { qoder: uninstallQoder, cursor: uninstallCursor, claude: u
 
 const opts = parseArgs();
 
-if (opts.tool && opts.tool !== 'auto') {
+if (opts.syncGlobal) {
+  // 全局技能同步是独立命令（作用于 ~/.claude/skills/，与项目内安装的 --tool 无关）
+  opts.uninstall ? unsyncClaudeGlobal() : syncClaudeGlobal();
+} else if (opts.tool && opts.tool !== 'auto') {
   if (!TOOLS.includes(opts.tool)) {
     console.error(`未知工具: ${opts.tool}，支持: ${TOOLS.join(', ')}, auto`);
     process.exit(1);
@@ -472,7 +529,8 @@ if (opts.tool && opts.tool !== 'auto') {
 }
 
 // 装完提示设 CWORK_HOME（IDE 安装场景下 cwork-log/config/data 的凭证 fallback 依赖它）
-if (!opts.uninstall && !process.env.CWORK_HOME) {
+// --sync-global 已软链凭证时无需提示（软链成功数 > 0 即凭证已就位）
+if (!opts.uninstall && !process.env.CWORK_HOME && !(opts.syncGlobal && globalSyncCredLinks > 0)) {
   console.log('\n💡 凭证复用提示：');
   console.log('   cwork-log / cwork-config / cwork-data 在 IDE 安装目录里没有凭证（敏感文件已过滤）。');
   console.log('   在 shell profile（~/.zshrc 或 ~/.bashrc）加一行，让所有 IDE 复用源仓库凭证，无需重复配置：');
