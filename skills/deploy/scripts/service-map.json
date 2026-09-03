@@ -807,6 +807,18 @@
       },
       "serviceName": "chargebusinessserver",
       "deployName": ""
+    },
+    {
+      "appName": "access",
+      "gitProjectName": "access",
+      "serviceName": "访问服务",
+      "platform": "yunxiao",
+      "yxDeploy": {
+        "test": "1e8ed4b5c2b14db6aa8250871362ed1a|2f07f7fe7f3e416d997abb5fe9fe5298",
+        "uat": "1e8ed4b5c2b14db6aa8250871362ed1a|c0b80231b9ee4637aeeefa61b2707c5f",
+        "prod": "1e8ed4b5c2b14db6aa8250871362ed1a|9a7bff71a291425e87ffe29d6d79843c"
+      },
+      "yxBuild": "84a66500c21d4de8bb6744570b7c6b44|8f3508c681904da4b34560944ebe9fcf"
     }
   ]
 }

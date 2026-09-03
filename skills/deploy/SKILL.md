@@ -83,11 +83,14 @@ API base: `https://{YX_DOMAIN}/oapi/v1/appstack/organizations/{YX_ORG_ID}`
 
 **环境映射**（swimDeploy，Jenkins 专用）：
 
-| env | swimDeploy 值 |
-|---|---|
-| `dev` | `dynamic-deployment_opendev` |
-| `test` | `dynamic-deployment_k8s-test` |
-| `uat` | `dynamic-deployment_k8s-uat` |
+| env | swimDeploy 值 | 说明 |
+|---|---|---|
+| `dev` | `dynamic-deployment_opendev` | 非生产泳道 |
+| `test` | `dynamic-deployment_k8s-test` | 非生产泳道 |
+| `uat` | `dynamic-deployment_k8s-uat` | 非生产泳道 |
+| `prod` | （无） | **prod 无泳道**，部署时不传 SUB_APPNAME |
+
+> **泳道说明**：swimDeploy 是 Jenkins 部署作业的"子应用名"（SUB_APPNAME），对应 K8S 动态部署泳道。仅 Jenkins 平台使用，**云效平台不走 swimDeploy**（用 yxDeploy 的 workflowSn|stageSn）。未配置泳道时部署正常执行，只是不传 SUB_APPNAME 参数。
 
 ## 脚本调用说明（关键）
 
@@ -167,6 +170,8 @@ bash deploy.sh deploy order-server test feature/20260901_add_export
 ---
 
 ## 阶段 3：结果输出
+
+**输出约束（强制）**：结果展示尽量用图表/图示，不要只用文字。数据用表格、趋势用 ASCII 图、对比用并排图，让证据一目了然。
 
 把构建/部署结果与用户需求对应：
 
@@ -312,6 +317,7 @@ Jenkins 控制台：
 ## 自动衔接
 
 本技能为**独立工具**（和 log/bug/doc/data/config/graf 同级），不进 init→implement→commit 主流程衔接链。
-完成后不自动调起其他技能；若由 cwork-bug/cwork-implement 调起，则**带部署结果返回调用方**继续。
+完成后**提示**：可用 cwork-log 查目标服务最近 2 分钟启动日志确认服务正常（部署后验证闭环）。
+若由 cwork-bug/cwork-implement 调起，则**带部署结果返回调用方**继续。
 随安装发布需在 `bin/cwork.js` 白名单加 `'deploy'`。
 
