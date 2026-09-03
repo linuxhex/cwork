@@ -241,6 +241,8 @@ bash scripts/arms_traces.sh "<pid>" <分钟> "<接口关键字>"
 
 ## 阶段 3：结论输出
 
+**输出约束（强制）**：结果展示尽量用图表/图示，不要只用文字。链路用 ASCII 调用链图、耗时用表格、异常时间线用时间轴图，让证据一目了然。
+
 输出汇总（带 banner）：
 
 ```
@@ -346,9 +348,9 @@ bash scripts/arms_traces.sh "<pid>" <分钟> "<接口关键字>"
 
 ---
 
-## 联动：查业务数据 / 查 Nacos 配置（cwork-data / cwork-config）
+## 联动：查业务数据 / 查 Nacos 配置 / 查监控指标（cwork-data / cwork-config / cwork-graf）
 
-排查中常需用数据或配置佐证根因。**触发条件命中即调起**（主 agent 用 Skill 工具触发），写法对齐 cwork-bug 的「后端日志联动」。
+排查中常需用数据、配置或监控佐证根因。**触发条件命中即调起**（主 agent 用 Skill 工具触发），写法对齐 cwork-bug 的「后端日志联动」。
 
 **① 数据查询联动（cwork-data）** — 用数仓数据佐证
 - 触发条件（任一）：需核对业务数据（订单状态/金额/库存/某用户数据）、查某时段数据量、数据一致性存疑、日志看到数据异常需数仓佐证。
@@ -372,7 +374,12 @@ bash scripts/arms_traces.sh "<pid>" <分钟> "<接口关键字>"
   ```
 - 联动原则：cwork-log 管「现象与链路」，cwork-config 管「核对 Nacos 配置真值」；确认配置后回到链路分析。
 
-> **凭证注意**：cwork-data 需 `skills/data/scripts/mcp-client/.mcp_config.json` 已配置；cwork-config 需 `skills/config/scripts/.config.local.sh` 已配置对应集群。未配置时跳过对应联动，仅基于日志/链路分析。
+**③ 监控查询联动（cwork-graf）** — 用监控指标佐证性能异常
+- 触发条件（任一）：链路有慢 span（耗时 > 1s）、日志发现 OOM/FGC/线程耗尽等 JVM 问题、日志发现 CPU 飙升/连接池满等资源问题、需要监控曲线佐证性能异常趋势。
+- 流程：从链路/日志提取服务名 + 异常类型 → 调 cwork-graf 查对应面板（JVM 监控大盘 `UOJjh1SMz` / Container `DZ8sNXDZk` / DB `Y6gogUmVk`）→ 监控曲线 ↔ 日志异常对应。
+- 联动原则：cwork-log 管「链路/日志根因」，cwork-graf 管「监控指标佐证」；拿到监控证据后回到链路分析下结论。
+
+> **凭证注意**：cwork-data 需 `skills/data/scripts/mcp-client/.mcp_config.json` 已配置；cwork-config 需 `skills/config/scripts/.config.local.sh` 已配置对应集群；cwork-graf 需 `skills/graf/scripts/.config.local.sh` 已配置 Grafana 凭证。未配置时跳过对应联动，仅基于日志/链路分析。
 
 ---
 

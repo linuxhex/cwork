@@ -225,6 +225,24 @@ fi
 4. 校验格式：必须匹配 `^OMJF-\d+$`
 5. 校验通过后，更新 workflow-state.json 中的 requirement_id 字段
 
+## 需求范围核对（cwork-requirement 联动）
+
+**有 requirement_id 时，自动调 cwork-requirement 查需求详情，核对实现范围**：
+
+```
+有 requirement_id？
+  ├─ 否 → 跳过，继续需求分析
+  └─ 是 → 调用 cwork-requirement：
+           1. 查需求详情（标题/状态/描述/负责人）
+           2. 与用户描述的需求对比，确认范围一致
+           3. 不一致时提醒用户"需求文档描述与实现范围不一致，请确认"
+           4. 一致则继续需求分析
+```
+
+**联动原则**：cwork-implement 管「实现」，cwork-requirement 管「需求范围核对」；拿到需求详情后回到需求分析继续。
+
+> **注意**：调用 cwork-requirement 需云效 AK/SK 已配置（`scripts/.config.local.sh` 或环境变量），未配置时跳过需求核对，仅从用户描述分析。
+
 ## 阶段切换通知（强制）
 
 **每个阶段开始时必须明确声明当前阶段，格式如下：**

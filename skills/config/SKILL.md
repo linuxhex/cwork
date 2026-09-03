@@ -109,6 +109,8 @@ bash nacos_query.sh diff order-service.yml DEFAULT_GROUP uat prod
 
 ## 阶段 3：结果输出
 
+**输出约束（强制）**：结果展示尽量用图表/图示，不要只用文字。数据用表格、趋势用 ASCII 图、对比用并排图，让证据一目了然。
+
 把配置内容与排查问题对应：
 
 ```
