@@ -168,10 +168,17 @@ trigger_deploy_job() {
   lastNum=$(get_last_build_number "$deployJob" 2>/dev/null || echo "0")
 
   local resp
-  resp=$(jenkins_post "/job/${deployJob}/buildWithParameters" \
-    --data-urlencode "MASTER_APPNAME=${appName}" \
-    --data-urlencode "SUB_APPNAME=${swim}" \
-    --data-urlencode "BRANCH=${branch}" 2>&1 || true)
+  if [[ -n "$swim" ]]; then
+    resp=$(jenkins_post "/job/${deployJob}/buildWithParameters" \
+      --data-urlencode "MASTER_APPNAME=${appName}" \
+      --data-urlencode "SUB_APPNAME=${swim}" \
+      --data-urlencode "BRANCH=${branch}" 2>&1 || true)
+  else
+    # 无泳道时不传 SUB_APPNAME（prod 环境 / 部署作业不需要泳道参数的场景）
+    resp=$(jenkins_post "/job/${deployJob}/buildWithParameters" \
+      --data-urlencode "MASTER_APPNAME=${appName}" \
+      --data-urlencode "BRANCH=${branch}" 2>&1 || true)
+  fi
 
   # 轮询等待新构建号
   local i=0
@@ -601,10 +608,9 @@ print(ej.get('$env', ''))
   fi
 
   local swim
-  swim=$(lookup_swim "$env")
+  swim=$(lookup_swim "$env" 2>/dev/null || echo "")
   if [[ -z "$swim" ]]; then
-    fail "没有配置 $env 环境的 swimDeploy"
-    exit 1
+    warn "未配置 $env 环境的 swimDeploy，部署时不传 SUB_APPNAME（prod/云效平台通常无泳道）"
   fi
 
   local deployName
