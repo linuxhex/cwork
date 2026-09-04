@@ -226,6 +226,68 @@ get_job_status() {
   return 0
 }
 
+# ── 轮询等待 Jenkins 作业完成 ──
+# 用法: wait_jenkins_job_complete <jobName> <buildNum> [label]
+# label: "构建" / "部署"（显示用，默认"作业"）
+# 轮询 get_job_status 直到非 running 或超时，输出终态到 stdout
+wait_jenkins_job_complete() {
+  local jobName="$1"
+  local buildNum="$2"
+  local label="${3:-作业}"
+
+  local status="running"
+  local poll_interval="${DEPLOY_POLL_INTERVAL:-5}"
+  local timeout="${DEPLOY_TIMEOUT:-1800}"
+  local elapsed=0
+  while [[ "$status" == "running" && $elapsed -lt $timeout ]]; do
+    sleep "$poll_interval"
+    elapsed=$((elapsed + poll_interval))
+    status=$(get_job_status "$jobName" "$buildNum")
+    local mins=$((elapsed / 60))
+    local secs=$((elapsed % 60))
+    echo -ne "\r  ${label}状态: $status (已等待 ${mins}m${secs}s)    "
+  done
+  echo ""
+  echo "$status"
+}
+
+# ── 报告 Jenkins 作业结果并按需退出 ──
+# 用法: report_jenkins_result <status> <jobName> <buildNum> <label>
+# status 非 success 时 exit 1
+report_jenkins_result() {
+  local status="$1"
+  local jobName="$2"
+  local buildNum="$3"
+  local label="$4"
+
+  local consoleUrl="${JENKINS_URL:-http://172.16.98.169:18001}/job/${jobName}/${buildNum}/console"
+
+  case "$status" in
+    success)
+      ok "${label}成功！构建号: #${buildNum}"
+      echo ""
+      info "${label}详情: ${consoleUrl}"
+      ;;
+    fail)
+      fail "${label}失败！构建号: #${buildNum}"
+      echo ""
+      info "查看${label}日志:"
+      echo "  deploy.sh console $jobName $buildNum"
+      echo "  ${consoleUrl}"
+      exit 1
+      ;;
+    running)
+      warn "${label}超时（${DEPLOY_TIMEOUT:-1800}s），请手动检查状态:"
+      echo "  deploy.sh status $jobName $buildNum"
+      echo "  deploy.sh console $jobName $buildNum"
+      ;;
+    *)
+      warn "${label}状态未知，请手动检查:"
+      echo "  deploy.sh status $jobName $buildNum"
+      ;;
+  esac
+}
+
 # ── 获取构建时间戳 ──
 # 对应 JenkinsController.buildAndExecuteJob 中的时间格式转换
 get_build_timestamp() {
@@ -320,6 +382,92 @@ except:
   echo "$status"
 }
 
+# ── 判断云效工作流状态是否为终态 ──
+# 终态: success/fail/超时由调用方判断
+# 用法: yx_is_terminal <status>  → 输出 "success" / "fail" / "" (非终态)
+yx_is_terminal() {
+  local s="$1"
+  # 归一化小写
+  s=$(echo "$s" | tr '[:upper:]' '[:lower:]')
+  case "$s" in
+    success|succeed|succeeded|complete|completed|finish|finished|true)
+      echo "success"
+      ;;
+    fail|failed|failure|error|cancel|cancelled|abort|aborted|false)
+      echo "fail"
+      ;;
+    *)
+      echo ""
+      ;;
+  esac
+}
+
+# ── 轮询等待云效工作流完成 ──
+# 用法: wait_yx_workflow_complete <appName> <workflowSn> <stageSn> [label]
+# 轮询 yx_get_workflow_status 直到终态或超时，输出终态到 stdout
+wait_yx_workflow_complete() {
+  local appName="$1"
+  local workflowSn="$2"
+  local stageSn="$3"
+  local label="${4:-部署}"
+
+  local poll_interval="${DEPLOY_POLL_INTERVAL:-5}"
+  local timeout="${DEPLOY_TIMEOUT:-1800}"
+  local elapsed=0
+  local status="running"
+  local terminal=""
+
+  while [[ -z "$terminal" && $elapsed -lt $timeout ]]; do
+    sleep "$poll_interval"
+    elapsed=$((elapsed + poll_interval))
+    status=$(yx_get_workflow_status "$appName" "$workflowSn" "$stageSn")
+    terminal=$(yx_is_terminal "$status")
+    local mins=$((elapsed / 60))
+    local secs=$((elapsed % 60))
+    echo -ne "\r  ${label}状态: $status (已等待 ${mins}m${secs}s)    "
+  done
+  echo ""
+
+  if [[ -n "$terminal" ]]; then
+    echo "$terminal"
+  else
+    echo "running"
+  fi
+}
+
+# ── 报告云效工作流结果并按需退出 ──
+# 用法: report_yx_result <status> <appName> <env> <branch>
+report_yx_result() {
+  local status="$1"
+  local appName="$2"
+  local env="$3"
+  local branch="$4"
+
+  case "$status" in
+    success)
+      ok "云效部署成功！"
+      echo ""
+      echo "  服务: $appName | 环境: $env | 分支: $branch"
+      echo "  可用 cwork-log 查 $appName $env 环境日志确认服务启动"
+      ;;
+    fail)
+      fail "云效部署失败！"
+      echo ""
+      echo "  服务: $appName | 环境: $env | 分支: $branch"
+      echo "  请到云效 AppStack 控制台查看流水线执行详情"
+      exit 1
+      ;;
+    running)
+      warn "云效部署超时（${DEPLOY_TIMEOUT:-1800}s），请到云效 AppStack 控制台手动检查状态"
+      echo "  服务: $appName | 环境: $env | 分支: $branch"
+      ;;
+    *)
+      warn "云效部署状态未知，请到云效 AppStack 控制台确认"
+      echo "  服务: $appName | 环境: $env | 分支: $branch"
+      ;;
+  esac
+}
+
 # ── 云效完整部署流程 ──
 # 云效的 executeWorkflow 一步完成构建+部署（流水线内含构建和部署阶段）
 # 用法: yx_deploy <appName> <env> <branch> <svcJson>
@@ -384,22 +532,14 @@ else:
   info "执行结果: ${result#OK:}"
   echo ""
 
-  # 查询一次状态
-  local status
-  status=$(yx_get_workflow_status "$appName" "$workflowSn" "$stageSn")
-  info "当前状态: $status"
+  # 轮询等待工作流执行完成
+  info "等待云效工作流执行完成..."
+  local finalStatus
+  finalStatus=$(wait_yx_workflow_complete "$appName" "$workflowSn" "$stageSn" "部署")
 
   echo ""
   echo "═══════════════════════════════════════════════════════════════"
-  echo "  部署已触发"
-  echo "═══════════════════════════════════════════════════════════════"
-  echo "  服务:   $appName"
-  echo "  环境:   $env"
-  echo "  分支:   $branch"
-  echo "  平台:   云效 (yunxiao)"
-  echo "  状态:   $status"
-  echo ""
-  echo "  可用 cwork-log 查 $appName $env 环境日志确认服务启动"
+  report_yx_result "$finalStatus" "$appName" "$env" "$branch"
   echo "═══════════════════════════════════════════════════════════════"
 }
 
@@ -503,10 +643,13 @@ cmd_build() {
   buildNum=$(trigger_build_job "$buildJob" "$branch")
   ok "构建已触发，构建号: #$buildNum"
   echo ""
-  info "构建详情: ${JENKINS_URL:-http://172.16.98.169:18001}/job/${buildJob}/${buildNum}/console"
+
+  # 等待构建完成并报告结果
+  info "等待构建完成..."
+  local buildStatus
+  buildStatus=$(wait_jenkins_job_complete "$buildJob" "$buildNum" "构建")
   echo ""
-  echo "  用以下命令查看状态:"
-  echo "    deploy.sh status $buildJob $buildNum"
+  report_jenkins_result "$buildStatus" "$buildJob" "$buildNum" "构建"
 }
 
 # ── 命令: execute ──
@@ -568,7 +711,13 @@ print(ej.get('$env', ''))
   deployNum=$(trigger_execute_job "$executeJob" "$branch" "$dateTime")
   ok "部署已触发，构建号: #$deployNum"
   echo ""
-  info "部署详情: ${JENKINS_URL:-http://172.16.98.169:18001}/job/${executeJob}/${deployNum}/console"
+
+  # 等待部署完成并报告结果
+  info "等待部署完成..."
+  local deployStatus
+  deployStatus=$(wait_jenkins_job_complete "$executeJob" "$deployNum" "部署")
+  echo ""
+  report_jenkins_result "$deployStatus" "$executeJob" "$deployNum" "部署"
 }
 
 # ── 命令: deploy（构建 + 等待 + 部署，完整流程） ──
@@ -642,21 +791,11 @@ print(ej.get('$env', ''))
 
   # ── 步骤 2: 等待构建完成 ──
   info "[2/3] 等待构建完成..."
-  local status="running"
-  local poll_interval="${DEPLOY_POLL_INTERVAL:-5}"
-  local timeout="${DEPLOY_TIMEOUT:-1800}"
-  local elapsed=0
-  while [[ "$status" == "running" && $elapsed -lt $timeout ]]; do
-    sleep "$poll_interval"
-    elapsed=$((elapsed + poll_interval))
-    status=$(get_job_status "$buildJob" "$buildNum")
-    local mins=$((elapsed / 60))
-    local secs=$((elapsed % 60))
-    echo -ne "\r  状态: $status (已等待 ${mins}m${secs}s)    "
-  done
+  local buildStatus
+  buildStatus=$(wait_jenkins_job_complete "$buildJob" "$buildNum" "构建")
   echo ""
 
-  if [[ "$status" == "fail" ]]; then
+  if [[ "$buildStatus" == "fail" ]]; then
     fail "构建失败！构建号: #$buildNum"
     echo ""
     info "查看构建日志:"
@@ -665,13 +804,13 @@ print(ej.get('$env', ''))
     exit 1
   fi
 
-  if [[ "$status" == "running" ]]; then
-    warn "构建超时（${timeout}s），请手动检查状态:"
+  if [[ "$buildStatus" == "running" ]]; then
+    warn "构建超时（${DEPLOY_TIMEOUT:-1800}s），请手动检查状态:"
     echo "  deploy.sh status $buildJob $buildNum"
     exit 1
   fi
 
-  ok "构建成功！耗时约 ${elapsed}s"
+  ok "构建成功！构建号: #$buildNum"
   echo ""
 
   # ── 步骤 3: 触发部署 ──
@@ -687,17 +826,20 @@ print(ej.get('$env', ''))
   ok "部署已触发，构建号: #$deployNum"
   echo ""
 
+  # 等待部署完成
+  info "等待部署完成..."
+  local deployStatus
+  deployStatus=$(wait_jenkins_job_complete "$executeJob" "$deployNum" "部署")
+  echo ""
+
   echo "═══════════════════════════════════════════════════════════════"
-  echo "  部署完成"
+  echo "  部署结果"
   echo "═══════════════════════════════════════════════════════════════"
   echo "  构建号:   #$buildNum (SUCCESS)"
   echo "  部署号:   #$deployNum"
   echo "  镜像版本: ${dateTime}----${branch}"
   echo ""
-  echo "  查看部署状态:"
-  echo "    deploy.sh status $executeJob $deployNum"
-  echo "  查看部署日志:"
-  echo "    deploy.sh console $executeJob $deployNum"
+  report_jenkins_result "$deployStatus" "$executeJob" "$deployNum" "部署"
   echo "═══════════════════════════════════════════════════════════════"
 }
 
