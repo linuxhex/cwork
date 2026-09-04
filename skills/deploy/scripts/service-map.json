@@ -819,6 +819,18 @@
         "prod": "1e8ed4b5c2b14db6aa8250871362ed1a|9a7bff71a291425e87ffe29d6d79843c"
       },
       "yxBuild": "84a66500c21d4de8bb6744570b7c6b44|8f3508c681904da4b34560944ebe9fcf"
+    },
+    {
+      "appName": "guan-zhong",
+      "gitProjectName": "guan-zhong",
+      "serviceName": "充电-关中",
+      "platform": "yunxiao",
+      "yxDeploy": {
+        "test": "5173041b4d9c4883b77770ed037f522b|134d4c897cf54ab8bdafc16a4b62f623",
+        "uat": "5173041b4d9c4883b77770ed037f522b|b3354853cfbf487d8cb1a9aef250f043",
+        "prod": "5173041b4d9c4883b77770ed037f522b|7ab868680cc641aa85b98a2ffdff7686"
+      },
+      "yxBuild": "71d86bf9f3b241afae73ad0576c31635|d57d47b4a40e4000a4b4622ac6592667"
     }
   ]
 }
