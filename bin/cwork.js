@@ -230,6 +230,7 @@ ${cleaned}
 - /cwork-requirement — 云效需求查询
 - /cwork-graf — Grafana 监控查询
 - /cwork-deploy — Jenkins + 云效构建部署触发
+- /cwork-image — 本地工程/jar 打包镜像 + push registry + 服务端拉起运行
 
 调用某个技能时，读取对应的 cwork-xxx.mdc 规则文件获取完整指令。
 `;
@@ -475,6 +476,7 @@ ${cleaned}
 - /cwork-requirement — 云效需求查询
 - /cwork-graf — Grafana 监控查询
 - /cwork-deploy — Jenkins + 云效构建部署触发
+- /cwork-image — 本地工程/jar 打包镜像 + push registry + 服务端拉起运行
 `;
   writeFileSync(join(target, 'cwork.md'), mainContent);
   log('cwork.md (主入口)');

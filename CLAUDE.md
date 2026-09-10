@@ -47,6 +47,7 @@ cwork 内置了决策树式追问机制，分两种模式：
 - /cwork-deploy — Jenkins + 云效构建部署触发，通过 curl 直连 Jenkins REST API 或云效 AppStack OpenAPI 触发服务构建和部署，支持 dev/test/uat/prod 多环境，自带服务名→作业映射（68 个服务）+ 双平台自动路由，排查问题时快速部署验证修复
 - /cwork-doc — 根据代码改动生成技术方案文档（两种模式：已有需求文档 / 对话式需求分析）
 - /cwork-graf — Grafana 监控数据只读查询，对话式查 K8S 节点/容器/应用/JVM/数据库/业务监控面板，支持 64 个仪表盘按分类检索、面板数据查询、PromQL 即时查询，排查问题时核对资源使用率/性能指标/业务数据佐证根因
+- /cwork-image — 本地工程/jar 打包 Docker 镜像 + push registry + 服务端拉起运行
 - /cwork-implement — 需求分析（对话式）+ 编写计划 + 执行计划 + 推演收敛
 - /cwork-init — 对话式初始化，自动查找工程路径，多服务分支切换
 - /cwork-log — 找日志分析问题。查 SLS 日志 + ARMS 链路，定位问题根因。适用于：问题排查、性能分析、流量分析、链路追踪。
