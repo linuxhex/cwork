@@ -317,7 +317,8 @@ except:
 # ── 触发云效工作流执行 ──
 # 对应 YXAppStackClient.executeWorkflow:
 #   POST /apps/{appName}/releaseWorkflows/{workflowSn}/releaseStages/{stageSn}:execute
-#   body: {"params":{"sourceId":"{branch}"}}
+#   body: {"params":{"<sourceName>":"{branch}"}}
+#   params 的 key 是 pipeline sources 中定义的代码源名称（如 device_hubble_server）
 # 用法: yx_trigger_workflow <appName> <workflowSn> <stageSn> <branch>
 yx_trigger_workflow() {
   local appName="$1"
@@ -325,8 +326,49 @@ yx_trigger_workflow() {
   local stageSn="$3"
   local branch="$4"
 
+  # 查询工作流定义，提取代码源名称作为 params 的 key
+  local sourceNames
+  sourceNames=$(yx_get "/apps/${appName}/releaseWorkflows" 2>/dev/null | python3 -c "
+import json, sys
+try:
+    wfs = json.load(sys.stdin)
+    if not isinstance(wfs, list):
+        wfs = [wfs]
+    names = []
+    target_sn = '${workflowSn}'
+    for wf in wfs:
+        if wf.get('sn', '') != target_sn:
+            continue
+        for stage in wf.get('releaseStages', []):
+            pcv = stage.get('pipeline', {}).get('pipeline', {}).get('pipelineConfigVo', {})
+            sources_raw = pcv.get('sources', '[]')
+            sources = json.loads(sources_raw) if isinstance(sources_raw, str) else sources_raw
+            if isinstance(sources, list):
+                for s in sources:
+                    n = s.get('name', '')
+                    if n and n not in names:
+                        names.append(n)
+    print(' '.join(names))
+except:
+    print('')
+" 2>/dev/null || echo "")
+
+  # 构建 params: 每个代码源名称都映射到目标分支
+  local paramsJson
+  if [[ -n "$sourceNames" ]]; then
+    paramsJson=$(python3 -c "
+import json
+names = '${sourceNames}'.split()
+params = {n: '${branch}' for n in names}
+print(json.dumps(params, ensure_ascii=False))
+")
+  else
+    # fallback: 无法获取源名称时用 sourceId（兼容旧行为）
+    paramsJson="{\"sourceId\":\"${branch}\"}"
+  fi
+
   local path="/apps/${appName}/releaseWorkflows/${workflowSn}/releaseStages/${stageSn}:execute"
-  local body="{\"params\":{\"sourceId\":\"${branch}\"}}"
+  local body="{\"params\":${paramsJson}}"
 
   local resp
   resp=$(yx_post "$path" -d "$body" 2>&1 || true)
@@ -337,8 +379,6 @@ yx_trigger_workflow() {
 import json, sys
 try:
     d = json.load(sys.stdin)
-    # 成功返回 {"result": {...}, "requestId": "..."}
-    # 失败返回 {"errorCode": "...", "errorMessage": "..."}
     if 'errorCode' in d:
         print('ERROR: ' + d.get('errorMessage', '未知错误'))
     else:
