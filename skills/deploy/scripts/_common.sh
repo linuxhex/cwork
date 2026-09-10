@@ -128,8 +128,8 @@ p = s.get('platform', '')
 if p:
     print(p)
 else:
-    print(os.environ.get('DEPLOY_DEFAULT_PLATFORM', 'jenkins'))
-" 2>/dev/null || echo "jenkins")
+    print(os.environ.get('DEPLOY_DEFAULT_PLATFORM', 'yunxiao'))
+" 2>/dev/null || echo "yunxiao")
   echo "$platform"
 }
 
@@ -190,7 +190,8 @@ with open('$SERVICE_MAP_PATH') as f:
 for s in data.get('services', []):
     name = s.get('appName', '')
     ej = s.get('executeJob', {})
-    envs = ','.join(sorted(ej.keys()))
+    yx = s.get('yxDeploy', {})
+    envs = ','.join(sorted(set(list(ej.keys()) + list(yx.keys()))))
     platform = s.get('platform', '-')
     print(f'{name}  [{envs}]  platform={platform}')
 "

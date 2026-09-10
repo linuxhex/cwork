@@ -4,9 +4,9 @@
 # 使用 := 语法: 同名环境变量优先, 否则用此处的值
 
 # ---- 默认部署平台 ----
-# jenkins = 走 Jenkins REST API（默认，向后兼容）
-# yunxiao = 走云效 AppStack OpenAPI（代码托管在云效的服务）
-: "${DEPLOY_DEFAULT_PLATFORM:=jenkins}"
+# yunxiao = 走云效 AppStack OpenAPI（默认，大部分服务）
+# jenkins = 走 Jenkins REST API（仅 omp-shop 等明确标记的服务）
+: "${DEPLOY_DEFAULT_PLATFORM:=yunxiao}"
 
 # ---- Jenkins 地址 ----
 : "${JENKINS_URL:=http://172.16.98.169:18001}"
