@@ -353,26 +353,24 @@ except:
 
 # ── 查询云效工作流执行状态 ──
 # GET /apps/{appName}/releaseWorkflows/{workflowSn}/releaseStages/{stageSn}/runs/{runSn}
-# 简化: 通过搜索应用发布单状态判断
+# 简化: 通过 executions API 查询最近执行状态
 # 用法: yx_get_workflow_status <appName> <workflowSn> <stageSn>
 yx_get_workflow_status() {
   local appName="$1"
   local workflowSn="$2"
   local stageSn="$3"
 
-  # 查询最近的发布单
   local resp
-  resp=$(yx_get "/apps/${appName}/releaseWorkflows/${workflowSn}/releaseStages/${stageSn}/runs?pageSize=1" 2>/dev/null || echo "")
+  resp=$(yx_get "/apps/${appName}/releaseWorkflows/${workflowSn}/releaseStages/${stageSn}/executions" 2>/dev/null || echo "")
 
   local status
   status=$(echo "$resp" | python3 -c "
 import json, sys
 try:
     d = json.load(sys.stdin)
-    runs = d.get('result', d.get('runs', []))
-    if runs and len(runs) > 0:
-        s = runs[0].get('status', runs[0].get('state', 'unknown'))
-        print(s)
+    executions = d.get('data', [])
+    if executions and len(executions) > 0:
+        print(executions[0].get('state', 'unknown'))
     else:
         print('unknown')
 except:

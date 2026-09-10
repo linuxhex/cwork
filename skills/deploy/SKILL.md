@@ -9,9 +9,9 @@ description: Jenkins + 云效构建部署触发，通过 curl 直连 Jenkins RES
 `deploy` 是构建部署触发技能，通过 curl 直连 **Jenkins REST API**（基本认证）或 **云效 AppStack OpenAPI**（`x-yunxiao-token` 认证），触发服务构建和部署，给开发/修复后验证提供部署能力。
 
 **双平台支持**：
-- **Jenkins**（默认）：代码托管在 GitLab 或自建 Git 的服务，走 Jenkins REST API
-- **云效（yunxiao）**：代码托管在云效 CodeUp 的服务，走云效 AppStack OpenAPI
-- **平台路由**：`service-map.json` 中 `platform` 字段决定走哪个平台，未配置则走 `DEPLOY_DEFAULT_PLATFORM`（默认 jenkins）
+- **云效（yunxiao）**（默认）：大部分服务走云效 AppStack OpenAPI
+- **Jenkins**：仅 omp-shop 等明确标记的服务走 Jenkins REST API
+- **平台路由**：`service-map.json` 中 `platform` 字段决定走哪个平台，未配置则走 `DEPLOY_DEFAULT_PLATFORM`（默认 yunxiao）
 
 **不走 devops 中间服务**（`http://172.16.149.95:81`），而是直接封装 devops-server 内部的构建部署调用，去掉中间层。
 
