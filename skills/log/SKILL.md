@@ -78,6 +78,18 @@ description: 找日志分析问题。查 SLS 日志 + ARMS 链路，定位问题
 
 参数说明：`env`=test/uat/prod；时间戳为秒级（SLS）或毫秒级（ts_ms）；`pid` 从 `arms_apps.sh` 输出获取；`logstore` 默认 `all`（见上表）。
 
+### ARMS 链路中的 Redis/MySQL 慢查询识别
+
+`arms_trace.sh` 的 span 树能识别 Redis 和 SQL 调用，自动标注耗时：
+- **Redis 调用**：RpcType=13，显示为 `[Redis]`，可看到 `db.statement`（命令内容）和耗时
+- **SQL 调用**：RpcType=14，显示为 `[SQL]`，可看到 `db.statement`（SQL 语句）和耗时
+
+**识别慢查询**：span 树中耗时 > 50ms 的 Redis/SQL 调用会被标记 `<<< 耗时点`，直接定位慢查询。
+
+**使用场景**：
+- 接口响应慢 → `arms_trace.sh` 查链路 → 找 Redis/SQL 耗时点 → 定位慢查询
+- 结合日志中的 traceId，可追溯到具体哪条 SQL 或 Redis 命令拖慢了接口
+
 ---
 
 ## 阶段 0：首轮并行查询（最关键，决定排查速度）
