@@ -21,8 +21,10 @@
 ```
 cwork-init       → 初始化工作区
 cwork-implement  → 需求分析 + 编写计划 + 方案审查 + 执行计划 + 推演收敛 + 编译/构建检查 + 前端设计辅助
+cwork-do         → 自主工作流（grill-me 追问 → 实现/修复 → 部署 → 测试 → 提交）
 cwork-test       → 页面自动化测试（基于 page-agent，前端改动时自动触发）
 cwork-commit     → 提交所有工程
+cwork-deploy     → Jenkins + 云效构建部署触发
 cwork-doc        → 生成技术方案文档（两种模式：已有需求文档 / 对话式需求分析）
 cwork-bug        → 快速修复bug（对话式，5阶段：代码分析→问题咨询→问题定位→修复代码→推演验证）
 cwork-log        → 日志与链路分析（SLS 日志 + ARMS 链路，查接口流量/上下游/P99/耗时点，排查问题）
@@ -491,6 +493,131 @@ while round <= 5:
 
 ---
 
+### 3.9 cwork-deploy
+
+**作用**：Jenkins + 云效构建部署触发，通过 curl 直连 Jenkins REST API 或云效 AppStack OpenAPI，触发服务构建和部署。
+
+**双平台支持**：
+- **云效（yunxiao）**（默认）：大部分服务走云效 AppStack OpenAPI
+- **Jenkins**：仅 omp-shop 等明确标记的服务走 Jenkins REST API
+- **平台路由**：`service-map.json` 中 `platform` 字段决定走哪个平台
+
+**脚本调用**：
+```bash
+cd scripts
+# 完整部署（构建 + 等待 + 部署，自动路由平台）
+bash deploy.sh deploy <appName> <env> <branch>
+# 仅触发构建
+bash deploy.sh build <appName> <branch>
+# 仅触发部署（需先构建）
+bash deploy.sh execute <appName> <env> <branch>
+# 列出可用服务
+bash deploy.sh list [关键字]
+```
+
+**使用示例**：
+```bash
+/cwork-deploy 部署 order-server 到 test 环境
+
+阶段 1：定位目标（服务名 + 环境 + 分支 + 平台）
+阶段 2：触发构建部署（自动路由 Jenkins 或云效）
+阶段 3：结果输出（构建号 + 部署状态 + 控制台链接）
+```
+
+**核心原则**：
+- 自己能定的直接做（服务定位、环境/分支默认值、平台识别）
+- 决策点才问（服务歧义、环境确认）
+- 直接走 API，不走 devops 中间服务
+- 不臆造结果，API 返回错误如实说
+
+**注意**：cwork-deploy 是独立工具（和 log/bug/doc 同级），不进主流程衔接链。可被 cwork-do 调起。需在 `bin/cwork.js` 白名单加 `'deploy'`。
+
+---
+
+### 3.10 cwork-do
+
+**作用**：自主工作流，一站式完成从需求分析/问题修复到部署验证的完整流程。
+
+**核心能力**：
+1. **cwork-implement** — 实现新需求
+2. **cwork-bug** — 修复问题
+3. **cwork-deploy** — 部署服务（当前分支）
+4. **cwork-test** — 自动化测试
+5. **cwork-log** — 查询服务日志
+
+**执行流程**（5 阶段，grill-me 追问式）：
+
+```
+阶段 1：grill-me 追问确认
+├─ 工作类型？（新需求/修复 bug）
+├─ 工作内容？（需求 ID/问题现象）
+├─ 部署环境？（test/uat/prod）
+├─ 涉及服务？
+└─ 最终确认
+
+阶段 2：执行工作（最多尝试 3 次）
+├─ 新需求 → 调用 cwork-implement
+└─ 修复 bug → 调用 cwork-bug
+
+阶段 3：部署验证（最多尝试 3 次）
+├─ 调用 cwork-deploy 部署到指定环境
+├─ 使用当前 git 分支
+└─ 调用 cwork-log 查启动日志验证
+
+阶段 4：测试确认（最多尝试 3 次）
+├─ 有前端改动 → 调用 cwork-test
+└─ 无前端改动 → 跳过
+
+阶段 5：结果输出
+└─ 询问是否提交代码 → 调用 cwork-commit
+
+⚠️ 尝试次数限制：每个阶段最多 3 次尝试，超过则停止工作流
+```
+
+**使用示例**：
+```bash
+/cwork-do
+```
+
+**交互示例**：
+```
+工作类型？
+> 1. 实现新需求
+
+需求内容？
+> 需求 ID：OMJF-12345
+> 需求简述：新增导出功能
+
+部署环境？
+> 1. test
+
+涉及服务？
+> order-server
+
+确认信息：
+- 工作类型：新需求
+- 需求 ID：OMJF-12345
+- 涉及服务：order-server
+- 部署环境：test
+- 部署分支：feature/OMJF-12345_add_export
+
+是否正确？
+> y
+
+[自动执行：需求分析 → 编写计划 → 执行计划 → 推演收敛 → 部署 → 测试 → 提交]
+```
+
+**核心原则**：
+- grill-me 追问确认：像审讯一样追问用户，确认清楚所有信息后再开始工作
+- 部署必须使用当前 git 分支
+- 部署前必须确认环境
+- 确认前不动手
+- **尝试次数限制**：每个阶段最多 3 次尝试，超过则停止工作流，输出失败报告，等待人工介入
+
+**注意**：cwork-do 是自主工作流，串联多个技能完成完整工作流程。完成后询问用户是否提交代码。
+
+---
+
 ## 四、文件结构
 
 ### 产物
@@ -572,7 +699,12 @@ cp -r cwork/skills/* ~/.qoder/skills/
 安装后可用：
 - `/cwork-init`
 - `/cwork-implement`
+- `/cwork-do`
+- `/cwork-test`
 - `/cwork-commit`
+- `/cwork-deploy`
 - `/cwork-doc`
 - `/cwork-bug`
 - `/cwork-log`
+- `/cwork-data`
+- `/cwork-config`
