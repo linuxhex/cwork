@@ -128,8 +128,8 @@ p = s.get('platform', '')
 if p:
     print(p)
 else:
-    print(os.environ.get('DEPLOY_DEFAULT_PLATFORM', 'yunxiao'))
-" 2>/dev/null || echo "yunxiao")
+    print(os.environ.get('DEPLOY_DEFAULT_PLATFORM', 'jenkins'))
+" 2>/dev/null || echo "jenkins")
   echo "$platform"
 }
 
