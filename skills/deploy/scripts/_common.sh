@@ -116,7 +116,7 @@ yx_post() {
 # ============================================================
 
 # ── 获取服务的部署平台 ──
-# 优先级: service-map.json 的 platform 字段 > DEPLOY_DEFAULT_PLATFORM 环境变量 > jenkins
+# 优先级: service-map.json 的 platform 字段 > DEPLOY_DEFAULT_PLATFORM 环境变量 > yunxiao
 # 用法: get_platform <serviceNameJson>
 get_platform() {
   local svcJson="$1"
@@ -128,8 +128,8 @@ p = s.get('platform', '')
 if p:
     print(p)
 else:
-    print(os.environ.get('DEPLOY_DEFAULT_PLATFORM', 'jenkins'))
-" 2>/dev/null || echo "jenkins")
+    print(os.environ.get('DEPLOY_DEFAULT_PLATFORM', 'yunxiao'))
+" 2>/dev/null || echo "yunxiao")
   echo "$platform"
 }
 
