@@ -15,6 +15,9 @@
 
 ## 未分析
 
+- [2026-09-16] [deploy] SKILL/文档多处写「omp-shop 走 Jenkins」，但实测 Jenkins（172.16.98.169:18001，540 个 job 含 folder 递归）无任何 omp-shop 作业，旧 70 服务映射（09-04，devops DeployData.js 提取）也无此条目；omp-shop 实为 OMP 运营前端（Vue2，git@172.16.98.176:web/omp-shop.git，仓库内无 Jenkinsfile/CI/部署文档）；「omp-shop 走 Jenkins」说法源头是 ac24646 提交的示例性文字，属笔误 | 建议改法：文档示例去掉 omp-shop（已改为 device-hubble-server）；不加假映射条目；若前端确需部署能力，先确认实际通道（可能走 172.16.98.176 GitLab CI，deploy 技能当前不支持），再考虑扩展
+- [2026-09-16] [deploy] Jenkins API 查询 `tree=jobs[name]` 时 curl 报空响应，排查半天才发现是 curl 把 URL 中 `[]` 当 glob 模式（bad range），需加 `-g` 或对括号做 %5B%5D 编码；且 `/tmp` 下 curl -o 写文件被环境限制 | 建议改法：deploy.sh 内所有 Jenkins URL 已用变量拼接不含 `[]` 不受影响；诊断类临时脚本建议放工程目录而非 /tmp
+
 - [2026-08-31] [installer] `~/.claude/skills/cwork-*` 靠手动拷贝维护，随源仓库更新漂移（实测 yunxiao_query.sh 还是 8-7 旧版 / _common.sh 是 8-13 新版混装，且无凭证）→ 已修正：`bin/cwork.js` 新增 `--sync-global` 独立命令，源仓库整目录覆盖同步（复用 SENSITIVE_PATTERNS 过滤凭证）+ 凭证软链（`scripts/.config.local.sh`、`scripts/mcp-client/.mcp_config.json`，源优先 CWORK_HOME 缺省 ROOT），配 `--sync-global --uninstall` 卸载；实测 /tmp 下跑全局技能直读软链凭证查询成功
 - [2026-08-31] [requirement] Claude Code 源仓库会话中误判"凭证未配置"：agent 预检查了 `~/.claude/skills/...` 和 `scripts/.config.local.sh` 等错误路径，实际凭证在 `skills/requirement/scripts/.config.local.sh`（源仓库本身），导致 Qoder 能用而 Claude Code"不能用" | 建议改法：SKILL.md 凭证/密钥配置段明确凭证唯一判据=直接试跑 `yunxiao_query.sh list 3`（脚本自带 CWORK_HOME fallback），agent 禁止自行预检文件路径下结论
 - [2026-08-12] [log/config/data] IDE 安装场景凭证丢失：3b0110e 提交的 SENSITIVE_PATTERNS 过滤了 .config.local.sh/.mcp_config.json，装到 ~/.qoder/skills/ 等目录后 cwork-log/config/data 全部报"未配置密钥" → 已修正：三个脚本加 CWORK_HOME fallback（同目录无凭证时回 $CWORK_HOME/skills/<skill>/... 读源仓库同一份），bin/cwork.js 装完提示 export CWORK_HOME，三个 SKILL.md 密钥段补 IDE 安装场景说明

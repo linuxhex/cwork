@@ -499,7 +499,7 @@ while round <= 5:
 
 **双平台支持**：
 - **云效（yunxiao）**（默认）：大部分服务走云效 AppStack OpenAPI
-- **Jenkins**：仅 omp-shop 等明确标记的服务走 Jenkins REST API
+- **Jenkins**：`platform=jenkins` 明确标记的服务走 Jenkins REST API（如 device-hubble-server）
 - **平台路由**：`service-map.json` 中 `platform` 字段决定走哪个平台
 
 **脚本调用**：

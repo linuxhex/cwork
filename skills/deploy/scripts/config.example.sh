@@ -5,7 +5,7 @@
 
 # ---- 默认部署平台 ----
 # yunxiao = 走云效 AppStack OpenAPI（默认，大部分服务）
-# jenkins = 走 Jenkins REST API（platform=jenkins 明确标记的服务，如 omp-shop、device-hubble-server）
+# jenkins = 走 Jenkins REST API（platform=jenkins 明确标记的服务，如 device-hubble-server）
 : "${DEPLOY_DEFAULT_PLATFORM:=yunxiao}"
 
 # ---- Jenkins 地址 ----
