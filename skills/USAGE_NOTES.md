@@ -15,7 +15,7 @@
 
 ## 未分析
 
-- [2026-09-16] [deploy] SKILL/文档多处写「omp-shop 走 Jenkins」，但实测 Jenkins（172.16.98.169:18001，540 个 job 含 folder 递归）无任何 omp-shop 作业，旧 70 服务映射（09-04，devops DeployData.js 提取）也无此条目；omp-shop 实为 OMP 运营前端（Vue2，git@172.16.98.176:web/omp-shop.git，仓库内无 Jenkinsfile/CI/部署文档）；「omp-shop 走 Jenkins」说法源头是 ac24646 提交的示例性文字，属笔误 | 建议改法：文档示例去掉 omp-shop（已改为 device-hubble-server）；不加假映射条目；若前端确需部署能力，先确认实际通道（可能走 172.16.98.176 GitLab CI，deploy 技能当前不支持），再考虑扩展
+- [2026-09-16] [deploy] SKILL/文档多处写「omp-shop 走 Jenkins」，但实测 Jenkins（172.16.98.169:18001，540 个 job 含 folder 递归）无任何 omp-shop 作业，旧 70 服务映射（09-04，devops DeployData.js 提取）也无此条目；omp-shop 实为 OMP 运营前端（Vue2，git@172.16.98.176:web/omp-shop.git，仓库内无 Jenkinsfile/CI/部署文档）；「omp-shop 走 Jenkins」说法源头是 ac24646 提交的示例性文字，属笔误 | 后续：用户确认为「omp 系走 Jenkins」→ 已将 3 个 omp 系后端服务（gateway-server-omp-admin / omp-poly-center / omp_superwarehouse_server，Jenkins 作业 09-16 实测存在、无 prod 作业）以 platform=jenkins 加入映射并统一两份 service-map.json（claude 侧原为过期 70 服务版，已备份为 .bak-20260904-70services 后替换为 qoder 整理版）；文档示例改为 device-hubble-server / omp-poly-center；若前端确需部署能力，先确认实际通道（可能走 172.16.98.176 GitLab CI，deploy 技能当前不支持）
 - [2026-09-16] [deploy] Jenkins API 查询 `tree=jobs[name]` 时 curl 报空响应，排查半天才发现是 curl 把 URL 中 `[]` 当 glob 模式（bad range），需加 `-g` 或对括号做 %5B%5D 编码；且 `/tmp` 下 curl -o 写文件被环境限制 | 建议改法：deploy.sh 内所有 Jenkins URL 已用变量拼接不含 `[]` 不受影响；诊断类临时脚本建议放工程目录而非 /tmp
 
 - [2026-08-31] [installer] `~/.claude/skills/cwork-*` 靠手动拷贝维护，随源仓库更新漂移（实测 yunxiao_query.sh 还是 8-7 旧版 / _common.sh 是 8-13 新版混装，且无凭证）→ 已修正：`bin/cwork.js` 新增 `--sync-global` 独立命令，源仓库整目录覆盖同步（复用 SENSITIVE_PATTERNS 过滤凭证）+ 凭证软链（`scripts/.config.local.sh`、`scripts/mcp-client/.mcp_config.json`，源优先 CWORK_HOME 缺省 ROOT），配 `--sync-global --uninstall` 卸载；实测 /tmp 下跑全局技能直读软链凭证查询成功
