@@ -9,9 +9,9 @@ description: Jenkins + 云效构建部署触发，通过 curl 直连 Jenkins RES
 `deploy` 是构建部署触发技能，通过 curl 直连 **Jenkins REST API**（基本认证）或 **云效 AppStack OpenAPI**（`x-yunxiao-token` 认证），触发服务构建和部署，给开发/修复后验证提供部署能力。
 
 **双平台支持**：
-- **Jenkins**（默认）：未标记平台的服务走 Jenkins REST API
-- **云效（yunxiao）**：`service-map.json` 中 `platform=yunxiao` 标记的服务走云效 AppStack OpenAPI
-- **平台路由**：`service-map.json` 中 `platform` 字段决定走哪个平台，未配置则走 `DEPLOY_DEFAULT_PLATFORM`（默认 jenkins）
+- **云效（yunxiao）**（默认）：大部分服务走云效 AppStack OpenAPI
+- **Jenkins**：`platform=jenkins` 明确标记的服务走 Jenkins REST API（如 omp-shop、device-hubble-server）
+- **平台路由**：`service-map.json` 中 `platform` 字段决定走哪个平台，未配置则走 `DEPLOY_DEFAULT_PLATFORM`（默认 yunxiao）
 
 **不走 devops 中间服务**（`http://172.16.149.95:81`），而是直接封装 devops-server 内部的构建部署调用，去掉中间层。
 
@@ -79,7 +79,7 @@ API base: `https://{YX_DOMAIN}/oapi/v1/appstack/organizations/{YX_ORG_ID}`
 - `releaseWorkflowSn` + `releaseStageSn`：工作流阶段标识（配置在 `service-map.json` 的 `yxDeploy` 字段，格式 `workflowSn|stageSn`）
 - `sourceId`：分支名（传给 `params.sourceId`）
 
-**平台路由**：`service-map.json` 的 `platform` 字段 → `yunxiao` 走云效 API，`jenkins` 或未配置走 Jenkins API
+**平台路由**：`service-map.json` 的 `platform` 字段 → `platform=jenkins` 走 Jenkins API，`yunxiao` 或未配置走云效 API
 
 **环境映射**（swimDeploy，Jenkins 专用）：
 
@@ -120,7 +120,7 @@ API base: `https://{YX_DOMAIN}/oapi/v1/appstack/organizations/{YX_ORG_ID}`
 1. **确定服务名**（直接做）：用户给了直接用；没给 → 先 `list <关键字>` 定位。
 2. **确定环境**（直接做）：默认 `test`；用户指明环境或从问题推断（线上修复→prod 验证→test/uat）。
 3. **确定分支**（直接做）：从当前 git 分支推断；用户指定了直接用。
-4. **确定平台**（直接做）：从 `service-map.json` 的 `platform` 字段读取，未配置则用 `DEPLOY_DEFAULT_PLATFORM`（默认 jenkins）。
+4. **确定平台**（直接做）：从 `service-map.json` 的 `platform` 字段读取，未配置则用 `DEPLOY_DEFAULT_PLATFORM`（默认 yunxiao）。
 
 **决策点（这里才对话）**：
 - `list` 命中多个服务，不知是哪个 → 列出让用户选
@@ -153,11 +153,11 @@ bash deploy.sh console order-server_3.0_dev 123
 **平台路由示例**：
 ```bash
 # service-map.json 中 platform=yunxiao 的服务，自动走云效 API
-bash deploy.sh deploy brook-content test feature/20260901_add_export
+bash deploy.sh deploy order-foundation test feature/20260901_add_export
 # 输出: 平台=yunxiao, 触发云效工作流执行...
 
-# service-map.json 中 platform=jenkins 或未配置的服务，走 Jenkins
-bash deploy.sh deploy order-server test feature/20260901_add_export
+# service-map.json 中 platform=jenkins 标记的服务，走 Jenkins
+bash deploy.sh deploy device-hubble-server test feature/20260901_add_export
 # 输出: 平台=jenkins, 触发 Jenkins 构建...
 ```
 
@@ -207,7 +207,7 @@ Jenkins 控制台：
 【部署结果】
 ═══════════════════════════════════════════════════════════════
 
-服务：brook-content
+服务：order-foundation
 平台：yunxiao
 环境：test
 分支：feature/20260901_add_export
@@ -217,7 +217,7 @@ Jenkins 控制台：
 
 结论：
 - 云效工作流执行成功，部署完成
-- 可用 cwork-log 查 brook-content test 环境日志确认服务启动
+- 可用 cwork-log 查 order-foundation test 环境日志确认服务启动
 ═══════════════════════════════════════════════════════════════
 ```
 
@@ -237,7 +237,7 @@ Jenkins 控制台：
   - `YX_ORG_ID` — 云效组织 ID
   - `YX_DOMAIN` — 默认 `openapi-rdc.aliyuncs.com`
 - **默认平台**：
-  - `DEPLOY_DEFAULT_PLATFORM` — `jenkins`（默认）或 `yunxiao`，未在 `service-map.json` 配 `platform` 的服务走此默认值
+  - `DEPLOY_DEFAULT_PLATFORM` — `yunxiao`（默认）或 `jenkins`，未在 `service-map.json` 配 `platform` 的服务走此默认值
 - 环境变量可临时覆盖 `.config.local.sh`
 - **IDE 安装场景**：`bin/cwork.js` 的 `SENSITIVE_PATTERNS` 过滤了 `.config.local.sh`，IDE 目录里没有凭证；在 shell profile 加 `export CWORK_HOME=<cwork 源仓库路径>`，脚本同目录找不到时回源仓库读同一份，无需每个 IDE 重复配置
 - 未配置时脚本 fail 并提示配置方法
@@ -246,7 +246,7 @@ Jenkins 控制台：
 
 ## 服务映射（service-map.json）
 
-`scripts/service-map.json` 包含 68 个服务→构建部署作业的完整映射，从 devops-web 的 `DeployData.js` 提取。
+`scripts/service-map.json` 是手工维护的服务→部署平台映射（云效服务带 `yxDeploy` 工作流标识，Jenkins 服务带 `buildJob`/`executeJob` 作业名）。
 
 **结构**：
 ```json
@@ -261,6 +261,7 @@ Jenkins 控制台：
       "appName": "order-server",
       "buildJob": "order-server_3.0_dev",
       "gitProjectName": "order-server",
+      "platform": "jenkins",
       "executeJob": {
         "dev": "order-server_opendev",
         "test": "order-server_k8s-test",
@@ -292,7 +293,7 @@ Jenkins 控制台：
 | `gitProjectName` | 全部 | 云效仓库名（仅参考，不直接用于部署） |
 | `buildJob` | Jenkins | 构建作业名 |
 | `executeJob` | Jenkins | 各环境部署作业名 |
-| `platform` | 全部 | 部署平台：`jenkins`（默认）/ `yunxiao` |
+| `platform` | 全部 | 部署平台：`yunxiao`（默认）/ `jenkins` |
 | `yxDeploy` | 云效 | 各环境工作流标识，格式 `workflowSn|stageSn` |
 | `yxBuild` | 云效 | 构建工作流标识，格式 `workflowSn|stageSn` |
 | `serviceName` | 全部 | 服务中文名（仅展示） |

@@ -12,8 +12,8 @@
 #   deploy.sh sync                               # 从 devops API 同步服务映射
 #
 # 平台路由:
-#   service-map.json 中 platform=yunxiao 的服务走云效 AppStack API
-#   其余走 Jenkins REST API（默认，向后兼容）
+#   service-map.json 中 platform=jenkins 的服务走 Jenkins REST API
+#   其余走云效 AppStack API（默认）
 
 set -euo pipefail
 
@@ -991,9 +991,9 @@ cwork-deploy — Jenkins + 云效 构建部署工具（curl 封装）
   deploy.sh sync                               从 devops API 同步服务映射
 
 平台路由:
-  service-map.json 中 platform=yunxiao 的服务走云效 AppStack API
-  其余走 Jenkins REST API（默认，向后兼容）
-  也可设置环境变量 DEPLOY_DEFAULT_PLATFORM=yunxiao 全局切换
+  service-map.json 中 platform=jenkins 的服务走 Jenkins REST API
+  其余走云效 AppStack API（默认）
+  也可设置环境变量 DEPLOY_DEFAULT_PLATFORM=jenkins 全局切换
 
 参数:
   appName   服务名（如 order-server, charge-server）
