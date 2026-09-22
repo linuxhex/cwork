@@ -44,7 +44,7 @@ description: 需求分析（对话式）+ 编写计划 + 执行计划 + 推演�
 
 ```bash
 # 需求分析开始时执行
-cd $HOME/Work/code-projects && codegraph status
+cd $CODE_WORKSPACE && codegraph status
 
 if 已索引：
   # 探测跨服务调用
@@ -203,8 +203,8 @@ fi
 
 > 本机工作区默认值；**服务地图为本地隐藏配置，不入库**。
 
-- **代码根目录**：`$HOME/Work/code-projects`（多服务聚合，无统一根 pom，改哪个服务进哪个目录）
-- **最近需求工程**：`$HOME/Work/code-projects/brook-content`（用户没指明工程时默认从这里分析）
+- **代码根目录**：`$CODE_WORKSPACE`（多服务聚合，无统一根 pom，改哪个服务进哪个目录）
+- **最近需求工程**：从 `.services-map.md` 读取（用户没指明工程时默认从最近活跃工程分析）
 - **服务地图（按需加载 + 自更新）**：`$HOME/Study/cwork/.services-map.md` —— cwork **唯一权威**服务地图（路径 + 领域边界 + 下游依赖），**多服务识别的第一手依据**。
   - **何时 Read**：需求分析探索项目上下文、识别涉及哪些服务、按服务名定位目录、查上下游依赖时。不需要则不读（各技能可单独使用）。
   - **文件不存在则回退**：询问用户 / 当前目录。

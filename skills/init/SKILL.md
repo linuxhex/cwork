@@ -151,7 +151,7 @@ description: 对话式初始化，自动查找工程路径，多服务分支切�
 ┌─────────────────────────────────────────────────────────────────┐
 │  触发 codegraph 图谱更新                                          │
 ├─────────────────────────────────────────────────────────────────┤
-│  codegraph sync $HOME/Work/code-projects -q          │
+│  codegraph sync $CODE_WORKSPACE -q          │
 │  （未装 / 锁占用则跳过，不阻塞）                                    │
 └─────────────────────────────────────────────────────────────────┘
                          │
@@ -221,7 +221,7 @@ cat .cwork/backup-log.json
 分支切换完成后，**必须**触发 codegraph 增量同步，保证后续 implement/bug 阶段的图谱查询基于最新代码（未装 / 锁占用则跳过，不阻塞）：
 
 ```bash
-codegraph sync $HOME/Work/code-projects -q
+codegraph sync $CODE_WORKSPACE -q
 ```
 
 ## 产物

@@ -47,8 +47,8 @@ description: 根据代码改动生成技术方案文档（两种模式：已有�
 
 > 本机工作区默认值；**服务地图为本地隐藏配置，不入库**。
 
-- **代码根目录**：`$HOME/Work/code-projects`（多服务聚合，无统一根 pom，改哪个服务进哪个目录）
-- **最近需求工程**：`$HOME/Work/code-projects/brook-content`（用户没指明工程时默认从这里分析）
+- **代码根目录**：`$CODE_WORKSPACE`（多服务聚合，无统一根 pom，改哪个服务进哪个目录）
+- **最近需求工程**：从 `.services-map.md` 读取（用户没指明工程时默认从最近活跃工程分析）
 - **服务地图（按需加载 + 自更新）**：`$HOME/Study/cwork/.services-map.md` —— cwork **唯一权威**服务地图（路径 + 领域边界 + 下游依赖）。
   - **何时 Read**：分析需求/改动涉及哪些服务、按服务名定位目录、查上下游依赖、评估改动影响范围时。不需要则不读（各技能可单独使用）。
   - **文件不存在则回退**：询问用户 / 当前目录。
@@ -429,7 +429,7 @@ description: 根据代码改动生成技术方案文档（两种模式：已有�
 - **持续监督**：每一步输出都必须有 `[codegraph]` 标签，没有就是偷懒
 
 ```bash
-cd $HOME/Work/code-projects && codegraph status                       # 探测（每次找代码都必须执行）：已索引→用；否则回退 git diff + Read 手抠
+cd $CODE_WORKSPACE && codegraph status                       # 探测（每次找代码都必须执行）：已索引→用；否则回退 git diff + Read 手抠
 codegraph node <类|接口>                # 取接口/数据模型的带行号源码（替代手抠，更准）
 codegraph callees <Controller 方法>      # 还原 Controller→Service→Mapper/Feign 调用链（喂下方自动架构图）
 codegraph impact <改动符号>             # 改动影响范围评估的实证（爆炸半径）

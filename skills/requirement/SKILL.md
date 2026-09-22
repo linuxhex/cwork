@@ -405,6 +405,7 @@ bash yunxiao_query.sh by-test-date 2026-08-05
 - 首次：`cp scripts/config.example.sh scripts/.config.local.sh`，填入 AK/SK + 组织 ID + 项目 ID
 - **凭证来源**：阿里云控制台 RAM 用户 AccessKey（需要有云效 DevOps 读权限）
 - 环境变量（`ALIBABA_CLOUD_ACCESS_KEY_ID`/`ALIBABA_CLOUD_ACCESS_KEY_SECRET`/`YUNXIAO_ORG_ID`/`YUNXIAO_PROJECT_ID`）可临时覆盖 `.config.local.sh`
+- **IDE 安装场景**：脚本支持 `CWORK_HOME` 回源仓库读凭证——在 shell profile 加 `export CWORK_HOME=<cwork 源仓库路径>`，IDE 目录找不到凭证时自动回源仓库读同一份，无需每个 IDE 重复配置
 - 未配置时脚本 fail 并提示配置方法
 
 > **凭证安全**：AK/SK 是阿里云控制台级别高权限凭证，**绝不写入 SKILL/config.example/git**，只进 `.config.local.sh`（gitignore）。

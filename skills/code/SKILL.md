@@ -108,7 +108,7 @@ description: 代码仓库只读查询 + clone/pull + codegraph 触发，支持 C
 
 1. **确定项目名**（直接做）：用户给了直接用；没给 → 先 `search <关键字>` 定位。
 2. **确定分支**（直接做）：clone 默认 `master`；用户指定了直接用。
-3. **确定目标目录**（直接做）：clone 默认 `$CODE_WORKSPACE`（`$HOME/Work/code-projects`）。
+3. **确定目标目录**（直接做）：clone 默认 `$CODE_WORKSPACE`（`$CODE_WORKSPACE`）。
 
 **决策点（这里才对话）**：
 - `search` 命中多个项目，不知是哪个 → 列出让用户选
@@ -163,7 +163,7 @@ bash code_query.sh sync
 操作: clone
 项目: flow-charge-server
 分支: feature/xxx
-路径: $HOME/Work/code-projects/flow-charge-server
+路径: $CODE_WORKSPACE/flow-charge-server
 状态: 成功
 
 [codegraph] 增量同步完成
@@ -184,6 +184,7 @@ bash code_query.sh sync
   - `GITLAB_TOKEN`（Private Token，在 GitLab 用户设置 > Access Tokens 生成，勾选 `read_repository` 和 `read_api` 权限）
 - 环境变量可临时覆盖 `.config.local.sh`
 - 未配置时脚本 fail 并提示配置方法
+- **IDE 安装场景**：脚本支持 `CWORK_HOME` 回源仓库读凭证——在 shell profile 加 `export CWORK_HOME=<cwork 源仓库路径>`，IDE 目录找不到凭证时自动回源仓库读同一份，无需每个 IDE 重复配置
 
 > **凭证安全**：AK/SK 和 GitLab Token 是高权限凭证，**绝不写入 SKILL/config.example/git**，只进 `.config.local.sh`（gitignore）。
 
