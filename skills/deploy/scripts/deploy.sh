@@ -245,9 +245,9 @@ wait_jenkins_job_complete() {
     status=$(get_job_status "$jobName" "$buildNum")
     local mins=$((elapsed / 60))
     local secs=$((elapsed % 60))
-    echo -ne "\r  ${label}状态: $status (已等待 ${mins}m${secs}s)    "
+    echo -ne "\r  ${label}状态: $status (已等待 ${mins}m${secs}s)    " >&2
   done
-  echo ""
+  echo "" >&2
   echo "$status"
 }
 
@@ -462,9 +462,9 @@ wait_yx_workflow_complete() {
     terminal=$(yx_is_terminal "$status")
     local mins=$((elapsed / 60))
     local secs=$((elapsed % 60))
-    echo -ne "\r  ${label}状态: $status (已等待 ${mins}m${secs}s)    "
+    echo -ne "\r  ${label}状态: $status (已等待 ${mins}m${secs}s)    " >&2
   done
-  echo ""
+  echo "" >&2
 
   if [[ -n "$terminal" ]]; then
     echo "$terminal"
@@ -948,7 +948,7 @@ cmd_sync() {
   if [[ -z "$resp" ]] || echo "$resp" | grep -q "error\|Error\|无法" 2>/dev/null; then
     warn "无法从 devops API 获取应用列表（$devopsUrl 可能不可达）"
     echo ""
-    info "当前使用本地 service-map.json（从 DeployData.js 提取，包含 68 个服务）"
+    info "当前使用本地 service-map.json（包含 54 个服务，云效 API 自动同步）"
     echo "  如需手动更新，编辑: $SCRIPT_DIR/service-map.json"
     return 0
   fi

@@ -42,7 +42,7 @@
 - 文档（仅供参考，以实际代码为准）
 - 最近的 commit
 - 现有代码模式
-- **代码图谱（必须先探测）**：进入探索后，第一步跑 `codegraph status`（在 `/Users/caomunian/Work/code-projects` 下执行）。有符号数（已索引）→ **必须用** `codegraph explore "<要理解的流程>"` / `codegraph query <符号>` 摸现状，比散乱 grep+Read 更省 context、更准确；无符号（未索引）→ 回退 grep/Read，不阻塞
+- **代码图谱（必须先探测）**：进入探索后，第一步跑 `codegraph status`（在 `$CODE_WORKSPACE` 下执行）。有符号数（已索引）→ **必须用** `codegraph explore "<要理解的流程>"` / `codegraph query <符号>` 摸现状，比散乱 grep+Read 更省 context、更准确；无符号（未索引）→ 回退 grep/Read，不阻塞
 
 **⚠️ 关键：不是只探测一次，而是每次找代码都要探测**
 
@@ -734,7 +734,7 @@ List<Order> orders = new ArrayList<>();
 本阶段改完了代码，进入推演收敛（要用 `codegraph impact` / `callers` 查影响范围）前，**必须**先增量 sync 一次，保证推演用的是最新图谱（未装 / 锁占用则跳过，不阻塞）：
 
 ```bash
-codegraph sync /Users/caomunian/Work/code-projects -q
+codegraph sync $CODE_WORKSPACE -q
 ```
 
 ---

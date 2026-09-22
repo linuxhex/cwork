@@ -1,6 +1,6 @@
 ---
 name: cwork-deploy
-description: Jenkins + 云效构建部署触发，通过 curl 直连 Jenkins REST API 或云效 AppStack OpenAPI 触发服务构建和部署，支持 dev/test/uat/prod 多环境，自带服务名→作业映射（68 个服务）+ 双平台自动路由，排查问题时快速部署验证修复
+description: Jenkins + 云效构建部署触发，通过 curl 直连 Jenkins REST API 或云效 AppStack OpenAPI 触发服务构建和部署，支持 dev/test/uat/prod 多环境，自带服务名→作业映射（54 个服务）+ 双平台自动路由，排查问题时快速部署验证修复
 ---
 # Jenkins + 云效 构建部署
 

@@ -73,7 +73,7 @@ description: 推演收敛后自动提交所有服务工程，不确认
 **提交前触发图谱更新（必须）**：代码已改完，提交前**必须**增量 sync 一次，保证图谱新鲜供后续查询（未装 / 锁占用则跳过，不阻塞）：
 
 ```bash
-codegraph sync /Users/caomunian/Work/code-projects -q
+codegraph sync $CODE_WORKSPACE -q
 ```
 
 ### 提交前多服务检查（新增，关键）

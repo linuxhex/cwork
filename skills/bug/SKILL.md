@@ -411,7 +411,7 @@ bug 涉及调用链 / 接口实现 / 要追"谁调用了这个方法" / 怀疑�
 
 **前置探测（每次找代码都必须执行）**：
 ```bash
-cd /Users/caomunian/Work/code-projects && codegraph status            # 已索引（有符号数）→ 必须用；无索引 → 回退 grep/Read，继续分析
+cd $CODE_WORKSPACE && codegraph status            # 已索引（有符号数）→ 必须用；无索引 → 回退 grep/Read，继续分析
 ```
 
 🔍 **输出标签（强制）**：每次调 codegraph 必须在对话里打一行 `[codegraph]` 标签让走向可见——探测后 `🔍 [codegraph] status → 已索引(N符号)，用图谱` 或 `→ 未索引，回退 grep+Read`；查询时 `🔍 [codegraph] <命令> <目标> → <目的>`。**无 `[codegraph]` 标签 = 没走 codegraph，视为偷懒。**
@@ -524,7 +524,7 @@ if (userInfo == null) {
 刚改完代码，本阶段 `codegraph affected` / 推演查图谱前，**必须**先增量 sync 一次，保证推演用的是最新图谱（未装 / 锁占用则跳过，不阻塞）：
 
 ```bash
-codegraph sync /Users/caomunian/Work/code-projects -q
+codegraph sync $CODE_WORKSPACE -q
 ```
 
 ### 逻辑推演

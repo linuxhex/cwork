@@ -44,8 +44,8 @@ description: 找日志分析问题。查 SLS 日志 + ARMS 链路，定位问题
 
 > 本机工作区默认值；**服务地图为本地隐藏配置，不入库**。
 
-- **代码根目录**：`/Users/caomunian/Work/code-projects`（所有后端/前端工程都在这）
-- **最近需求工程**：`/Users/caomunian/Work/code-projects/brook-content`（用户没指明工程时，默认从这里探查）
+- **代码根目录**：`$CODE_WORKSPACE`（所有后端/前端工程都在这）
+- **最近需求工程**：从 `.services-map.md` 读取（用户没指明工程时，默认从最近活跃的工程探查）
 - **服务地图（按需加载 + 自更新）**：`/Users/caomunian/Study/cwork/.services-map.md` —— cwork **唯一权威**服务地图（路径 + 领域边界 + 下游依赖），**定位工程的第一手依据**。
   - **何时 Read**：用户说了服务名/领域要定位目录、查上下游依赖时。不需要则不读。
   - **文件不存在则回退**：当前目录 / 询问用户。
