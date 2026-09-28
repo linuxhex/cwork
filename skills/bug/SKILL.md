@@ -481,6 +481,11 @@ fi
 
 ### 执行内容
 
+0. **加载统一代码规范（强制，修复前执行）**
+   - Read `.claude/rules/cwork-common/code-style.md`（cwork 统一代码规范；Qoder 全局安装环境读 `~/.qoder/skills/cwork-common/code-style.md`）
+   - 修复代码必须符合规范：禁用项清单（System.out / printStackTrace / SimpleDateFormat / 空 catch 等）、**跨方法传参禁用 `Map<String,Object>`（必须 DTO）**、命名、魔法数字、方法 ≤50 行、嵌套 ≤3 层
+   - **流程保持轻量**：只加载规范约束写代码，不走 cwork-implement 的需求分析/计划/审查流程
+
 1. **修复 bug**
    - 按确认的方案修复代码
    - 严格按照修复方案执行
@@ -543,6 +548,16 @@ codegraph sync $CODE_WORKSPACE -q
 - 用户信息为 null → 初始化默认值 → 正常 ✓
 - 用户等级为 null → 使用默认等级 → 正常 ✓
 ```
+
+### 规范自查（强制）
+
+对照统一代码规范（`.claude/rules/cwork-common/code-style.md`，Qoder 环境为 `~/.qoder/skills/cwork-common/code-style.md`）检查本次修复的 diff，命中即修，修完再进回归测试：
+
+1. diff 是否命中「禁用项清单」任一条（System.out / printStackTrace / SimpleDateFormat / 空 catch / @Transactional 非 public 等）
+2. 跨方法/接口传参是否用了 `Map<String,Object>`（必须 DTO）
+3. 是否引入魔法数字、方法超 50 行、嵌套超 3 层
+4. 新增公共方法是否有业务注释
+5. 重写方法是否加 `@Override`、资源是否 try-with-resources
 
 ### 自问自答质询（修复质询）
 
@@ -675,6 +690,7 @@ npm run build
 ```
 验证完成：
 - 逻辑推演：✓ 通过
+- 规范自查：✓ 通过（对照统一代码规范，无禁用项/无 Map 传参）
 - 回归测试：✓ 通过（N 个用例）
 - 编译检查：✓ 通过
 - 修复文件：UserService.java:45-48
@@ -858,6 +874,11 @@ npm run build
 ## 自动衔接
 
 修复验证通过后，**自动进入 cwork-commit**，不询问用户。
+
+**衔接携带上下文（重要）**：进入 commit 时带上本轮修复上下文，供其直接生成提交信息、不重复询问：
+- 问题现象简述（来自阶段 2 用户描述）→ commit message 的需求名称，type 用 `fix`
+- 当前分支 + 修复文件清单（来自阶段 5 验证结果）
+- 需求 ID（若用户在咨询/定位阶段提供过；未提供则由 commit 按其独立模式默认规则处理）
 
 ---
 

@@ -399,9 +399,3 @@ implement 过程中**禁止提交代码**，最终由 cwork-commit 统一提交�
 
 使用本 skill 遇到的不顺手 / 报错 / 结果不准 / 可省步骤，记一笔到 `../USAGE_NOTES.md`「未分析」区（格式 `[YYYY-MM-DD] [implement] 现象 | 建议改法`），能当场修的直接修。**每天最多分析一次**，据此优化各 skill——流程见 `../USAGE_NOTES.md` 顶部。
 
-
----
-## 参考文件位置
-
-本技能的参考文件位于 `skills/implement/` 目录下，按 SKILL.md 内引用路径读取。例如 "见 `references/catalog-detail.md`" 对应 `skills/implement/references/catalog-detail.md`，"Read 同目录 `design-guide.md`" 对应 `skills/implement/design-guide.md`。
-

@@ -42,8 +42,8 @@ description: 推演收敛后自动提交所有服务工程，不确认
 1. 以当前目录为主工程
 2. 检查当前分支名（格式：{type}/{YYYYMMDD}_{description}，type 为 feature/hotfix/bugfix/refactor）
 3. 检查是否有未提交的改动
-4. 询问需求ID（格式：OMJF-数字）
-5. 询问需求名称（用于 commit message）
+4. 确定需求 ID（格式：OMJF-数字）：**优先沿用对话中已有的衔接上下文**（如由 cwork-bug 自动衔接进入，直接用其携带的需求 ID），对话中没有再询问用户，用户回车跳过则用默认 `OMJF-00000`
+5. 确定 commit message（需求名称）：同样优先沿用衔接上下文（bug 场景用问题现象简述，type 用 `fix`），没有再询问
 6. 直接执行提交
 
 ## 关联执行模式（存在 workflow-state）

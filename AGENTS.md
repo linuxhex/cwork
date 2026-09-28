@@ -18,6 +18,7 @@
 - cwork-writing-plans（由 implement 内部调用）
 - cwork-executing-plans（由 implement 内部调用）
 - cwork-loop-refined（由 implement 内部调用）
+- cwork-common（共享规范文件目录，implement/bug 写代码时强制引用其中的 code-style.md 统一代码规范）
 
 ## 深度追问与自问自答机制说明
 cwork 内置了决策树式追问机制，分两种模式：
@@ -27,9 +28,10 @@ cwork 内置了决策树式追问机制，分两种模式：
 ## 阶段自动衔接硬约束
 - cwork-init 结束后自动进入 cwork-implement。
 - cwork-implement 结束后，评估是否需要 cwork-test（条件见下方），需要则进入，不需要则进入 cwork-commit。
-- cwork-bug 结束后自动进入 cwork-commit。
-- cwork-test 结束后自动进入 cwork-commit。
+- cwork-bug 结束后自动进入 cwork-commit（衔接时携带修复上下文，commit 不重复询问需求信息）。
+- cwork-test 结束后自动进入 cwork-commit（P0 失败默认禁止提交，用户明确确认才能带失败提交）。
 - 全流程禁止让用户手动发起下一 skill。
+- **提交时机两条路径（有意设计）**：直接走 implement→commit 链时，编译/构建通过即可提交；走 cwork-do 自主工作流时，必须部署验证通过后才提交（do 多了部署验证环节）。
 
 ## cwork-test 触发条件（implement 结束后评估）
 满足以下**全部**条件才进入 cwork-test，否则跳过直接进 commit：
