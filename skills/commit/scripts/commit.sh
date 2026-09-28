@@ -55,6 +55,28 @@ check_branch() {
   fi
 }
 
+# 推送防护：显式推到 origin/<当前分支>，禁止裸 git push（裸 push 走 upstream，upstream 错时会把特性代码推到 master 等错误分支）
+# - upstream 指向别的分支 → 阻断推送，提示修正
+# - 无 upstream（新分支首次推送）→ push -u origin <当前分支>，建立正确关联
+push_current_branch() {
+  local repo="$1"
+  local branch
+  branch=$(git -C "$repo" branch --show-current)
+  [[ -n "$branch" ]] || fail "detached HEAD，无法推送: $repo"
+
+  local upstream
+  upstream=$(git -C "$repo" rev-parse --abbrev-ref --symbolic-full-name @{upstream} 2>/dev/null || true)
+  if [[ -n "$upstream" && "$upstream" != "origin/$branch" ]]; then
+    fail "推送中止: $repo 当前分支 $branch 的 upstream 是 $upstream（非同名远端分支）。先执行 git branch --set-upstream-to=origin/$branch $branch 修正后再推送"
+  fi
+
+  if [[ -z "$upstream" ]]; then
+    git -C "$repo" push -u origin "$branch" >/dev/null 2>&1 || fail "推送失败: $repo (origin/$branch)"
+  else
+    git -C "$repo" push origin "$branch" >/dev/null 2>&1 || fail "推送失败: $repo (origin/$branch)"
+  fi
+}
+
 # 预检
 while IFS= read -r repo; do
   [[ -z "$repo" ]] && continue
@@ -82,16 +104,14 @@ while IFS= read -r repo; do
 
   # 提交
   git -C "$repo" commit -m "$COMMIT_MSG" >/dev/null 2>&1 || fail "提交失败: $repo"
-  local hash
   hash=$(git -C "$repo" rev-parse --short HEAD)
   OUTPUT="$OUTPUT"$'\n'"$repo: $hash"
 
-  # 推送到远端当前分支
-  git -C "$repo" push >/dev/null 2>&1 || fail "推送失败: $repo"
+  # 推送到远端同名分支（校验 upstream 一致性，不一致阻断）
+  push_current_branch "$repo"
 
   # 更新 workflow-state
-  local state_file="$repo/docs/requirements/$REQ_KEY/workflow-state.json"
-  local timestamp
+  state_file="$repo/docs/requirements/$REQ_KEY/workflow-state.json"
   timestamp=$(date '+%Y-%m-%d %H:%M:%S')
   echo "{\"phase\": \"done\", \"requirement_key\": \"$REQ_KEY\", \"updated_at\": \"$timestamp\"}" > "$state_file"
 done < <(tr ',' '\n' <<<"$REPOS")
