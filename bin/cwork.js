@@ -33,22 +33,61 @@ function skip(msg) { console.log(`  - ${msg}`); }
 
 function parseArgs() {
   const args = process.argv.slice(2);
-  const opts = { tool: null, uninstall: false, syncGlobal: false };
+  const opts = { tool: null, uninstall: false, syncGlobal: false, check: false };
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--tool') opts.tool = args[++i];
     if (args[i] === '--uninstall') opts.uninstall = true;
     if (args[i] === '--sync-global') opts.syncGlobal = true;
+    if (args[i] === '--check') opts.check = true;
   }
   return opts;
 }
 
+// 公共资源目录名（skills/common/）：跨技能共享的规范/参考文件，不是技能——
+// 不生成技能规则文件、不进技能清单，只把文件分发到 <destDir>/cwork-common/ 下
+const COMMON_DIR = 'common';
+
 function readSkillDirs() {
   return readdirSync(SKILLS_DIR)
     .filter(name => {
+      if (name === COMMON_DIR) return false;
       const p = join(SKILLS_DIR, name);
       return statSync(p).isDirectory();
     })
     .sort();
+}
+
+// 分发 skills/common/ 下的共享文件到目标规则目录（如 .claude/rules/cwork-common/、.cursor/rules/cwork-common/）
+function installCommonFiles(target) {
+  const commonSrc = join(SKILLS_DIR, COMMON_DIR);
+  if (!existsSync(commonSrc)) return;
+  const destDir = join(target, 'cwork-common');
+  rmSync(destDir, { recursive: true, force: true });
+  mkdirSync(destDir, { recursive: true });
+  const files = [];
+  (function walk(dir, prefix = '') {
+    for (const entry of readdirSync(dir)) {
+      if (entry.endsWith('.bak') || entry.endsWith('.backup')) continue;
+      const full = join(dir, entry);
+      const stat = statSync(full);
+      if (stat.isDirectory()) {
+        walk(full, prefix + entry + '/');
+      } else {
+        files.push({ path: full, relPath: prefix + entry });
+      }
+    }
+  })(commonSrc);
+  for (const f of files) {
+    const dest = join(destDir, f.relPath);
+    mkdirSync(dirname(dest), { recursive: true });
+    writeFileSync(dest, readFileSync(f.path, 'utf-8'));
+  }
+  if (files.length > 0) log('cwork-common/ (共享规范文件)');
+}
+
+// Claude Code 产物尾注：解释参考文件位置（installClaude 生成与 checkInstall 校验共用同一份，避免双份字符串漂移）
+function buildClaudeRefIndex(skillName) {
+  return `\n\n---\n## 参考文件位置\n\n本技能的参考文件位于 \`.cwork/refs/${skillName}/\` 目录下（按需 Read，不常驻上下文），按 SKILL.md 内引用路径读取。例如 "见 \`references/catalog-detail.md\`" 对应 \`.cwork/refs/${skillName}/references/catalog-detail.md\`，"Read 同目录 \`design-guide.md\`" 对应 \`.cwork/refs/${skillName}/design-guide.md\`。\n`;
 }
 
 function readSkillMd(skillName) {
@@ -147,6 +186,9 @@ function installQoder() {
     }
     log(skillName);
   }
+
+  // 分发共享规范文件（skills/common/ → ~/.qoder/skills/cwork-common/）
+  installCommonFiles(target);
 }
 
 function uninstallQoder() {
@@ -159,6 +201,11 @@ function uninstallQoder() {
       rmSync(dest, { recursive: true, force: true });
       log(`删除 cwork-${skill}`);
     }
+  }
+  const commonDest = join(target, 'cwork-common');
+  if (existsSync(commonDest)) {
+    rmSync(commonDest, { recursive: true, force: true });
+    log('删除 cwork-common');
   }
 }
 
@@ -198,6 +245,9 @@ function installCursor() {
   mkdirSync(globalTarget, { recursive: true });
   writeFileSync(join(globalTarget, 'cwork-skills.md'), mainRule);
   log('~/.cursor/rules/cwork-skills.md (全局主入口)');
+
+  // 4) 分发共享规范文件（skills/common/ → .cursor/rules/cwork-common/）
+  installCommonFiles(target);
 }
 
 function buildCursorMainRule() {
@@ -238,7 +288,9 @@ ${cleaned}
 
 function buildCursorSkillRule(skillDir, skillName) {
   const md = readSkillMd(skillDir);
-  const { meta, body } = parseFrontmatter(md);
+  const { meta, body: rawBody } = parseFrontmatter(md);
+  // 共享规范引用路径按 IDE 替换：源里写 .claude/rules/cwork-common/，Cursor 装到 .cursor/rules/cwork-common/
+  const body = rawBody.replaceAll('.claude/rules/cwork-common/', '.cursor/rules/cwork-common/');
 
   // 参考文件复制到 .cursor/rules/<skillName>/ 下，主规则不内联（避免超 40k 字符限制）
   const files = collectSkillFiles(skillDir);
@@ -270,9 +322,15 @@ function uninstallCursor() {
   const target = join(PROJECT, '.cursor', 'rules');
   if (!existsSync(target)) return skip('目录不存在');
   for (const f of readdirSync(target)) {
-    if (f.startsWith('cwork') && f.endsWith('.mdc')) {
-      rmSync(join(target, f));
+    const p = join(target, f);
+    const stat = statSync(p);
+    if (f.startsWith('cwork') && f.endsWith('.mdc') && stat.isFile()) {
+      rmSync(p);
       log(`删除 ${f}`);
+    } else if (f.startsWith('cwork-') && stat.isDirectory()) {
+      // 参考文件目录（cwork-<skill>/）与共享规范目录（cwork-common/）
+      rmSync(p, { recursive: true, force: true });
+      log(`删除 ${f}/`);
     }
   }
 
@@ -335,29 +393,40 @@ ${skillList}
     }
   }
 
+  // 清理旧版参考文件目录（曾放在 .claude/rules/cwork-<name>/ 下，现迁至 .cwork/refs/）+ 整体重建 refs
+  const refsRoot = join(PROJECT, '.cwork', 'refs');
+  if (existsSync(refsRoot)) {
+    rmSync(refsRoot, { recursive: true, force: true });
+  }
+  mkdirSync(refsRoot, { recursive: true });
+
   for (const skill of skills) {
     const skillName = `cwork-${skill}`;
     const md = readSkillMd(skill);
     const { body } = parseFrontmatter(md);
 
-    // 参考文件按原结构复制到 .claude/rules/<skillName>/ 下，主规则文件不内联（避免超 40k 字符限制）
+    // 参考文件复制到 .cwork/refs/<skillName>/ 下（不放 .claude/rules/——rules 下文件会被全量注入上下文，参考文件应按需 Read）
     const files = collectSkillFiles(skill);
     const refFiles = files.filter(f => f.relPath !== 'SKILL.md' && !f.relPath.startsWith('scripts/'));
     let refIndex = '';
     if (refFiles.length > 0) {
-      const refDir = join(target, skillName);
+      const refDir = join(PROJECT, '.cwork', 'refs', skillName);
+      rmSync(refDir, { recursive: true, force: true });
       mkdirSync(refDir, { recursive: true });
       for (const f of refFiles) {
         const dest = join(refDir, f.relPath);
         mkdirSync(dirname(dest), { recursive: true });
         writeFileSync(dest, readFileSync(f.path, 'utf-8'));
       }
-      refIndex = `\n\n---\n## 参考文件位置\n\n本技能的参考文件位于 \`.claude/rules/${skillName}/\` 目录下，按 SKILL.md 内引用路径读取。例如 "见 \`references/catalog-detail.md\`" 对应 \`.claude/rules/${skillName}/references/catalog-detail.md\`，"Read 同目录 \`design-guide.md\`" 对应 \`.claude/rules/${skillName}/design-guide.md\`。\n`;
+      refIndex = buildClaudeRefIndex(skillName);
     }
 
     writeFileSync(join(target, `${skillName}.md`), `# ${skillName}\n\n${body}${refIndex}\n`);
     log(`${skillName}.md`);
   }
+
+  // 分发共享规范文件（skills/common/ → <rules>/cwork-common/）
+  installCommonFiles(target);
 }
 
 function uninstallClaude() {
@@ -373,12 +442,103 @@ function uninstallClaude() {
   const target = join(PROJECT, '.claude', 'rules');
   if (existsSync(target)) {
     for (const f of readdirSync(target)) {
-      if (f.startsWith('cwork-') && f.endsWith('.md')) {
-        rmSync(join(target, f));
+      if (!f.startsWith('cwork-')) continue;
+      const p = join(target, f);
+      if (statSync(p).isFile() && f.endsWith('.md')) {
+        rmSync(p);
         log(`删除 ${f}`);
+      } else if (statSync(p).isDirectory()) {
+        rmSync(p, { recursive: true, force: true });
+        log(`删除 ${f}/`);
       }
     }
   }
+
+  // 清理按需参考文件目录
+  const refsRoot = join(PROJECT, '.cwork', 'refs');
+  if (existsSync(refsRoot)) {
+    rmSync(refsRoot, { recursive: true, force: true });
+    log('删除 .cwork/refs/');
+  }
+}
+
+// ── 安装一致性校验（--check） ─────────────────────────────────────────
+
+// 校验当前目录（PROJECT）的 Claude 安装是否与源一致，防止直接改产物导致重装静默丢失：
+// ① frontmatter 完整性（name/description）② 主规则产物一致性（内存重建 vs 磁盘 diff）
+// ③ 源文件里引用的 .claude/rules/*、.cwork/refs/* 路径真实存在（防断链）④ common 分发一致性
+function checkInstall() {
+  console.log('🔍 cwork 安装一致性校验（Claude Code）');
+  const problems = [];
+
+  const skills = readSkillDirs();
+
+  // ① frontmatter 完整性
+  for (const skill of skills) {
+    const md = readSkillMd(skill);
+    const { meta } = parseFrontmatter(md);
+    if (!meta.name) problems.push(`skills/${skill}/SKILL.md 缺少 frontmatter name`);
+    if (!meta.description) problems.push(`skills/${skill}/SKILL.md 缺少 frontmatter description`);
+  }
+
+  // ② 主规则产物一致性
+  for (const skill of skills) {
+    const skillName = `cwork-${skill}`;
+    const md = readSkillMd(skill);
+    const { body } = parseFrontmatter(md);
+    const files = collectSkillFiles(skill);
+    const refFiles = files.filter(f => f.relPath !== 'SKILL.md' && !f.relPath.startsWith('scripts/'));
+    let refIndex = '';
+    if (refFiles.length > 0) {
+      refIndex = buildClaudeRefIndex(skillName);
+    }
+    const expected = `# ${skillName}\n\n${body}${refIndex}\n`;
+    const dest = join(PROJECT, '.claude', 'rules', `${skillName}.md`);
+    if (!existsSync(dest)) {
+      problems.push(`产物缺失: .claude/rules/${skillName}.md（未安装或被删除，重装: node bin/cwork.js --tool claude）`);
+    } else if (readFileSync(dest, 'utf-8') !== expected) {
+      problems.push(`产物与源不一致: .claude/rules/${skillName}.md（可能被直接修改，重装会丢失该修改）`);
+    }
+  }
+
+  // ③ 源文件引用路径存在性（.claude/rules/... 与 .cwork/refs/...）
+  const refPattern = /(\.claude\/rules\/[\w/-]+?\.md|\.cwork\/refs\/[\w/-]+?\.md)/g;
+  for (const skill of skills) {
+    for (const f of collectSkillFiles(skill)) {
+      if (f.relPath.startsWith('scripts/')) continue;
+      const content = readFileSync(f.path, 'utf-8');
+      for (const m of content.matchAll(refPattern)) {
+        const refPath = m[1];
+        if (!existsSync(join(PROJECT, refPath))) {
+          problems.push(`引用断链: skills/${skill}/${f.relPath} 引用 ${refPath} 不存在`);
+        }
+      }
+    }
+  }
+
+  // ④ common 分发一致性
+  const commonSrc = join(SKILLS_DIR, COMMON_DIR);
+  if (existsSync(commonSrc)) {
+    const commonDest = join(PROJECT, '.claude', 'rules', 'cwork-common');
+    for (const entry of readdirSync(commonSrc)) {
+      if (entry.endsWith('.bak') || entry.endsWith('.backup')) continue;
+      const dest = join(commonDest, entry);
+      if (!existsSync(dest)) {
+        problems.push(`common 分发缺失: .claude/rules/cwork-common/${entry}`);
+      } else if (readFileSync(dest, 'utf-8') !== readFileSync(join(commonSrc, entry), 'utf-8')) {
+        problems.push(`common 分发不一致: .claude/rules/cwork-common/${entry}`);
+      }
+    }
+  }
+
+  if (problems.length > 0) {
+    console.log(`\n❌ 发现 ${problems.length} 个问题：`);
+    for (const p of problems) console.log(`  - ${p}`);
+    console.log('\n修复：改 skills/ 源文件后重装（node bin/cwork.js --tool claude），不要直接改产物。');
+    process.exit(1);
+  }
+  console.log('✅ 源与产物一致，引用无断链');
+  process.exit(0);
 }
 
 // ── Claude Code global skills sync ──────────────────────────────────
@@ -485,7 +645,9 @@ ${cleaned}
   for (const skill of skills) {
     const skillName = `cwork-${skill}`;
     const md = readSkillMd(skill);
-    const { body } = parseFrontmatter(md);
+    // 共享规范引用路径按 IDE 替换：源里写 .claude/rules/cwork-common/，Trae 装到 .trae/rules/cwork-common/
+    const { body: rawBody } = parseFrontmatter(md);
+    const body = rawBody.replaceAll('.claude/rules/cwork-common/', '.trae/rules/cwork-common/');
 
     // 参考文件复制到 .trae/rules/<skillName>/ 下，主规则不内联（避免超 40k 字符限制）
     const files = collectSkillFiles(skill);
@@ -506,6 +668,9 @@ ${cleaned}
     writeFileSync(join(target, `${skillName}.md`), `# ${skillName}\n\n${body}${refIndex}\n`);
     log(`${skillName}.md`);
   }
+
+  // 分发共享规范文件（skills/common/ → <rules>/cwork-common/）
+  installCommonFiles(target);
 }
 
 function uninstallTrae() {
@@ -527,7 +692,10 @@ const uninstallers = { qoder: uninstallQoder, cursor: uninstallCursor, claude: u
 
 const opts = parseArgs();
 
-if (opts.syncGlobal) {
+if (opts.check) {
+  // 一致性校验是独立命令，执行完直接退出（不走安装流程）
+  checkInstall();
+} else if (opts.syncGlobal) {
   // 全局技能同步是独立命令（作用于 ~/.claude/skills/，与项目内安装的 --tool 无关）
   opts.uninstall ? unsyncClaudeGlobal() : syncClaudeGlobal();
 } else if (opts.tool && opts.tool !== 'auto') {

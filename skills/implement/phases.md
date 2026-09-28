@@ -659,6 +659,17 @@ List<Order> orders = new ArrayList<>();
 
 ### 代码质量准则（强制）
 
+#### 统一代码规范（强制，写代码前必读）
+
+写代码前**必须** Read `.claude/rules/cwork-common/code-style.md`（cwork 统一代码规范；Qoder 全局安装环境读 `~/.qoder/skills/cwork-common/code-style.md`），所有新增/修改代码必须符合：
+
+- **基础规范**：阿里 Java 手册、命名、禁魔法数字、方法 ≤50 行、嵌套 ≤3 层、公共方法业务注释
+- **禁用项清单**：System.out / printStackTrace / new SimpleDateFormat / 空 catch / @Transactional 非 public 等，写代码时直接避开
+- **数据传递约束**：跨方法/跨服务传参和返回值**禁止 `Map<String,Object>`**，必须定义 DTO
+- **设计原则**：单一职责、DRY、避免贫血模型、异常不吞
+
+推演收敛阶段按该文件的「规范自查」检查 diff，命中禁用项即修。前端部分遵循同文件「五、前端规范」。
+
 #### 代码简化原则
 
 **保护功能**：只优化代码质量，绝不改变业务逻辑。重构后行为必须一致。

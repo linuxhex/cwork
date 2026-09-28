@@ -258,7 +258,7 @@ if 测试失败:
 - **Web**：环境未就绪（服务未启动），禁止执行测试
 - **小程序**：微信开发者工具未安装 / project.config.json 不存在 / MCP Server 不可用，禁止执行
 - 测试规划未经用户确认，禁止执行
-- 所有 P0 场景必须通过才能进入 cwork-commit
+- 所有 P0 场景必须通过才能进入 cwork-commit（唯一例外：用户明确确认「带 P0 失败提交」，见自动衔接）
 - P1/P2 场景失败可记录但不阻塞提交
 - 调用 cwork-log 查后端日志需阿里云密钥已配置（`scripts/.config.local.sh` 或环境变量），未配置时跳过后端诊断，仅保留前端证据
 
@@ -333,7 +333,9 @@ cwork-test 也可以独立使用（不依赖 cwork-implement）：
 1. **写测试报告**：无论通过/失败，均生成 `test-report.md`（含截图证据）
 2. **有失败场景**：询问用户"测试有失败场景，是否调起 cwork-bug 进行代码修复？"
    - 用户确认 → 进入 cwork-bug 修复 → 修复后重新执行失败场景 → 全部通过 → 进入 cwork-commit
-   - 用户跳过 → 直接进入 cwork-commit
+   - 用户跳过 → 按失败级别分流（与 HARD GATE 对齐）：
+     - 仅 P1/P2 失败 → 记录到报告，进入 cwork-commit
+     - 存在 P0 失败 → 明确告知「P0 场景未通过，默认禁止提交」；用户仍要提交必须明确确认「带 P0 失败提交」，确认后将 P0 失败清单记入报告再进入 cwork-commit（禁止静默跳过）
 3. **全部通过**：询问用户是否调起 commit 技能进行代码提交，经用户确认后再进入 commit
 
 ---
@@ -341,10 +343,4 @@ cwork-test 也可以独立使用（不依赖 cwork-implement）：
 ## 使用记录与闭环
 
 使用本 skill 遇到的不顺手 / 报错 / 结果不准 / 可省步骤，记一笔到 `../USAGE_NOTES.md`「未分析」区（格式 `[YYYY-MM-DD] [test] 现象 | 建议改法`），能当场修的直接修。**每天最多分析一次**，据此优化各 skill——流程见 `../USAGE_NOTES.md` 顶部。
-
-
----
-## 参考文件位置
-
-本技能的参考文件位于 `skills/test/` 目录下，按 SKILL.md 内引用路径读取。例如 "见 `references/catalog-detail.md`" 对应 `skills/test/references/catalog-detail.md`，"Read 同目录 `design-guide.md`" 对应 `skills/test/design-guide.md`。
 
