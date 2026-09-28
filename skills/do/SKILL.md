@@ -41,6 +41,15 @@ description: 自主工作流。深度追问确认工作目标后，自动串联 
 - 部署必须使用当前 git 分支，**禁止切换分支**（除非用户明确要求）
 - **尝试次数限制**：每个阶段（执行工作/部署验证/测试确认）最多尝试 3 次，超过 3 次仍失败则**停止工作流**，输出失败报告，等待人工介入
 
+## Git 分支与推送防护（强制，全链路生效）
+
+cwork-do 编排 implement（建分支）/ bug / commit（推送）全流程，所有环节的 git 分支操作**必须**遵守 `cwork-common/git-guard.md`：
+
+- **建分支/切分支**：upstream 只能是 `origin/<同名分支>`——`git checkout -B <feature> origin/master` 默认会把 upstream 设成 origin/master（事故根源），建分支后必须立即纠正（`git branch --set-upstream-to=origin/<同名分支>` 或 `--unset-upstream`）并验证；分支名 `{type}/{YYYYMMDD}_{description}` 格式
+- **推送**：禁止裸 `git push`，一律 `git push origin <当前分支>`（首次 `-u`）；upstream 指向别的分支（如 origin/master）→ 先纠正再推，禁止带错误关联推送
+- **拉取**：禁止裸 `git pull`，一律 `git pull origin <当前分支>`
+- **汇报约束**：「已切换并跟踪 origin/master」是事故状态，必须纠正后再继续
+
 ## 阶段切换通知（强制）
 
 **每个阶段开始时必须明确声明当前阶段，格式如下：**

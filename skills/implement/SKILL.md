@@ -198,6 +198,27 @@ fi
 - **推演收敛完成后必须进入编译/构建检查**，禁止跳过
 - **编译/构建检查通过后才能进入 cwork-commit**
 - **implement 过程中禁止提交代码**，所有提交由 cwork-commit 统一处理
+- **建分支必须走防护命令序列**（见下方「分支防护」），upstream 指向 master 等其他分支时禁止继续
+
+## 分支防护（强制，建/切换分支时执行）
+
+implement 单服务场景不走 init 脚本，AI 手工建分支**必须**遵守 `cwork-common/git-guard.md`（Qoder 全局安装环境读 `~/.qoder/skills/cwork-common/git-guard.md`）。核心规则：
+
+1. **upstream 只能是 `origin/<同名分支>`**——`git checkout -B feature/xxx origin/master` 默认会把 upstream 设成 origin/master（事故根源），建分支后必须立即纠正并验证：
+
+```bash
+git fetch origin --prune
+git checkout -B feature/20260928_xxx origin/master
+# 立即纠正（禁止省略）：
+git branch --set-upstream-to=origin/feature/20260928_xxx feature/20260928_xxx 2>/dev/null \
+  || git branch --unset-upstream feature/20260928_xxx
+# 验证：输出必须是 origin/feature/20260928_xxx 或空：
+git rev-parse --abbrev-ref @{upstream} 2>/dev/null
+```
+
+2. **分支名格式**：`{type}/{YYYYMMDD}_{description}`（type=feature/hotfix/bugfix/refactor）——禁止随手起名（如 `aaa`）
+3. **禁止裸 `git push` / 裸 `git pull`**——推送一律 `git push origin <当前分支>`（首次 `-u`），拉取一律 `git pull origin <当前分支>`
+4. **汇报约束**：「已切换并跟踪 origin/master」是**事故状态不是正常状态**，发现必须纠正后再继续，不得当作切换成功汇报
 
 ## 代码工作区 + 服务地图（需求分析/多服务识别时借鉴）
 

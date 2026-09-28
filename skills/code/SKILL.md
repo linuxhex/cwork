@@ -147,6 +147,11 @@ bash code_query.sh sync
 - 错误：`git clone --single-branch -b <branch> <url>` —— 只拉取一个分支历史，后续无法 fetch 其他分支
 - 脚本已强制禁止 `--single-branch`，确保所有分支历史完整
 
+**pull 分支防护（强制，规范见 `cwork-common/git-guard.md`）**：
+- **禁止裸 `git pull`**——一律显式 `git pull origin <当前分支>`：upstream 若错误关联到别的分支（如特性分支跟踪了 origin/master），裸 pull 会拉错分支内容进来
+- 若发现仓库当前分支 upstream 指向非同名远端分支，先纠正（`git branch --set-upstream-to=origin/<当前分支>`）再操作
+- AI 在本技能外手工建分支时同样必须走 git-guard.md 的防护命令序列（建分支后立即纠正/清除 upstream 并验证）
+
 **鉴权失败排查**（返回 401/403）：1. `.config.local.sh` 的 GITLAB_TOKEN 是否正确；2. GITLAB_URL 是否可达（`curl -v` 实测）；3. Token 是否过期或被撤销。
 
 **clone 失败排查**：1. 网络是否通（GitLab 在内网 `172.16.98.176`）；2. Token 是否有 read_repository 权限；3. 目标目录是否已存在（已存在则自动 pull）。

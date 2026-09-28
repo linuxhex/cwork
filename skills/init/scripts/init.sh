@@ -37,6 +37,24 @@ if [[ -n "$DEPS_RAW" ]]; then
   done < <(tr ',' '\n' <<<"$DEPS_RAW")
 fi
 
+# 分支防护：确保当前分支的 upstream 只能是 origin/<同名分支>，绝不能是 master 等其他分支
+# （checkout -B 以 origin/master 为起点时 autoSetupMerge 默认把 origin/master 设为 upstream，必须纠正）
+ensure_correct_upstream() {
+  local repo="$1"
+  local branch="$2"
+  local expected="origin/$branch"
+  local upstream
+  upstream=$(git -C "$repo" rev-parse --abbrev-ref --symbolic-full-name @{upstream} 2>/dev/null || true)
+
+  [[ "$upstream" == "$expected" ]] && return 0
+
+  if git -C "$repo" show-ref --verify --quiet "refs/remotes/origin/$branch"; then
+    git -C "$repo" branch --set-upstream-to="$expected" "$branch" >/dev/null 2>&1 || true
+  else
+    git -C "$repo" branch --unset-upstream "$branch" >/dev/null 2>&1 || true
+  fi
+}
+
 # 切换分支
 switch_branch() {
   local repo="$1"
@@ -62,7 +80,7 @@ switch_branch() {
     fail "只支持从 master 或 main 分支 checkout，当前仓库无这两个分支: $repo"
   fi
 
-  # 切换 feature 分支
+  # 切换 feature 分支（三条路径后都必须纠正 upstream）
   if git -C "$repo" show-ref --verify --quiet "refs/heads/$FEATURE_BRANCH"; then
     git -C "$repo" checkout -f "$FEATURE_BRANCH" >/dev/null 2>&1
   elif git -C "$repo" show-ref --verify --quiet "refs/remotes/origin/$FEATURE_BRANCH"; then
@@ -70,6 +88,7 @@ switch_branch() {
   else
     git -C "$repo" checkout -B "$FEATURE_BRANCH" "origin/$base_branch" >/dev/null 2>&1
   fi
+  ensure_correct_upstream "$repo" "$FEATURE_BRANCH"
 }
 
 # 切换主工程
