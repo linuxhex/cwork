@@ -69,6 +69,27 @@ preflight_repo() {
   git -C "$repo" remote get-url origin >/dev/null 2>&1 || fail "origin remote is required: $repo"
 }
 
+# 分支防护：确保当前分支的 upstream 只能是 origin/<同名分支>，绝不能是 master 等其他分支
+# 背景：git checkout -b/-B 以远程跟踪分支（如 origin/master）为起点时，autoSetupMerge 默认
+# 会把 origin/master 设为新分支 upstream，后续裸 push/pull 会打到 master —— 必须显式纠正：
+# - 远端已有同名分支 → set-upstream-to 显式关联到 origin/<同名分支>
+# - 远端没有（新建分支）→ unset 清除错误跟踪（首次 git push -u origin <分支> 时建立正确关联）
+ensure_correct_upstream() {
+  local repo="$1"
+  local branch="$2"
+  local expected="origin/$branch"
+  local upstream
+  upstream=$(git -C "$repo" rev-parse --abbrev-ref --symbolic-full-name @{upstream} 2>/dev/null || true)
+
+  [[ "$upstream" == "$expected" ]] && return 0
+
+  if git -C "$repo" show-ref --verify --quiet "refs/remotes/origin/$branch"; then
+    git -C "$repo" branch --set-upstream-to="$expected" "$branch" >/dev/null 2>&1 || true
+  else
+    git -C "$repo" branch --unset-upstream "$branch" >/dev/null 2>&1 || true
+  fi
+}
+
 checkout_feature_from_latest_base() {
   local repo="$1"
   local feature_branch="$2"
@@ -104,6 +125,8 @@ checkout_feature_from_latest_base() {
       echo "failed to switch existing local branch: $repo -> $feature_branch" >&2
       return 1
     }
+    # 本地已有分支可能残留错误 upstream（如手工建的分支跟踪了 origin/master），统一纠正
+    ensure_correct_upstream "$repo" "$feature_branch"
     printf '%s' "switched_existing_local"
     return 0
   fi
@@ -113,6 +136,7 @@ checkout_feature_from_latest_base() {
       echo "failed to switch existing remote branch: $repo -> $feature_branch" >&2
       return 1
     }
+    ensure_correct_upstream "$repo" "$feature_branch"
     printf '%s' "switched_existing_remote"
     return 0
   fi
@@ -121,6 +145,8 @@ checkout_feature_from_latest_base() {
     echo "failed to create branch from origin/$base_branch: $repo -> $feature_branch" >&2
     return 1
   }
+  # 从 origin/master 等基线建分支时 upstream 会被默认设为基线分支，必须纠正/清除
+  ensure_correct_upstream "$repo" "$feature_branch"
   printf '%s' "created_from_origin_base"
 }
 

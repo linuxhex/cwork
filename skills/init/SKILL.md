@@ -200,6 +200,35 @@ description: 对话式初始化，自动查找工程路径，多服务分支切�
 - 示例：`feature/20260720_render_change`、`feature/20260529_user_export`、`feature/20260529_user_export_v2`、`hotfix/20260529_fix_log_url`、`refactor/20260529_auth`
 - 脚本校验：`skills/init/scripts/init_requirement_workspace.sh` 的 `validate_feature_branch` 函数，格式不符直接 fail
 
+## 分支防护（强制，根治 upstream 跟踪错分支）
+
+**背景**：`git checkout -b/-B <feature> origin/master`（或基于 master 的操作）时，git 默认 autoSetupMerge 会把 **origin/master 设为新分支的 upstream**——当前分支关联的远端分支变成了 master，后续裸 push 会把特性代码直接推到 master。此问题已实际发生过，必须根治。
+
+**硬约束**：**特性分支的 upstream 只能是 `origin/<同名分支>`，绝不能是 master/main 等其他分支；新建分支在远端有同名分支前可以无 upstream（无关联）。**
+
+**AI 手工创建/切换分支时（不走脚本）必须执行的命令序列**：
+
+```bash
+# 1. 从远端最新 master 建特性分支
+git fetch origin --prune
+git checkout -B feature/20260910_xxx origin/master
+
+# 2. 立即纠正 upstream（核心防护，禁止省略）
+#    远端已有同名分支 → 显式关联
+git branch --set-upstream-to=origin/feature/20260910_xxx feature/20260910_xxx 2>/dev/null \
+  || git branch --unset-upstream feature/20260910_xxx   # 新分支无远端同名分支 → 清除从 master 继承的错误跟踪
+
+# 3. 验证：输出必须是 origin/feature/20260910_xxx 或空（无 upstream）
+git rev-parse --abbrev-ref @{upstream} 2>/dev/null
+```
+
+**脚本路径已内置防护**：`skills/init/scripts/init_requirement_workspace.sh` 的 `ensure_correct_upstream` 函数在三条 checkout 路径（本地已有/远端已有/从 master 新建）后自动校验纠正，无需手工干预。
+
+**禁止**：
+- ❌ 创建分支后不校验 upstream 就继续操作
+- ❌ 裸 `git push` / 裸 `git pull`（走 upstream 默认行为，upstream 错时打错分支）
+- ❌ 假设 git 默认行为正确——默认行为恰恰是问题根源
+
 ## 安全保护
 
 **强制回退前的备份：**

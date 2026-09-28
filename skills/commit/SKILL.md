@@ -29,6 +29,34 @@ description: 推演收敛后自动提交所有服务工程，不确认
 ## HARD GATE
 - 分支不一致，禁止提交
 - 任一工程有未完成的任务，禁止提交
+- **推送目标远端分支与当前分支不一致，禁止推送**（详见下方「推送防护」）
+- **禁止裸 `git push`**（走 upstream 默认行为，upstream 指向 master 等错误分支时会把特性代码推错分支）
+
+## 推送防护（强制）
+
+**背景**：特性分支若因创建时未纠正 upstream 而跟踪了 origin/master，裸 `git push` 会把特性代码直接推到远端 master。推送前必须校验，不一致阻断。
+
+**推送前校验（每个工程）**：
+
+```bash
+branch=$(git branch --show-current)
+upstream=$(git rev-parse --abbrev-ref @{upstream} 2>/dev/null || echo "")
+
+# upstream 指向别的分支（如 origin/master）→ 阻断，禁止推送
+if [[ -n "$upstream" && "$upstream" != "origin/$branch" ]]; then
+  阻断："当前分支 $branch 的 upstream 是 $upstream，禁止推送"
+  修正命令：git branch --set-upstream-to=origin/$branch $branch
+fi
+
+# 无 upstream（新分支首次推送）→ push -u 建立正确关联
+git push -u origin "$branch"
+# upstream 正确 → 显式推送（禁止裸 git push）
+git push origin "$branch"
+```
+
+**脚本路径已内置防护**：`skills/commit/scripts/commit.sh` 的 `push_current_branch` 函数自动执行上述校验（不一致 fail 阻断 / 无 upstream 用 `push -u` / 正常用显式 `push origin <当前分支>`）。
+
+**AI 手工推送时**：一律 `git push origin $(git branch --show-current)`，禁止裸 `git push`。
 
 ## 服务工程路径（按需）
 

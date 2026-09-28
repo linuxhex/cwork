@@ -393,7 +393,12 @@ PY
           cd "$dir"
           current_branch=$(git branch --show-current 2>/dev/null || echo "unknown")
           echo "当前分支: $current_branch"
-          git pull --ff-only 2>&1 || git pull 2>&1 || echo "pull 失败，跳过"
+          # pull 防护：显式拉当前分支，禁止裸 git pull（upstream 指向别的分支时会拉错内容）
+          if [[ "$current_branch" != "unknown" ]]; then
+            git pull origin "$current_branch" --ff-only 2>&1 || git pull origin "$current_branch" 2>&1 || echo "pull 失败，跳过"
+          else
+            git pull --ff-only 2>&1 || git pull 2>&1 || echo "pull 失败，跳过"
+          fi
         fi
       done
     else
@@ -401,7 +406,13 @@ PY
       [[ -d "$repo_dir/.git" ]] || fail "仓库不存在: $repo_dir（请先 clone）"
       echo ">>> Pull: $target"
       cd "$repo_dir"
-      git pull --ff-only 2>&1 || git pull 2>&1
+      # pull 防护：显式拉当前分支，禁止裸 git pull（upstream 指向别的分支时会拉错内容）
+      pull_branch=$(git branch --show-current 2>/dev/null || echo "")
+      if [[ -n "$pull_branch" ]]; then
+        git pull origin "$pull_branch" --ff-only 2>&1 || git pull origin "$pull_branch" 2>&1
+      else
+        git pull --ff-only 2>&1 || git pull 2>&1
+      fi
     fi
 
     echo ""
