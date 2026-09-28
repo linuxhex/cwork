@@ -576,6 +576,8 @@ function syncClaudeGlobal() {
     }
     log(skillName);
   }
+  // 分发共享规范文件（skills/common/ → ~/.claude/skills/cwork-common/，含 git-guard.md 分支防护规范）
+  installCommonFiles(target);
 }
 
 function unsyncClaudeGlobal() {
