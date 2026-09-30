@@ -31,7 +31,7 @@ cwork 内置了决策树式追问机制，分两种模式：
 - cwork-bug 结束后自动进入 cwork-commit（衔接时携带修复上下文，commit 不重复询问需求信息）。
 - cwork-test 结束后自动进入 cwork-commit（P0 失败默认禁止提交，用户明确确认才能带失败提交）。
 - 全流程禁止让用户手动发起下一 skill。
-- **提交时机两条路径（有意设计）**：直接走 implement→commit 链时，编译/构建通过即可提交；走 cwork-do 自主工作流时，必须部署验证通过后才提交（do 多了部署验证环节）。
+- **提交时机两条路径（有意设计）**：直接走 implement→commit 链时，编译/构建通过即可提交；走 cwork-do 自主工作流时，必须目标收敛（实测结果 + 理论评估双证据逼近验收标准）后才提交（do 多了部署验证与收敛评估环节）。
 
 ## cwork-test 触发条件（implement 结束后评估）
 满足以下**全部**条件才进入 cwork-test，否则跳过直接进 commit：
@@ -48,7 +48,7 @@ cwork 内置了决策树式追问机制，分两种模式：
 - /cwork-config — Nacos 配置只读查询，对话式查多环境(dev/test/uat/prod)的 Nacos 配置内容/清单/差异，排查问题时核对某服务某环境的配置真值（开关/阈值/地址/参数）
 - /cwork-data — 数仓数据查询，对话式查 Doris 数仓（internal/hive/JDBC catalog）跑只读 SQL 查业务数据/表结构/指标/数据量，自带 SQL 前置校验，排查问题时核对订单/金额/库存/数据量佐证根因
 - /cwork-deploy — Jenkins + 云效构建部署触发，通过 curl 直连 Jenkins REST API 或云效 AppStack OpenAPI 触发服务构建和部署，支持 dev/test/uat/prod 多环境，自带服务名→作业映射（54 个服务）+ 双平台自动路由，排查问题时快速部署验证修复
-- /cwork-do — 自主工作流。深度追问确认工作目标后，自动串联 implement/bug → deploy → test → commit 完成完整开发流程。每个阶段最多 3 次尝试，超过则停止等待人工介入。适用于：独立完成需求开发、bug 修复并部署验证。
+- /cwork-do — 目标驱动的自主工作流。深度追问确认目标并固化验收标准后，迭代循环「实现/修复 → 部署 → 实测验证 → 收敛评估」不断逼近目标，测试结果 + 理论评估双证据收敛后才提交代码。适用于：独立完成需求开发、bug 修复并部署验证收敛。
 - /cwork-doc — 根据代码改动生成技术方案文档（两种模式：已有需求文档 / 对话式需求分析）
 - /cwork-graf — Grafana 监控数据只读查询，对话式查 K8S 节点/容器/应用/JVM/数据库/业务监控面板，支持 64 个仪表盘按分类检索、面板数据查询、PromQL 即时查询，排查问题时核对资源使用率/性能指标/业务数据佐证根因
 - /cwork-image — 本地工程/jar 打包 Docker 镜像 + push registry + 服务端拉起运行
