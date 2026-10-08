@@ -79,6 +79,52 @@ fi
 APPID=$(python3 -c "import json; print(json.load(open('project.config.json'))['appid'])")
 ```
 
+## 执行引擎（强制：直连优先，MCP 降级）
+
+**小程序测试默认用原生 miniprogram-automator 直连脚本执行，不走 MCP**。原因（均为源码/实测实证）：
+
+1. **MCP 网络监控劫持业务请求**：`list_network_requests` 等工具底层 `mockWxMethod('request'/'uploadFile'/'downloadFile')` 整组替换网络 API（weixin-devtools-mcp `build/core/connection.js:85`），开启后业务响应被替换成占位符（如 `{uniqueId}`），**停止监听也清不干净**——页面行为直接异常，测试结果全部不可信
+2. **MCP 层无超时**：除 `connect_devtools`(45s) 外全部裸 await，命令挂起整个会话卡死（见「挂起检测与恢复」）
+3. **MCP 每步一往返**：AI 每步 2-3 次工具调用 + 思考轮，一个场景十几轮，慢
+
+**直连执行器**：`scripts/mini-run.cjs`（自动定位全局 automator 包，无需 MCP）
+
+```bash
+# 探活：连接 + 当前页面（15s 超时保护，不劫持任何请求）
+node mini-run.cjs --check
+
+# 跑测试计划：AI 把场景生成为 plan.json，一次连接跑完所有场景
+node mini-run.cjs --plan plan.json --out result.json
+```
+
+**plan.json 格式**（AI 按测试场景生成，动作集见脚本头部注释：navigate/click/input/callMethod/setData/evaluate/wait/expectPage/expectData/expectText/expectElement）：
+
+```json
+{
+  "wsEndpoint": "ws://127.0.0.1:9420",
+  "stepTimeoutMs": 15000,
+  "scenarios": [{
+    "name": "用户登录", "priority": "P0",
+    "steps": [
+      {"action": "navigate", "url": "/pages/login/login"},
+      {"action": "input", "selector": "input[placeholder*='手机号']", "text": "13800138000"},
+      {"action": "click", "selector": "button.login-btn"},
+      {"action": "expectPage", "path": "pages/index/index"}
+    ]
+  }]
+}
+```
+
+**执行器内置防护**：每操作 15s 超时（挂起即报错，不卡死）、导航一律 evaluate 调 `wx.*`、无 screenshot、全局看门狗 10 分钟、场景内首败即停并自动取证（页面 path + data dump）、结果经 stdout 的 `RESULT_JSON=` 行返回供 AI 解析。
+
+**AI 执行流程（直连模式）**：
+1. `node mini-run.cjs --check` 探活（失败先确认自动化端口已开：`cli auto --project <路径> --auto-port 9420`）
+2. 生成 plan.json（场景规划见「小程序阶段二」；**元素选择器先从页面真实结构取**——`--check` 后可用 `evaluate` 动作读 `__page__.data`，或先用 MCP `get_page_snapshot` 一次性拿结构后断开）
+3. `node mini-run.cjs --plan plan.json --out result.json` 一次跑完
+4. 解析结果：失败步骤看 `evidence`（页面 path + data），写测试报告
+
+**MCP 的定位（降级备选）**：仅用于交互式探索（`get_page_snapshot` 拿页面结构、`debug_page_elements` 列可见元素）和连接管理，**禁止用于网络监控**；探索完即断开，正式执行走直连脚本。
+
 ## MCP 工具速查表
 
 weixin-devtools-mcp 暴露的 31 个工具，按类别分组：
@@ -142,14 +188,16 @@ weixin-devtools-mcp 暴露的 31 个工具，按类别分组：
 | `list_console_messages` | 列出 Console 消息 |
 | `get_console_message` | 获取单条 Console 消息详情 |
 
-### 网络监控（4 个，需启用 network 类别）
+### 网络监控（4 个，❌ 全部禁用——劫持业务请求）
 
 | 工具 | 说明 |
 |------|------|
-| `list_network_requests` | 列出网络请求 |
-| `get_network_request` | 获取单条请求详情 |
-| `stop_network_monitoring` | 停止网络监控 |
-| `clear_network_requests` | 清空请求记录 |
+| `list_network_requests` | ❌ **禁用**——开启即 `mockWxMethod('request')` 劫持 wx.request，业务响应被替换成占位符（实测验证码响应变成 `{uniqueId}`），页面行为异常 |
+| `get_network_request` | ❌ **禁用**——同上 |
+| `stop_network_monitoring` | ❌ **不可靠**——实测停止监听后劫持清不干净，唯一恢复手段是重启开发者工具 |
+| `clear_network_requests` | ❌ **禁用**——同上 |
+
+> **网络问题排查替代方案**：小程序侧不监控网络。接口是否正常用页面表现 + data 断言判断；疑似后端问题直接调 cwork-log 查后端日志/链路（比前端抓包更准）。
 
 ### 调试诊断（5 个，需启用 debug 类别）
 
@@ -400,7 +448,7 @@ await miniProgram.evaluate(() => { wx.navigateBack() });
 
 > **关键**：IDE 已运行且无代码改动时，**本步骤整体跳过**，不重复 `cli open`/`cli auto`，避免重启。
 
-### 步骤 3：MCP 连接（整个测试会话只连一次）
+### 步骤 3：MCP 连接（仅备选路径需要；直连模式跳过本步骤直接用 mini-run.cjs）
 
 通过 MCP 工具连接开发者工具，**整个测试会话只连接一次，所有场景复用同一连接**：
 
@@ -504,7 +552,7 @@ connect_devtools({
 
 ### 连接生命周期原则（关键）
 
-**整个测试会话：连接一次 → 跑完所有场景 → 最后断开。**
+**整个测试会话：连接一次 → 跑完所有场景 → 最后断开。**（直连模式由 mini-run.cjs 内部保证：一次 automator.connect 跑完 plan 全部场景）
 
 ```
 ❌ 错误做法：每个场景都 disconnect → reconnect（慢 + 易端口冲突）
@@ -513,7 +561,24 @@ connect_devtools({
 
 场景间切换用 `mp.evaluate(() => wx.reLaunch(...))` 重置页面栈即可，**不需要重新连接**。
 
-### 执行流程
+### 执行流程（直连优先）
+
+**主路径（mini-run.cjs 直连，见「执行引擎」章节）**：
+
+```
+1. 探活：node mini-run.cjs --check
+   （失败 → 确认自动化端口：cli auto --project <路径> --auto-port 9420；IDE 异常 → mini-recover.sh）
+2. 取页面真实结构（选一）：
+   a. MCP connect_devtools → get_page_snapshot / debug_page_elements → disconnect_devtools（一次性探索）
+   b. plan.json 里放 {"action":"evaluate","script":"JSON.stringify(__page__.data)"} 先跑一轮拿 data
+3. 生成 plan.json（选择器从真实结构取，禁止盲猜）
+4. 执行：node mini-run.cjs --plan plan.json --out result.json（一次连接跑完所有场景）
+5. 解析 RESULT_JSON：失败步骤看 evidence（页面 path + data dump）
+6. 疑似后端接口问题 → 调 cwork-log 查后端日志（禁止 MCP 网络监控，劫持请求）
+7. 自动修复代码后：只重跑失败场景的 plan（场景数量 1 个的 plan.json），不重跑全部
+```
+
+**备选路径（MCP 交互式，仅探索/诊断用）**：
 
 ```
 对于每个测试场景：
@@ -534,9 +599,9 @@ connect_devtools({
     6. 记录通过/失败
     7. 失败时：
        a. get_page_snapshot 获取页面快照
-       b. list_network_requests 检查网络请求
+       b. （禁止网络监控工具——会劫持请求；疑似接口问题改调 cwork-log 查后端日志）
        c. list_console_messages 检查 Console 错误
-       d. 诊断根因 → 尝试自动修复并重试（最多 3 次）
+       d. 诊断根因 → 尝试自动修复并重试（最多 2 次，重试前先换选择器/断言方式）
     8. 场景间用 mp.evaluate(() => wx.reLaunch(...)) 重置页面栈（不要重连 MCP）
 
 全部场景完成后：
@@ -583,7 +648,7 @@ connect_devtools({
   诊断：
   → 页面快照：get_page_snapshot()
   → 页面 data：evaluate_script({ script: "JSON.stringify(__page__.data)" })
-  → 网络请求：list_network_requests()
+  → 网络问题：调 cwork-log 查后端日志（禁止 list_network_requests，劫持请求）
   → Console 错误：list_console_messages()
   → 可见元素：debug_page_elements()
   → 可能原因：按钮选择器不匹配或按钮未渲染
@@ -601,26 +666,26 @@ connect_devtools({
 
 1. **页面快照**：`get_page_snapshot()` — 获取当前 DOM 结构（优先，不卡）
 2. **页面 data**：`evaluate_script({ script: "JSON.stringify(__page__.data)" })` — 读取页面数据
-3. **网络请求**：`list_network_requests()` — 检查是否有接口失败（4xx/5xx/超时）
+3. **网络请求**：❌ 禁止用 MCP 网络监控工具（劫持 wx.request 污染业务响应，见「执行引擎」）——疑似接口失败直接调 cwork-log 查后端日志/链路
 4. **Console 错误**：`list_console_messages()` — 检查 JS 报错
 5. **元素调试**：`debug_page_elements()` — 列出可见交互元素
 6. **连接诊断**：`diagnose_connection()` — 仅在怀疑连接断开时调用
 
-**诊断决策树**：
+**诊断决策树**（诊断信息来源：页面快照 + 页面 data + Console；**禁止网络监控工具**——劫持请求污染现场）：
 
 ```
 测试步骤失败
   │
-  ├─ 收集诊断信息（截图 + 快照 + 网络请求 + Console + 元素列表）
+  ├─ 收集诊断信息（页面快照 + 页面 data + Console 错误 + 元素列表）
   │
-  ├─ 是否有后端接口失败（4xx/5xx/超时）？
-  │    ├─ 否 → 纯前端问题：查截图 + 可见元素 + Console 错误 → 修前端代码
+  ├─ 页面 data 是否符合预期（有数据/空/报错标志）？
+  │    ├─ data 正常、元素/交互异常 → 纯前端问题：查快照元素 + Console → 修前端代码
   │    │
-  │    └─ 是 → 后端接口问题：
-  │            1. 从失败请求取接口路径 / 状态码 / 响应体
-  │            2. 判断：前端传参错？后端逻辑错？网络超时？
+  │    └─ data 空/加载中/错误态 → 疑似后端接口问题：
+  │            1. 调 cwork-log 查后端对应接口日志（时间窗对齐测试执行时刻）
+  │            2. 判断：前端传参错？后端逻辑错？接口超时？
   │            3. 前端传参错 → 修前端代码
-  │            4. 后端逻辑错 → 记录到报告（含接口证据），等待人工处理
+  │            4. 后端逻辑错 → 记录到报告（含后端日志证据），等待人工处理
 ```
 
 ### 小程序特有注意事项

@@ -228,7 +228,7 @@ elif 有失败:
 
 ```
 if 测试失败:
-    1. 诊断（Web: drainEvents + captureScreenshot + snapshotText + pageInfo; 小程序: get_page_snapshot + evaluate_script 读 data + list_network_requests + list_console_messages）
+    1. 诊断（Web: drainEvents + captureScreenshot + snapshotText + pageInfo; 小程序: get_page_snapshot + evaluate_script 读 data + list_console_messages；禁止网络监控工具——MCP 的会劫持 wx.request 污染业务响应，接口问题调 cwork-log 查后端）
     2. 若有后端接口失败 → 调用 cwork-log 查后端日志/链路，拿到异常堆栈 + 文件:行号
     3. 综合前后端证据定位根因：
        - 纯前端：修前端代码
