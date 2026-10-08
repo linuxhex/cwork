@@ -25,7 +25,7 @@ CLI 路径（macOS 默认）：
 | 命令 | 说明 |
 |------|------|
 | `cli open --project <path>` | 打开项目 |
-| `cli auto --project <path> --port <port>` | 开启自动化端口 |
+| `cli auto --project <path> --auto-port <port>` | 开启自动化端口（⚠️ 是 `--auto-port`，不是 `--port`——`--port` 是 IDE HTTP 服务端口，用错会导致 automator 连不上） |
 | `cli close --project <path>` | 关闭项目 |
 | `cli quit` | 退出开发者工具 |
 
@@ -39,20 +39,23 @@ CLI 路径（macOS 默认）：
 npm install -g weixin-devtools-mcp
 ```
 
-**Claude Code MCP 配置**（项目 `.claude/settings.json` 或全局配置）：
+**Claude Code MCP 配置**（项目 `.mcp.json` 或 `~/.claude.json`）：
 
 ```json
 {
   "mcpServers": {
     "weixin-devtools": {
       "command": "npx",
-      "args": ["-y", "weixin-devtools-mcp", "--tools-profile=full"]
+      "args": ["-y", "weixin-devtools-mcp", "--tools-profile=full"],
+      "timeout": 30000
     }
   }
 }
 ```
 
 > 也可用 `npm install -g weixin-devtools-mcp` 后直接用 `weixin-devtools-mcp` 命令。
+
+> ⚠️ **`timeout: 30000` 必须配置（挂起兜底，强制）**：MCP 工具调用默认超时（`MCP_TOOL_TIMEOUT`）约为 28 小时——automator 命令回包丢失挂起时，AI 会无限等待，整个测试会话卡死。配置后挂起调用 30 秒超时报错，AI 得以走「挂起检测与恢复」流程（见下方专章）。
 
 ### 自动检测
 
@@ -115,14 +118,16 @@ weixin-devtools-mcp 暴露的 31 个工具，按类别分组：
 | `assert_attribute` | 断言元素属性值 |
 | `assert_state` | 断言元素状态（可见/启用等） |
 
-### 导航（4 个）
+### 导航（4 个，⚠️ 禁止使用）
 
 | 工具 | 说明 |
 |------|------|
-| `navigate_to` | navigateTo 跳转页面 |
-| `navigate_back` | navigateBack 返回 |
-| `switch_tab` | switchTab 切换 TabBar |
-| `relaunch` | reLaunch 重启到页面 |
+| `navigate_to` | ❌ **禁止调用**——底层裸调 `automator.navigateTo`，回包丢失会永久挂起 |
+| `navigate_back` | ❌ **禁止调用**——同上，用 `evaluate_script` 调 `wx.navigateBack()` |
+| `switch_tab` | ❌ **禁止调用**——同上，用 `evaluate_script` 调 `wx.switchTab()` |
+| `relaunch` | ❌ **禁止调用**——同上，用 `evaluate_script` 调 `wx.reLaunch()` |
+
+> **导航一律走 `evaluate_script` 执行 `wx.navigateTo/switchTab/reLaunch/navigateBack`**（见「miniprogram-automator 已知问题与绕行方案」和「中文步骤 → 实际调用映射表」）。这 4 个 MCP 导航工具的 `timeout` 参数只保护"跳转后等待页面加载"的轮询，**不保护跳转命令本身**，形同虚设。
 
 ### 脚本执行（1 个）
 
@@ -150,7 +155,7 @@ weixin-devtools-mcp 暴露的 31 个工具，按类别分组：
 
 | 工具 | 说明 |
 |------|------|
-| `screenshot` | 页面截图 |
+| `screenshot` | ⚠️ 可能永久挂起，禁用——用 `get_page_snapshot` + 页面 data 断言替代 |
 | `diagnose_connection` | 诊断连接问题 |
 | `check_environment` | 检查环境配置 |
 | `debug_page_elements` | 调试页面元素 |
@@ -194,18 +199,43 @@ await miniProgram.evaluate(() => { wx.navigateBack() });
 2. 用 `page.data` 读取页面数据，做数据断言
 3. 用开发者工具手动截图
 
-### 超时保护（强制）
+### 挂起检测与恢复（强制，实测踩坑总结）
 
-**所有 automator 调用必须加超时保护**，防止 Promise 永久挂起：
+**挂起机理（源码级证据）**：automator 的 `Connection.send` 是裸 Promise——发出带 id 的 WebSocket 消息后，只有收到回包或连接关闭才结算，**没有任何请求超时**。开发者工具端回包丢失时（导航类命令 `App.callWxMethod` 是高发点），该 Promise 永久挂起；MCP 层除 `connect_devtools`（45s）外全部裸 await，也无兜底。命令队列堵死后，**小程序一直"加载中"、模拟器手动点击无反应**——这是队列堵死的伴随现象，不是死机，只能重启开发者工具清掉堵塞的 WebSocket。
 
-```javascript
-function withTimeout(promise, ms, label) {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) => setTimeout(() => reject(new Error(label + ' 超时')), ms))
-  ]);
-}
+**挂起判定（三联症状，占其一即判定）**：
+
+| 症状 | 表现 |
+|---|---|
+| MCP 调用无返回 | 工具调用超过约 30 秒无响应（配了 per-server `timeout: 30000` 则会直接报超时错） |
+| 小程序一直加载中 | 页面长时间转圈不渲染，`get_current_page` 拿不到或 path 不变 |
+| 手动点击无反应 | 用户在模拟器上手动点击任何位置均无响应 |
+
+**恢复序列（挂起后必须执行，禁止原地重试）**：
+
 ```
+判定挂起
+  │
+  ├─ 1. 放弃当前挂起的调用（超时报错自动放弃；未配 timeout 则请用户 Esc 中断）
+  │     ⚠️ 禁止对同一操作原地重试——队列已堵死，重试调用只会再挂起一个
+  │
+  ├─ 2. 跑恢复脚本（重启开发者工具 + 重开自动化端口 + 等端口就绪）：
+  │     bash <mini-recover.sh 绝对路径> <小程序项目路径> [端口]
+  │     脚本位置（按当前技能安装位置选一）：
+  │     - 源仓库：  $CWORK_HOME/skills/test/scripts/mini-recover.sh
+  │     - 全局 Claude：~/.claude/skills/cwork-test/scripts/mini-recover.sh
+  │     - Qoder：   ~/.qoder/skills/cwork-test/scripts/mini-recover.sh
+  │
+  ├─ 3. 重连：connect_devtools({ projectPath, strategy: "connect" })
+  │
+  ├─ 4. 从当前场景的第一个步骤重跑（不从头跑全部场景）
+  │
+  └─ 5. 若恢复后再次在同一位置挂起 → 记该场景失败（原因：自动化链路不稳定），
+        跳过继续下一场景，不再二次恢复
+```
+
+**给用户的提示话术**（判定挂起时告知用户，避免误以为死机）：
+> 检测到开发者工具自动化命令挂起（小程序会一直显示加载中、点击无反应是伴随现象）。正在重启开发者工具恢复，约 30 秒，无需手动操作。
 
 ### 连接方式（智能启动 + 复用，避免重复重启 IDE）
 
@@ -218,7 +248,7 @@ function withTimeout(promise, ms, label) {
   │
   ├─ 否（IDE 未运行）→ 首次启动：
   │     cli open --project <path>
-  │     cli auto --project <path> --port 9420
+  │     cli auto --project <path> --auto-port 9420
   │     connect_devtools({ strategy: "connect" })
   │
   ├─ 是（IDE 已运行）→ 检测代码是否有改动？
@@ -230,11 +260,11 @@ function withTimeout(promise, ms, label) {
   │           disconnect_devtools()          # 断开旧连接
   │           cli close --project <path>     # 关闭项目
   │           cli open --project <path>      # 重新打开（触发重新编译）
-  │           cli auto --project <path> --port 9420
+  │           cli auto --project <path> --auto-port 9420
   │           connect_devtools({ strategy: "connect" })
   │
   └─ 连接失败（IDE 在但端口未开）→ 补开自动化端口：
-        cli auto --project <path> --port 9420
+        cli auto --project <path> --auto-port 9420
         connect_devtools({ strategy: "connect" })
 ```
 
@@ -309,7 +339,7 @@ const miniProgram = await automator.launch({
 
 **导航操作强制 evaluate 规则（新增，关键）**：
 
-所有导航操作（navigateTo/switchTab/reLaunch/navigateBack）**必须**通过 `mp.evaluate` 调用 `wx.*` API，**禁止直接调用** automator 的导航方法：
+所有导航操作（navigateTo/switchTab/reLaunch/navigateBack）**必须**通过 `mp.evaluate` 调用 `wx.*` API，**禁止直接调用** automator 的导航方法。**MCP 的 `navigate_to`/`navigate_back`/`switch_tab`/`relaunch` 四个工具同样禁止**——它们内部就是裸调 automator 导航方法，同样会挂起；走 MCP 时一律用 `evaluate_script`：
 
 ```javascript
 // ❌ 禁止：直接调用（会永久卡住）
@@ -325,7 +355,7 @@ await miniProgram.evaluate(() => { wx.reLaunch({ url: '/pages/testExp/index' }) 
 await miniProgram.evaluate(() => { wx.navigateBack() });
 ```
 
-**翻译时自动检测**：当测试步骤包含"打开页面"/"切换Tab"/"重启到"/"返回"时，自动翻译为 `mp.evaluate(() => wx.xxx(...))`，不翻译为 automator 的直接调用。
+**翻译时自动检测**：当测试步骤包含"打开页面"/"切换Tab"/"重启到"/"返回"时，自动翻译为 `mp.evaluate(() => wx.xxx(...))`（MCP 路径则翻译为 `evaluate_script`），**既不翻译为 automator 的直接调用，也不翻译为 MCP 的 `navigate_to`/`switch_tab`/`relaunch`/`navigate_back`**。
 
 ## 小程序阶段一：环境准备
 
@@ -363,7 +393,7 @@ await miniProgram.evaluate(() => { wx.navigateBack() });
    - 否（IDE 未运行）→ 首次启动：
      ```bash
      "$CLI_PATH" open --project "$PROJECT_PATH"
-     "$CLI_PATH" auto --project "$PROJECT_PATH" --port 9420
+     "$CLI_PATH" auto --project "$PROJECT_PATH" --auto-port 9420
      ```
 2. 等待项目加载完成（轮询检测，最多 30 秒）
 3. 确认自动化端口已开启
@@ -399,9 +429,10 @@ connect_devtools({
 ```
 → 获取当前页面：get_current_page()
 → 获取页面快照：get_page_snapshot()
-→ 截图：screenshot({ path: "screenshots/初始状态.png" })
 → 页面加载状态：{正常/异常}
 ```
+
+> **禁止在此调 `screenshot`**（会永久挂起，见「挂起检测与恢复」）；初始状态留证用 `get_page_snapshot` 结果即可。若 `get_current_page` 都无返回，直接按挂起走恢复序列。
 
 ## 小程序阶段二：测试规划
 
@@ -497,7 +528,7 @@ connect_devtools({
        - 验证属性：assert_attribute
        - 验证状态：assert_state
        - 等待：wait_for
-       - 截图：screenshot（注意：可能卡住，优先用 data/元素断言）
+       - 留证：get_page_snapshot + 页面 data 断言（禁止 screenshot，会挂起）
        - 执行 JS：evaluate_script
     5. 每步执行后验证结果
     6. 记录通过/失败
@@ -520,7 +551,7 @@ connect_devtools({
 ═══════════════════════════════════════════════════════════════
 
 步骤 1：打开 pages/login/login
-  → navigate_to({ path: "pages/login/login" })
+  → evaluate_script({ script: "wx.navigateTo({ url: '/pages/login/login' })" })
   → 结果：✓ 页面跳转成功
 
 步骤 2：输入手机号
@@ -597,9 +628,9 @@ connect_devtools({
 #### 页面栈管理
 
 小程序页面栈最多 10 层，测试中需注意：
-- 连续 `navigate_to` 不超过 10 次
-- 超过时用 `relaunch` 重置页面栈
-- 测试场景间用 `relaunch` 清理页面栈
+- 连续跳转（`wx.navigateTo`，走 `evaluate_script`）不超过 10 次
+- 超过时用 `wx.reLaunch` 重置页面栈
+- 测试场景间用 `wx.reLaunch` 清理页面栈
 
 #### 分包页面
 
@@ -623,9 +654,10 @@ connect_devtools({
 
 #### TabBar 页面
 
-TabBar 页面切换必须用 `switch_tab`，不能用 `navigate_to`：
-- `switch_tab({ tabName: "home" })` — 正确
-- `navigate_to({ path: "pages/index/index" })` — 错误（TabBar 页面不支持 navigateTo）
+TabBar 页面切换必须用 `wx.switchTab`（走 `evaluate_script`），不能用 `wx.navigateTo`：
+- `evaluate_script({ script: "wx.switchTab({ url: '/pages/home/index/index' })" })` — 正确
+- `evaluate_script({ script: "wx.navigateTo({ url: '/pages/index/index' })" })` — 错误（TabBar 页面不支持 navigateTo）
+- ⚠️ MCP 的 `switch_tab`/`navigate_to` 工具一律禁用（会挂起，见「挂起检测与恢复」）
 
 ### evaluate_script 高级用法
 

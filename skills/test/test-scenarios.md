@@ -39,13 +39,15 @@
 | 场景 | 测试内容 | 实现方式 |
 |------|---------|---------|
 | **页面生命周期** | onLoad 参数接收、onShow 刷新、onHide 暂停、onUnload 清理 | `evaluate_script` 检查 data 状态 |
-| **页面参数传递** | navigateTo 带 query 参数，目标页面 onLoad 接收 | `navigate_to({ path: "pages/xxx?param=val" })` |
-| **分包加载** | 首次进入分包页面的加载耗时和正确性 | `navigate_to` + `wait_for({ timeout: 10000 })` |
-| **TabBar 切换** | 5 个 Tab 页面间切换，页面状态保持 | `switch_tab` + `assert_text` |
-| **页面栈管理** | 连续 navigateTo 不超 10 层，navigateBack 正确回退 | 循环 `navigate_to` + `navigate_back` |
+| **页面参数传递** | navigateTo 带 query 参数，目标页面 onLoad 接收 | `evaluate_script` 调 `wx.navigateTo({ url: 'pages/xxx?param=val' })` |
+| **分包加载** | 首次进入分包页面的加载耗时和正确性 | `evaluate_script` 跳转 + `wait_for({ timeout: 10000 })` |
+| **TabBar 切换** | 5 个 Tab 页面间切换，页面状态保持 | `evaluate_script` 调 `wx.switchTab` + `assert_text` |
+| **页面栈管理** | 连续 navigateTo 不超 10 层，navigateBack 正确回退 | 循环 `evaluate_script` 跳转/返回 |
 | **下拉刷新** | 列表页下拉触发刷新，数据更新 | `evaluate_script` 触发 `onPullDownRefresh` |
-| **登录态依赖** | 未登录时访问需登录页面，自动跳转登录页 | `relaunch` + `evaluate_script` 清除登录态 + `navigate_to` |
+| **登录态依赖** | 未登录时访问需登录页面，自动跳转登录页 | `evaluate_script` 清除登录态 + `evaluate_script` 调 `wx.reLaunch` |
 | **网络异常处理** | 接口超时/5xx 时页面展示错误提示 | 开发者工具 Network 面板模拟 + `assert_text` |
 | **轮播图交互** | Swiper 自动播放 + 手动滑动 + 点击跳转 | `evaluate_script` 调用 `swiper.setCurrent()` |
 | **长列表滚动** | ScrollView / 列表页上拉加载更多 | `evaluate_script` 设置 `scrollTop` + `wait_for` 新数据 |
-| **web-view 页面** | 嵌套 H5 页面加载和交互 | `navigate_to` + `screenshot` 截图验证 |
+| **web-view 页面** | 嵌套 H5 页面加载和交互 | `evaluate_script` 跳转 + `get_page_snapshot` 结构断言 |
+
+> ⚠️ **禁止使用 MCP 的 `navigate_to`/`navigate_back`/`switch_tab`/`relaunch`/`screenshot` 工具**——底层裸调 automator，回包丢失会永久挂起（小程序一直加载中、点击无反应，只能重启开发者工具恢复）。导航一律 `evaluate_script` 调 `wx.*` API，留证一律 `get_page_snapshot` + data 断言，详见 mini-test.md「挂起检测与恢复」。
