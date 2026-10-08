@@ -13,7 +13,7 @@ description: 页面自动化测试，自动识别 Web/小程序项目，分别�
 
 | 项目类型 | 识别条件 | 驱动引擎 | 测试链路 |
 |---------|---------|---------|---------|
-| **微信小程序** | 存在 `project.config.json` 且含 `appid` | miniprogram-automator（MCP） | 小程序链路 |
+| **微信小程序** | 存在 `project.config.json` 且含 `appid` | miniprogram-automator（直连） | 小程序链路 |
 | **Web 应用** | 存在 `package.json`（无小程序配置） | ego-browser / page-agent | Web 链路 |
 
 ### 核心流程
@@ -228,7 +228,7 @@ elif 有失败:
 
 ```
 if 测试失败:
-    1. 诊断（Web: drainEvents + captureScreenshot + snapshotText + pageInfo; 小程序: get_page_snapshot + evaluate_script 读 data + list_console_messages；禁止网络监控工具——MCP 的会劫持 wx.request 污染业务响应，接口问题调 cwork-log 查后端）
+    1. 诊断（Web: drainEvents + captureScreenshot + snapshotText + pageInfo; 小程序: mini-run.cjs --snapshot 取页面结构 + evidence 取证；接口问题调 cwork-log 查后端）
     2. 若有后端接口失败 → 调用 cwork-log 查后端日志/链路，拿到异常堆栈 + 文件:行号
     3. 综合前后端证据定位根因：
        - 纯前端：修前端代码
@@ -256,7 +256,7 @@ if 测试失败:
 ## HARD GATE
 
 - **Web**：环境未就绪（服务未启动），禁止执行测试
-- **小程序**：微信开发者工具未安装 / project.config.json 不存在 / MCP Server 不可用，禁止执行
+- **小程序**：微信开发者工具未安装 / project.config.json 不存在 / miniprogram-automator 未安装，禁止执行
 - 测试规划未经用户确认，禁止执行
 - 所有 P0 场景必须通过才能进入 cwork-commit（唯一例外：用户明确确认「带 P0 失败提交」，见自动衔接）
 - P1/P2 场景失败可记录但不阻塞提交
