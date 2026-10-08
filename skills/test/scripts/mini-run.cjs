@@ -8,8 +8,9 @@
  * 本脚本直连 automator WebSocket，不 mock 任何 wx API，所有操作带超时看门狗。
  *
  * 用法：
- *   node mini-run.js --check                              # 探活：连接 + 当前页面
- *   node mini-run.js --plan plan.json [--out result.json]  # 跑测试计划
+ *   node mini-run.cjs --check                              # 探活：连接 + 当前页面
+ *   node mini-run.cjs --snapshot [--out snap.json]          # 快照：当前页 path + data + 可交互元素清单（供 AI 写选择器）
+ *   node mini-run.cjs --plan plan.json [--out result.json]  # 跑测试计划
  *
  * plan.json 结构（scenarios[].steps[] 按序执行）：
  * {
@@ -206,6 +207,60 @@ class Runner {
     }
   }
 
+  // 快照：当前页 path + data + 可交互元素清单（供 AI 生成 plan.json 时写准确选择器）
+  async snapshot() {
+    const page = await this.currentPage();
+    const pagePath = (page && page.path) ? await this.t(page.path, 'snapshot-path') : '';
+    let pageData = {};
+    try { pageData = await this.t(page.data(), 'snapshot-data'); } catch (_) { /* data 不可读不影响快照 */ }
+
+    const interactiveSelector = [
+      'button', 'input', 'textarea', 'navigator', 'picker',
+      'switch', 'slider', 'radio', 'checkbox', 'label[for]',
+      'image[data-src]', '[bindtap]', '[catchtap]', '[data-url]',
+    ].join(',');
+
+    let elements = [];
+    try {
+      const els = await this.t(page.$$(interactiveSelector), 'snapshot-elements');
+      if (els && els.length > 0) {
+        const limit = Math.min(els.length, 80);
+        for (let i = 0; i < limit; i++) {
+          try {
+            const el = els[i];
+            const tag = (await this.t(el.tagName(), `snapshot-tag-${i}`)) || '';
+            const text = (await this.t(el.text(), `snapshot-text-${i}`)) || '';
+            const attrs = (await this.t(el.attrs(), `snapshot-attrs-${i}`)) || {};
+            const selector = this._buildSelector(tag, attrs, text);
+            elements.push({
+              tag,
+              text: text.trim().slice(0, 60),
+              selector,
+              placeholder: attrs.placeholder || '',
+              type: attrs.type || '',
+              id: attrs.id || '',
+              className: attrs.class || '',
+            });
+          } catch (_) { /* 单个元素读取失败不影响整体 */ }
+        }
+      }
+    } catch (_) { /* 元素查询失败不阻塞快照 */ }
+
+    return { path: pagePath, data: pageData, elements };
+  }
+
+  // 从标签+属性构造 CSS 选择器（优先用 id/class，兜底用属性组合）
+  _buildSelector(tag, attrs, text) {
+    if (attrs.id) return `#${attrs.id}`;
+    if (attrs.class && typeof attrs.class === 'string') {
+      const firstClass = attrs.class.trim().split(/\s+/)[0];
+      if (firstClass && !/^\d/.test(firstClass)) return `${tag}.${firstClass}`;
+    }
+    if (attrs.placeholder) return `${tag}[placeholder*="${attrs.placeholder.slice(0, 10)}"]`;
+    if (attrs['data-url']) return `${tag}[data-url]`;
+    return tag;
+  }
+
   // 失败取证：当前页面 path + data dump（不用 screenshot，会挂起）
   async evidence() {
     try {
@@ -225,9 +280,10 @@ async function main() {
   const planFile = args.includes('--plan') ? args[args.indexOf('--plan') + 1] : null;
   const outFile = args.includes('--out') ? args[args.indexOf('--out') + 1] : null;
   const checkOnly = args.includes('--check');
+  const snapshotMode = args.includes('--snapshot');
 
-  if (!planFile && !checkOnly) {
-    console.error('用法：node mini-run.js --check | node mini-run.js --plan plan.json [--out result.json]');
+  if (!planFile && !checkOnly && !snapshotMode) {
+    console.error('用法：node mini-run.cjs --check | --snapshot [--out snap.json] | --plan plan.json [--out result.json]');
     process.exit(1);
   }
 
@@ -250,6 +306,15 @@ async function main() {
       const page = await withTimeout(mp.currentPage(), 10000, '获取当前页面');
       const p = (page && page.path) ? await withTimeout(page.path, 5000, '读取path') : '(空)';
       console.log(`✓ 探活成功：automator 可用，当前页面 ${p}`);
+      return;
+    }
+
+    if (snapshotMode) {
+      const runner = new Runner(mp, stepTimeoutMs);
+      const snap = await runner.snapshot();
+      if (outFile) fs.writeFileSync(outFile, JSON.stringify(snap, null, 2), 'utf8');
+      console.log(`✓ 快照完成：${snap.path}，${snap.elements.length} 个可交互元素${outFile ? `，已存 ${outFile}` : ''}`);
+      console.log('SNAPSHOT_JSON=' + JSON.stringify(snap));
       return;
     }
 
