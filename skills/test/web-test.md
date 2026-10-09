@@ -265,31 +265,96 @@ agent.execute("确认页面已正常加载，没有报错弹窗")
 
 所有操作通过 `ego-browser nodejs <<'EOF' ... EOF` heredoc 执行。
 
-**⚠️ heredoc 粒度硬约束（关键，避免开新页签）**：
+**🚨🚨🚨 heredoc 粒度硬约束（最高优先级，违反将导致登录态丢失）🚨🚨🚨**
 
-- **同一测试场景的所有步骤必须在同一个 heredoc 内执行**，禁止步骤级拆分 heredoc
-- **不同测试场景也在同一个 heredoc 内**，场景间用 `gotoAndWait(url)` 在同一 tab 内导航
-- 整个测试会话 = 一个 heredoc，tab 状态自然连续，`openOrReuseTab` 能正确复用
-- **禁止每个步骤开一个 heredoc**：跨 heredoc 时 tab 状态丢失，`openOrReuseTab` 无法复用，会反复开新页签，严重损耗性能
+**核心原则：整个测试会话 = 一个 heredoc，禁止拆分**
 
-**正确做法**（场景级单 heredoc）：
+**为什么必须一个 heredoc？**
+- 每个 `ego-browser nodejs <<'EOF'` 是独立进程，进程结束后 tab 引用和浏览上下文丢失
+- 下一个 heredoc 无法感知上一个进程的 tab，`openOrReuseTab` 会新开标签页
+- 新标签页没有之前的 cookie/session，**导致登录态丢失，页面跳转到登录页**
+
+**强制约束（必须遵守）**：
+
+1. **整个测试会话的所有场景、所有步骤，必须写在同一个 heredoc 内**
+2. **首个场景用 `openOrReuseTab`（整个会话只调用一次）**
+3. **后续所有场景用 `gotoAndWait` 在同一 tab 内导航（禁止再次调用 `openOrReuseTab`）**
+4. **最后才调用 `completeTaskSpace`（所有场景完成后）**
+5. **禁止任何形式的 heredoc 拆分**：不按步骤拆、不按场景拆、不按页面拆
+
+**执行前审查（强制，违反则拒绝执行）**：
+
+在生成 heredoc 代码后、执行前，必须自查：
+
+```javascript
+// ✅ 自查清单（全部满足才能执行）
+[ ] 整个测试代码只有一个 `ego-browser nodejs <<'EOF'` 开头
+[ ] 只有一个 `useOrCreateTaskSpace` 或 `claimTaskSpace` 调用
+[ ] 只有一个 `openOrReuseTab` 调用（在开头）
+[ ] 所有后续场景都用 `gotoAndWait` 导航
+[ ] 只有一个 `completeTaskSpace` 调用（在结尾）
+[ ] 没有中间出现的 `EOF` 和新的 `ego-browser nodejs <<'EOF'`
+```
+
+**违反示例（绝对禁止）**：
+
 ```bash
+# ❌ 错误 1：按步骤拆分 heredoc（会导致登录态丢失）
+ego-browser nodejs <<'EOF'
+await openOrReuseTab('http://localhost:3000/login')
+EOF
+
+ego-browser nodejs <<'EOF'  # ← 新进程，tab 状态丢失
+await fillInput('input[name="username"]', 'test')
+EOF
+
+# ❌ 错误 2：按场景拆分 heredoc（会导致登录态丢失）
+ego-browser nodejs <<'EOF'
+await openOrReuseTab('http://localhost:3000/login')
+// 场景 1：登录
+EOF
+
+ego-browser nodejs <<'EOF'  # ← 新进程，tab 状态丢失
+// 场景 2：列表页
+await openOrReuseTab('http://localhost:3000/dashboard')  # ← 又开新 tab
+EOF
+
+# ❌ 错误 3：多次调用 openOrReuseTab（会开新页签）
+ego-browser nodejs <<'EOF'
+await openOrReuseTab('http://localhost:3000/login')
+// ...
+await openOrReuseTab('http://localhost:3000/dashboard')  # ← 开新 tab，登录态丢失
+EOF
+```
+
+**正确做法（整个会话一个 heredoc）**：
+
+```bash
+# ✅ 正确：所有场景在一个 heredoc 内
 ego-browser nodejs <<'EOF'
 const task = await useOrCreateTaskSpace('cwork-test-{key}')
 
-// 场景1：用户登录
+// 会话首次打开（唯一一次 openOrReuseTab）
 await openOrReuseTab('http://localhost:3000/login', { wait: true, timeout: 20 })
+
+// 场景1：用户登录
 await fillInput('input[name="username"]', 'testuser')
+await fillInput('input[name="password"]', 'password123')
 await click('button[type="submit"]', { label: '点击登录' })
 await waitForLoad()
-// ...验证...
+// ...验证登录成功...
 
 // 场景2：数据列表（同一 tab 内导航，不开新页签）
 await gotoAndWait('http://localhost:3000/dashboard')
 await waitForNetworkIdle()
-// ...验证...
+// ...验证列表数据...
 
-// 全部完成
+// 场景3：表单提交（继续用 gotoAndWait）
+await gotoAndWait('http://localhost:3000/form')
+await waitForLoad()
+// ...填写表单并提交...
+
+// 全部场景完成后，才关闭任务空间
 await completeTaskSpace(task.id, { keep: false })
 EOF
 ```
