@@ -10,26 +10,17 @@
 
 1. 存在前端工程（含 `package.json`）
 2. 有可用的启动命令（`dev`/`start`/`serve`）
-3. ego-browser 已安装 **或** page-agent 可用（备选）
+3. ego-browser 已安装
 
-### ego-browser 依赖（主引擎）
+### ego-browser 依赖（唯一引擎）
 
-**ego-browser** 是本技能的核心驱动引擎，基于 Chromium 提供真实浏览器控制能力。
+**ego-browser** 是本技能的唯一驱动引擎，基于 Chromium 提供真实浏览器控制能力。
 
 - **安装检测**：`command -v ego-browser`（通常位于 `~/.local/bin/ego-browser`）
 - **CLI 用法**：`ego-browser nodejs <<'EOF' ... EOF` heredoc 方式
-- **任务空间**：隔离浏览上下文，继承用户登录态，场景间互不干扰
+- **任务空间**：隔离浏览上下文，进程结束会话销毁，**登录态不跨任务空间保留**（详见「登录会话硬约束」）
 - **三种工作流**：语义（snapshotText + refs）、视觉（截图 + 坐标）、DOM/CDP（js/cdp）
 - **首次安装**：若 `ego-browser` 不可用，参考 ego-browser 技能的 `references/install.md` 安装 ego lite 浏览器
-
-### page-agent 依赖（备选引擎）
-
-当 ego-browser 不可用时，降级到 **page-agent** 驱动。
-
-- **NPM 安装**：`npm install page-agent`，然后 `import { PageAgent } from 'page-agent'`
-- **CDN 注入**：`<script src="https://cdn.jsdelivr.net/npm/page-agent@1.12.2/dist/iife/page-agent.demo.js"></script>`
-- **模型配置**：PageAgent 需要 LLM API 配置（model / baseURL / apiKey）
-- **语言设置**：`language: 'zh-CN'`
 
 ### 自动检测
 
@@ -46,55 +37,157 @@ if [ -f "package.json" ]; then
 fi
 
 # 检测引擎可用性
-if command -v ego-browser &>/dev/null; then
-    ENGINE="ego-browser"
-else
-    ENGINE="page-agent"
+if ! command -v ego-browser &>/dev/null; then
+    echo "❌ ego-browser 未安装，请先安装"
+    exit 1
 fi
 ```
 
-## 引擎选择
+---
 
-### 检测逻辑
+## 执行模型：Plan + Executor
 
-优先使用 ego-browser，不可用时回退到 page-agent：
+### 核心架构
 
-| 引擎 | 检测条件 | 特点 |
-|------|---------|------|
-| **ego-browser**（主） | `command -v ego-browser` 成功 | 精确 API 调用、三种工作流、任务空间隔离、截图验证、继承登录态 |
-| **page-agent**（备） | ego-browser 不可用 | 自然语言驱动、LLM 理解指令、无任务空间、无截图 |
+Web 测试采用 **"AI 生成计划 → 执行器确定性执行"** 模型，解决传统 AI 写 heredoc 的不稳定问题：
 
-### 引擎差异
+```
+┌─────────────────┐
+│  AI（你）        │  分析需求 → 生成 plan.json（声明式测试计划）
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  web-run.cjs    │  读取 plan.json → 生成 ego-browser heredoc → 执行
+│  （执行器）      │  确定性断言（数据/布局/样式/API）直接判定
+│                  │  aiAssert 标记点暂停，输出上下文供 AI 判断
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  AI（你）        │  读取 aiAssert 上下文（截图+DOM）→ 判断 → 写回结果
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  web-run.cjs    │  读取 AI 判断结果 → 继续执行剩余步骤
+└─────────────────┘
+```
 
-| 能力 | ego-browser | page-agent |
-|------|------------|------------|
-| 操作方式 | 精确 API（click/fillInput/js） | 自然语言（agent.execute） |
-| 页面观察 | snapshotText() 语义树 + captureScreenshot() 截图 | LLM 自行理解页面 |
-| 断言方式 | js() 精确提取 + snapshotText 文本匹配 | agent.execute("检查...") |
-| 截图验证 | ✅ captureScreenshot() | ❌ |
-| 任务空间隔离 | ✅ 每个测试会话独立空间 | ❌ |
-| 登录态继承 | ✅ 继承用户浏览器登录态 | ❌ 需脚本登录 |
-| 用户接管 | ✅ handOffTaskSpace / takeOverTaskSpace | ❌ |
-| DOM/CDP 操作 | ✅ js() / cdp() | ❌ |
+### 为什么这样设计
 
-## 中文步骤翻译表（Web）
+| 问题 | 传统方式（AI 写 heredoc） | 新方式（Plan + Executor） |
+|------|------------------------|------------------------|
+| **准确性** | AI 解读 snapshotText 含糊，断言不精确 | 结构化断言（assertText/assertStyle/assertApi），精确匹配 |
+| **稳定性** | 每次 AI 生成不同代码，行为不一致 | 同一 plan.json 每次执行相同，结果可复现 |
+| **速度** | AI 每次都要生成 heredoc 代码，慢 | 执行器直接读 plan.json，快 |
+| **API 验证** | 完全缺失，只看页面文本 | 拦截 fetch/XHR，验证接口返回值 |
+| **AI 参与** | AI 全程写代码，但判断不精准 | AI 只在 aiAssert 点介入（视觉/语义判断），其他交给确定性断言 |
 
-agent 根据此表将中文测试步骤翻译为 ego-browser API 调用：
+### 执行器脚本
 
-| 中文测试步骤模式 | ego-browser 操作序列 | 工作流 |
-|---|---|---|
-| 打开 {URL} | 首个场景：`openOrReuseTab(url, {wait:true})`；后续场景：`gotoAndWait(url)` | 语义 |
-| 点击 {元素描述} | `snapshotText()` → 找到匹配的 ref → `click('@N')` | 语义 |
-| 在 {输入框} 中输入 {文本} | `snapshotText()` → 找到匹配的 ref → `fillInput('@N', text)` | 语义 |
-| 按下 {键名} | `pressKey(key)` | 语义 |
-| 确认/验证 {预期文本} | `snapshotText()` → 检查输出是否包含预期文本 | 语义 |
-| 验证页面显示 {视觉特征} | `captureScreenshot()` → 检查截图 | 视觉 |
-| 等待页面加载完成 | `waitForLoad()` 或 `waitForNetworkIdle()` | 语义 |
-| 等待 {元素} 出现 | `waitForElement(selector)` | 语义 |
-| 滚动到页面底部 | `scrollToBottomUntil(() => true)` | 语义 |
-| 上传文件 {路径} | `uploadFile(selector, path)` | 语义 |
-| 需要用户操作（登录/验证码） | `handOffTaskSpace()` → 等待确认 → `takeOverTaskSpace()` | 控制交接 |
-| 提取页面数据/断言 | `js(...)` IIFE | DOM/CDP |
+**位置**：`skills/test/scripts/web-run.cjs`
+
+**三种执行模式**：
+
+| 模式 | 命令 | 用途 |
+|------|------|------|
+| **完整流程** | `node web-run.cjs --plan plan.json` | 默认：collect → AI 判断 → run（推荐） |
+| **仅收集** | `node web-run.cjs --plan plan.json --collect` | 只执行到 aiAssert 点，收集上下文，不判断 |
+| **仅执行** | `node web-run.cjs --plan plan.json --run` | 使用预计算的 AI 判断结果执行（跳过 collect） |
+
+**输出文件**：
+
+| 文件 | 说明 |
+|------|------|
+| `result.json` | 测试结果（通过/失败/跳过，含截图路径） |
+| `ai-contexts/ai-assert-{场景}-{步骤}.json` | aiAssert 上下文（截图路径 + DOM 快照 + 判断标准） |
+| `ai-results.json` | AI 判断结果（完整流程模式下自动生成） |
+
+---
+
+## 测试会话硬约束（强制）
+
+> 实战根因：plan-A 靠用户手动登录保活的会话才"碰巧"跑通（AI 感知不到该会话，不可复现）；plan 里的 `fill #login_name` 一直无效（该 id 在真实登录页不存在），每步无效操作触发等待/超时——这是测试慢 + 全场景失败的直接来源。
+
+### 四条铁律
+
+1. **场景 1 必须是真实登录**（被测页面无需登录时除外）：
+   - ego 任务空间是隔离浏览上下文，进程结束会话销毁，登录态不跨任务空间保留
+   - **禁止依赖外部手动登录的会话**——那是不可复现的偶然条件，AI 无法感知其存在与有效期
+   - 测试会话的第一个 UI 场景必须完成完整登录流程，后续场景在同一 tab（`gotoAndWait`）内共享该登录态
+
+2. **登录选择器必须来自真实快照**：
+   - 生成 plan.json 前，先用 ego-browser 打开登录页 `snapshotText()` 拿真实结构
+   - 选择器只能来自快照实测（id / class / name / 文本），**禁止凭记忆或猜测编写**（如 `#login_name` 这类实际不存在的 id）
+   - 登录页若有"协议勾选" checkbox，plan 中必须包含勾选步骤（先 click checkbox 再点登录），否则登录无效
+
+3. **选择器首次无效立即重取快照**：
+   - fill/click 无效（元素不存在/超时）时，立即 `snapshotText()` 重取真实结构、修正选择器后重新生成 plan
+   - **禁止同一无效选择器反复重试**——每次无效重试 = 白等一次 `stepTimeoutMs`（15s），是测试时长爆炸的主要来源
+
+4. **回归测试禁止复用历史 plan.json（强制）**：
+   - 每次测试（含回归）都必须重新 `snapshotText()` 快照 → 重新生成 plan.json，**禁止直接跑上次提交的 plan**
+   - 为什么：复用旧 plan 存在「软失效」漏报——页面改版后旧选择器仍可能匹配到语义已变的元素（僵尸 class 未删、列表 index 错位、同名 class 被复用），断言照样通过但没测到真东西，**绿色但失真**
+   - 选择器来自当前真实页面是测试真实性的唯一来源，AI 每页一次快照决策的成本不省
+   - 某步骤选择器失效重快照时，**该场景整个 plan 重新生成**，不只修单个选择器（页面结构变了，其他步骤的选择器可能也站在软失效边缘）
+
+### 交互稳定性硬约束（强制）
+
+> 实战根因（OMJF-19293 占位单清单处理测试）：场景 A 的错误弹框未关闭，残留弹框与新确认框在快照中叠层，ref 错位导致点到旧弹框按钮，误判"请求已发出"，多轮查 MySQL/日志才实锤第二次请求根本没发出——约一半调试轮次浪费在弹框叠层上。
+
+5. **弹框生命周期（弹框即断言即关闭）**：
+   - 出现任何弹框（确认框/成功/错误提示）→ 断言内容 → **立即点关闭/确认 → snapshot 验证页面回到无弹框状态** → 才允许下一步操作
+   - **禁止在弹框叠加状态下点击任何按钮**——快照里同时出现两个弹框的文案 = 必须清场重来（关闭全部弹框 + 快照验证），不允许接着点
+   - **禁止跨弹框复用 ref**——每次点击前以最新快照为准；残留弹框按钮的 ref 与新弹框相邻时极易点错
+
+6. **captureScreenshot 返回值判据**：
+   - 返回值是**文件路径**（如 `/var/folders/.../ego-browser-shot-N.png`），直接 Read 该路径
+   - 非 `/` 开头的输出 = 异常/空截图，立即重截，**禁止当 base64 写文件**（写出来只有几十字节）
+
+7. **选择器歧义处理**：
+   - `text=` 仅用于唯一精确文本节点；matched > 1 时立即改用快照 ref 或限定容器的 CSS 选择器（如 `.ykc-table :text("清单处理")`），**禁止在歧义结果上猜 index**
+   - 表格操作列/列表行内按钮优先用「容器 + 文本」或快照 ref，不用全局 `text=`
+
+8. **提交类操作后先验证请求发出**：
+   - 点击提交/确认/删除类按钮后，先验证请求确实发出（performance entries / 网络拦截 / 组件状态变化），再核对页面文案
+   - **禁止只看页面弹框文案判断操作是否生效**——残留弹框的文案是旧的，会骗人（文案在、请求没发）
+
+9. **JS 绕过准则（页面自身 bug 时）**：
+   - 页面既有 bug 导致正常 UI 前置条件走不通时（如组件初始化 `radioType={}` 导致表单校验必失败），允许用 JS 调组件方法/直接赋值**造前置状态**
+   - 被测功能链路本身必须走真实 UI 操作，**禁止 JS 直接调接口替代被测操作**
+   - 测试报告必须记录：绕过原因（页面 bug 现象）、绕过方式、影响范围（该前置条件的 UI 交互未覆盖）
+
+### 探索套路与止损极值（防卡死，通用强制）
+
+> 实战根因（OMJF-18923 UAT，2026-10-16）：勾选框点不动 → 换姿势盲试 3+ 轮、轮间零观察；实际操作已生效却没验证状态 → 误判失败继续折腾。任何页面的陌生组件都可能触发同类卡死——必须按套路探索、按极值止损。
+
+**探索套路（操作不生效时的标准循环，每轮必须「观察 → 操作 → 验证」闭环）**：
+
+1. **操作后必须验证效果**：每次 fill/click 后用断言/截图/URL 确认状态变化，**未验证的操作不算完成**——这是防止"实际成功了却继续折腾"的唯一手段
+2. **无效 → 先观察再换方式**：captureScreenshot + 抓目标元素真实 DOM（outerHTML / 事件绑定方式）；本地有前端工程时直接查组件源码找事件绑定——这是最准路径，快过任何盲试
+3. **通道升级顺序**（每升一级前必须有一次观察）：快照 ref / CSS 选择器 → JS 合成 click → 容器/父级点击 → `clickCdp` 真实鼠标坐标 → 查组件源码 → JS 绕过造前置状态（铁律 9）
+
+**止损极值（三层，防无限折腾）**：
+
+| 层级 | 极值 | 触发后动作 |
+|------|------|-----------|
+| 单目标 | 同一元素 3 次操作（含换通道）仍无效 | 停手，输出卡点报告（截图 + DOM + 已试方式），该步骤标 BLOCKED，继续后续步骤 |
+| 单场景 | 场景含 BLOCKED 步骤 / 失败重试 2 次 | 场景失败收场，跳下一场景，禁止无限诊断 |
+| 全局 | totalBudgetMs 预算到点 | 停止全部执行，输出已完成结果 + 阻塞清单，等人工介入 |
+
+**禁止**：无观察的连续重试、同一通道反复重试、在未验证上一操作效果的状态下继续下一步。
+
+### 登录 SOP（最高频卡点，强制）
+
+> 实战根因（OMJF-18923 UAT 验证，2026-10-16）：协议勾选框 JS click 后 class 不变 → AI 换姿势盲试 3+ 轮；实际其中一次 CDP 点击已勾选且登录成功，但 AI 未验证 URL，误判"还在登录页"继续折腾——登录环节白耗 10+ 轮，整个测试被阻塞。
+
+1. **登录成功唯一判据 = `pageInfo()` 验证 URL 已离开登录页**（出现系统主界面路由/右上角用户信息）。**禁止**用"checkbox class 是否变化"判断勾选态——自定义组件点击后 class 不一定变，也不反映登录结果
+2. **点击无效果 → 先诊断再动手，禁止换姿势盲试**：点击后页面状态无变化时，第一动作是 `captureScreenshot()` + 抓目标元素真实 DOM/事件绑定，搞清"为什么没生效"再操作。`click icon → click 父级 → CDP` 式连环换姿势 = 乱操作，**每次换操作方式之前必须有一次观察**（截图或 DOM 检查），零观察的连续重试禁止
+3. **YKC 系登录页已知结论**（写 plan / 现场操作直接采用，不重新试错）：协议勾选框是自定义 Vue 组件，JS 合成 click 不触发状态变更，**用 `clickCdp`（真实鼠标坐标）点击勾选框**，随后点击登录按钮，最后 `pageInfo()` 验证 URL 跳转
+4. **风控/验证码预案**：弹验证码输入框 → 填测试验证码（UAT 通常 666666）后提交；弹"登录地址发生变化"类风控提示但主界面已可见 → 判定登录成功，在报告中记录说明
+
+---
 
 ## Web 阶段一：环境准备
 
@@ -115,62 +208,21 @@ agent 根据此表将中文测试步骤翻译为 ego-browser API 调用：
 2. 等待服务就绪（轮询检测端口可用）
 3. 记录服务地址（默认 `http://localhost:3000`，端口冲突时自动递增）
 
-### 步骤 2：初始化浏览器引擎
-
-**ego-browser 模式（主）：**
-
-> ⚠️ 环境准备 + 全部测试场景写在**同一个 heredoc** 里执行（见下方"heredoc 粒度硬约束"），此处仅为说明拆解。
+### 步骤 2：检测 ego-browser
 
 ```bash
-ego-browser nodejs <<'EOF'
-// 创建任务空间（整个测试会话复用）
-const task = await useOrCreateTaskSpace('cwork-test-{需求key}')
-cliLog('任务空间 ID：' + task.id)
+if ! command -v ego-browser &>/dev/null; then
+    echo "❌ ego-browser 未安装"
+    echo "安装方式：参考 ego-browser 技能的 references/install.md"
+    exit 1
+fi
 
-// 打开初始页面（整个会话唯一一次 openOrReuseTab）
-await openOrReuseTab('{URL}', { wait: true, timeout: 20 })
-
-// 确认页面可访问
-const snap = await snapshotText()
-cliLog('页面加载状态：' + (snap.length > 0 ? '正常' : '异常'))
-
-// ...后续所有测试场景在此 heredoc 内继续，场景间用 gotoAndWait 导航...
-EOF
+echo "✓ ego-browser 可用：$(command -v ego-browser)"
 ```
 
-**page-agent 模式（备）：**
+---
 
-```javascript
-import { PageAgent } from 'page-agent'
-// 或 CDN 注入
-const agent = new PageAgent({
-    model: '当前使用的模型',
-    baseURL: '模型 API 地址',
-    apiKey: 'API Key',
-    language: 'zh-CN',
-})
-```
-
-### 步骤 3：确认页面可访问
-
-**ego-browser**（同上面步骤 2 的 heredoc 内继续，不新开）：
-
-```bash
-# 仍在同一个 heredoc 内，紧接步骤 2 的代码：
-const info = await pageInfo()
-const snap = await snapshotText()
-const hasError = snap.includes('Error') || snap.includes('报错') || info.w === 0
-cliLog('页面状态：' + (hasError ? '异常' : '正常'))
-cliLog('URL：' + info.url + ' 标题：' + info.title)
-```
-
-**page-agent：**
-
-```
-agent.execute("确认页面已正常加载，没有报错弹窗")
-```
-
-## Web 阶段二：测试规划
+## Web 阶段二：测试规划（生成 plan.json）
 
 ### 测试场景来源
 
@@ -181,415 +233,375 @@ agent.execute("确认页面已正常加载，没有报错弹窗")
 | `analysis.md` | 业务功能点、用户操作流程 |
 | `plan.md` | 实现的功能清单、页面列表 |
 | `changes.md` | 改动点、新增功能 |
-| `design-system.md` / `DESIGN.md` | UI 预期表现 |
+| `design-system.md` / `DESIGN.md` | UI 预期表现（样式/布局/交互） |
 
-### 测试场景格式
+### plan.json 结构
 
-```markdown
-## 测试场景：{场景名称}
+```json
+{
+  "baseUrl": "http://localhost:3000",
+  "taskSpaceName": "cwork-test-{需求key}",
+  "stepTimeoutMs": 15000,
+  "totalBudgetMs": 600000,
 
-**前置条件**：{描述}
-**工作流类型**：语义 / 视觉 / DOM-CDP
-**测试步骤**：
-1. 打开 {页面URL}
-2. 点击 {元素描述}
-3. 在 {输入框} 中输入 "{文本}"
-4. 确认 {预期结果}
+  "apiTests": [
+    {
+      "name": "用户登录接口",
+      "priority": "P0",
+      "request": {
+        "url": "/api/user/login",
+        "method": "POST",
+        "headers": { "Content-Type": "application/json" },
+        "body": { "username": "testuser", "password": "password123" }
+      },
+      "assertions": [
+        { "type": "status", "expected": 200 },
+        { "type": "jsonPath", "path": "$.token", "assert": "exists" },
+        { "type": "jsonPath", "path": "$.user.level", "expected": "NORMAL" }
+      ]
+    }
+  ],
 
-**预期结果**：{详细描述}
-**优先级**：P0/P1/P2
+  "uiTests": {
+    "scenarios": [
+      {
+        "name": "用户登录",
+        "priority": "P0",
+        "steps": [
+          { "action": "navigate", "url": "/login" },
+          { "action": "waitForNetworkIdle" },
+          { "action": "fill", "selector": "input[name='username']", "value": "testuser" },
+          { "action": "fill", "selector": "input[name='password']", "value": "password123" },
+          { "action": "click", "selector": "button[type='submit']" },
+          { "action": "waitForNavigation" },
+          { "action": "assertText", "selector": "h1", "contains": "欢迎" },
+          { "action": "assertVisible", "selector": ".user-avatar" },
+          { "action": "aiAssert", "criteria": "页面显示用户头像和欢迎信息，布局正常", "screenshot": true }
+        ]
+      }
+    ]
+  },
+
+  "e2eTests": [
+    {
+      "name": "完整下单流程",
+      "priority": "P1",
+      "scenarios": ["用户登录", "浏览商品", "加入购物车", "提交订单"]
+    }
+  ]
+}
 ```
 
-### 工作流类型标注
+### 断言类型详解
 
-每个测试场景需标注工作流类型，决定执行策略：
+#### UI 测试断言（uiTests.scenarios[].steps[]）
 
-| 工作流 | 适用页面 | 核心操作 | 示例 |
-|--------|---------|---------|------|
-| **语义**（默认） | 表单、列表、按钮、表格等标准 DOM 页面 | `snapshotText()` + `@N` ref + `click`/`fillInput` | 登录、表单提交、列表翻页 |
-| **视觉** | Canvas、拖拽、富文本编辑器、视觉密集页面 | `captureScreenshot()` + 坐标点击 + `typeText`/`pressKey` | 拖拽排序、画布操作、富文本编辑 |
-| **DOM/CDP** | 数据提取、自定义断言、网络拦截 | `js()` IIFE / `cdp()` | 读取 localStorage、断言 DOM 状态、拦截网络 |
+| action | 说明 | 参数 | 示例 |
+|--------|------|------|------|
+| `navigate` | 导航到页面 | `url` | `{"action": "navigate", "url": "/login"}` |
+| `waitForNetworkIdle` | 等待网络空闲 | 无 | `{"action": "waitForNetworkIdle"}` |
+| `waitForNavigation` | 等待页面跳转 | 无 | `{"action": "waitForNavigation"}` |
+| `click` | 点击元素 | `selector`, `index?` | `{"action": "click", "selector": "button.submit"}` |
+| `fill` | 填充输入框 | `selector`, `value` | `{"action": "fill", "selector": "input[name='user']", "value": "test"}` |
+| `assertVisible` | 元素可见 | `selector` | `{"action": "assertVisible", "selector": ".user-avatar"}` |
+| `assertText` | 文本匹配 | `selector`, `contains`/`exact`/`regex` | `{"action": "assertText", "selector": "h1", "contains": "欢迎"}` |
+| `assertCount` | 元素数量 | `selector`, `count`/`min`/`max` | `{"action": "assertCount", "selector": ".item", "min": 5}` |
+| `assertStyle` | 样式检查 | `selector`, `property`, `expected` | `{"action": "assertStyle", "selector": ".btn", "property": "background-color", "expected": "rgb(255, 0, 0)"}` |
+| `assertLayout` | 布局检查 | `selector`, `position?`, `size?` | `{"action": "assertLayout", "selector": ".header", "position": {top: 0}}` |
+| `assertApi` | API 响应断言 | `urlPattern`, `status?`, `body?` | `{"action": "assertApi", "urlPattern": "/api/user", "status": 200}` |
+| `assertDataConsistency` | 数据一致性 | `apiPath`, `uiSelector`, `transform?` | `{"action": "assertDataConsistency", "apiPath": "$.user.name", "uiSelector": ".username"}` |
+| `aiAssert` | AI 判断 | `criteria`, `screenshot?` | `{"action": "aiAssert", "criteria": "页面布局正常，无错位", "screenshot": true}` |
+| `responsive` | 响应式测试 | `viewports`, `assertions` | `{"action": "responsive", "viewports": [[375,667],[1920,1080]], "assertions": [...]}` |
+| `openDatePicker` | 打开 el-date-picker 日历面板（JS 合成事件派发 focus/mousedown/click，实测唯一稳定通道） | `selector`, `index?`（同 selector 多框时按 querySelectorAll 索引取第 N 个） | `{"action": "openDatePicker", "selector": "input[placeholder='选择时间']", "index": 0}` |
+| `clickCdp` | CDP 真实鼠标坐标点击（mousePressed/Released，坐标经 Runtime.evaluate 求值） | `selector`, `index?` | `{"action": "clickCdp", "selector": ".el-picker-panel td"}` |
 
-**工作流选择决策树：**
+#### element-ui 组件自动化坑（强制，写 plan 前必读）
 
-```
-页面有标准 DOM 元素（表单/按钮/列表）？
-  ├─ 是 → 页面有 Canvas 或富文本编辑器？
-  │        ├─ 是 → 视觉工作流
-  │        └─ 否 → 语义工作流（默认）
-  └─ 否 → 需要提取数据或做自定义断言？
-           ├─ 是 → DOM/CDP 工作流
-           └─ 否 → 视觉工作流
-```
+1. **el-date-picker 面板打开**：合成 click 与 CDP 真实鼠标点击都**打不开**面板（focus 不落地）。必须用 `openDatePicker` action。面板打开后，面板内部元素（日期格 td、上一年/上一月按钮、确定按钮）用普通 `click` 即可（标准 @click 监听）。
+2. **确定按钮真实 class**：本项目 element-ui 版本确定按钮是 `plain + size mini`，**没有** `el-button--primary`！正确 selector：`.el-picker-panel__footer button.is-plain`（「此刻」按钮是 `type:"text"` → `el-button--text`）。
+3. **YKCDateInterval 等区间组件**（`:editable="false"`）：input readonly，`fill` **永不生效**，只能 `openDatePicker` + 面板点击。时间框真实 placeholder 通常是「选择时间」（不是「开始日期/结束日期」），写 plan 前必须用 `assertCount` 实测确认。
+4. **面板步进 selector**（element-ui 标准）：上一年 `.el-date-picker__prev-btn.el-icon-d-arrow-left`、上一月 `.el-date-picker__prev-btn.el-icon-arrow-left`（class token 精确匹配，不会互串）、日期格 `.el-date-table tr:nth-child(N) td:nth-child(M)`（第一列为周日）、确定 `.el-picker-panel__footer button.is-plain`。
+5. **同 selector 多个输入框**：用 `index` 字段取第 N 个（如页面 4 个「选择时间」框：0/1=开始充电组、2/3=结束充电组，按渲染顺序）。
+6. **列表页筛选区默认收起**（YKC OMP 系页面只显 3 项）：先 `click .ykc-search-arrow` 展开再操作深部筛选控件，否则 v-show 隐藏元素全部 Element not found。
+7. **多 tab 会话**：登录态不跨任务空间——新 taskSpaceName 必须自带登录场景。
 
-> 工作流可在执行中切换：若语义工作流 `snapshotText()` 返回的 ref 不足以操作目标元素，自动切换到视觉工作流。
+#### API 测试断言（apiTests[].assertions[]）
 
-### 自动生成测试场景
+| type | 说明 | 参数 | 示例 |
+|------|------|------|------|
+| `status` | HTTP 状态码 | `expected` | `{"type": "status", "expected": 200}` |
+| `jsonPath` | JSON 路径断言 | `path`, `expected?`/`assert?` | `{"type": "jsonPath", "path": "$.token", "assert": "exists"}` |
+| `header` | 响应头断言 | `name`, `expected` | `{"type": "header", "name": "content-type", "expected": "application/json"}` |
+| `responseTime` | 响应时间 | `maxMs` | `{"type": "responseTime", "maxMs": 500}` |
 
-分析需求文档后，自动生成测试场景并向用户确认：
+### AI 生成 plan.json 的原则
+
+1. **精确断言优先**：能用 `assertText`/`assertStyle`/`assertApi` 的，不用 `aiAssert`
+2. **aiAssert 用于视觉/语义判断**：布局是否正常、颜色是否协调、文案是否合适等主观判断
+3. **API 测试独立**：接口逻辑测试放在 `apiTests`，不依赖 UI
+4. **场景间独立**：每个 scenario 可独立执行，不依赖前一个场景的状态
+5. **选择器优先级**：`[data-testid]` > `id` > `class` > 文本内容 > XPath
+6. **选择器先实测后生成（强制）**：生成 plan.json 前必须 snapshotText() 拿真实页面结构，基于实测结构写选择器，含登录场景的真实选择器与协议勾选步骤（见「登录会话硬约束」）
+
+### 自动生成 plan.json
+
+分析需求文档后，自动生成 plan.json 并向用户确认：
 
 ```
 ═══════════════════════════════════════════════════════════════
-【测试规划】生成测试场景
+【测试规划】生成 plan.json
 ═══════════════════════════════════════════════════════════════
 
-根据需求分析，生成以下测试场景：
+根据需求分析，生成以下测试计划：
 
-场景 1（P0·语义）：用户登录
-  → 打开 /login
-  → 输入用户名和密码
-  → 点击登录按钮
-  → 验证跳转到首页
+API 测试（2 个）：
+  1. [P0] 用户登录接口 — POST /api/user/login
+  2. [P0] 查询用户信息接口 — GET /api/user/info
 
-场景 2（P0·语义）：数据列表展示
-  → 打开 /dashboard
-  → 验证列表数据加载
-  → 验证分页功能
+UI 测试（3 个场景）：
+  1. [P0] 用户登录
+     → 导航到 /login
+     → 输入用户名密码
+     → 点击登录
+     → 验证跳转 + 欢迎文本（assertText）
+     → 验证布局正常（aiAssert）
 
-场景 3（P1·视觉）：拖拽排序
-  → 打开 /kanban
-  → 拖拽卡片到新位置
-  → 验证排序结果
+  2. [P0] 数据列表展示
+     → 导航到 /dashboard
+     → 验证列表加载（assertCount ≥ 1）
+     → 验证 API 返回数据与页面一致（assertDataConsistency）
 
-场景 4（P1·DOM-CDP）：表单数据校验
-  → 打开 /form
-  → 填写并提交表单
-  → 验证 localStorage 中数据正确
+  3. [P1] 表单提交
+     → 导航到 /form
+     → 填写表单
+     → 提交
+     → 验证 API 调用成功（assertApi）
+     → 验证成功提示（assertText）
 
-共 4 个场景，是否开始执行？
+E2E 测试（1 个）：
+  1. [P1] 完整下单流程 — 登录 → 浏览 → 加购 → 下单
+
+plan.json 已生成：docs/requirements/{key}/plan.json
+是否开始执行？
 ```
+
+---
 
 ## Web 阶段三：测试执行
 
-### ego-browser 执行模式
+### 执行流程
 
-所有操作通过 `ego-browser nodejs <<'EOF' ... EOF` heredoc 执行。
+```bash
+cd skills/test/scripts
 
-**🚨🚨🚨 heredoc 粒度硬约束（最高优先级，违反将导致登录态丢失）🚨🚨🚨**
+# 完整流程（推荐）：collect → AI 判断 → run
+node web-run.cjs --plan ../../../docs/requirements/{key}/plan.json --out ../../../docs/requirements/{key}/result.json
 
-**核心原则：整个测试会话 = 一个 heredoc，禁止拆分**
+# 或分步执行：
+# 步骤 1：收集 aiAssert 上下文
+node web-run.cjs --plan ../../../docs/requirements/{key}/plan.json --collect
 
-**为什么必须一个 heredoc？**
+# 步骤 2：AI 判断 aiAssert 上下文
+# （读取 ai-contexts/*.json，写 ai-results.json）
+
+# 步骤 3：使用 AI 结果执行
+node web-run.cjs --plan ../../../docs/requirements/{key}/plan.json --run
+```
+
+### 执行器内部流程
+
+web-run.cjs 内部自动生成 ego-browser heredoc 并执行：
+
+```
+1. 读取 plan.json
+2. 生成 ego-browser heredoc 代码：
+   - 创建任务空间：useOrCreateTaskSpace(taskSpaceName)
+   - 打开初始页面：openOrReuseTab(baseUrl)（整个会话唯一一次）
+   - 注入网络拦截器（monkey-patch fetch/XHR）
+   - 执行 apiTests（直接 HTTP 请求，不走浏览器）
+   - 执行 uiTests.scenarios：
+     - 场景间导航：gotoAndWait(url)（同一 tab 内，不开新页签）
+     - 执行 steps（按 action 类型生成对应代码）
+     - aiAssert 点：
+       - collect 模式：截图 + snapshotText → 写 ai-contexts/*.json → 输出 AI_INTERVENTION_NEEDED 标记
+       - run 模式：读 ai-results.json → 使用预计算结果
+     - 失败时：截图 + 收集诊断信息 → 输出 FAILURE 标记
+   - 关闭任务空间：completeTaskSpace(taskId)
+3. 执行 heredoc（spawn ego-browser）
+4. 解析输出，生成 result.json
+```
+
+### heredoc 粒度约束（已自动化）
+
+**⚠️ 重要**：web-run.cjs 内部已保证整个测试会话在一个 heredoc 内执行，AI 无需手动管理。
+
+**约束内容**（web-run.cjs 自动遵守）：
+1. 整个测试会话只有一个 `ego-browser nodejs <<'EOF'` 开头
+2. 只有一个 `useOrCreateTaskSpace` 调用
+3. 只有一个 `openOrReuseTab` 调用（在开头）
+4. 所有后续场景用 `gotoAndWait` 导航
+5. 只有一个 `completeTaskSpace` 调用（在结尾）
+
+**为什么必须一个 heredoc**：
 - 每个 `ego-browser nodejs <<'EOF'` 是独立进程，进程结束后 tab 引用和浏览上下文丢失
 - 下一个 heredoc 无法感知上一个进程的 tab，`openOrReuseTab` 会新开标签页
 - 新标签页没有之前的 cookie/session，**导致登录态丢失，页面跳转到登录页**
 
-**强制约束（必须遵守）**：
+### AI 介入 aiAssert（完整流程模式）
 
-1. **整个测试会话的所有场景、所有步骤，必须写在同一个 heredoc 内**
-2. **首个场景用 `openOrReuseTab`（整个会话只调用一次）**
-3. **后续所有场景用 `gotoAndWait` 在同一 tab 内导航（禁止再次调用 `openOrReuseTab`）**
-4. **最后才调用 `completeTaskSpace`（所有场景完成后）**
-5. **禁止任何形式的 heredoc 拆分**：不按步骤拆、不按场景拆、不按页面拆
+当 web-run.cjs 输出 `AI_INTERVENTION_NEEDED` 标记时：
 
-**执行前审查（强制，违反则拒绝执行）**：
+```
+═══════════════════════════════════════════════════════════════
+【AI 介入】aiAssert 判断点
+═══════════════════════════════════════════════════════════════
 
-在生成 heredoc 代码后、执行前，必须自查：
+场景：用户登录
+步骤：aiAssert — 验证页面布局正常
+上下文文件：ai-contexts/ai-assert-0-6.json
 
-```javascript
-// ✅ 自查清单（全部满足才能执行）
-[ ] 整个测试代码只有一个 `ego-browser nodejs <<'EOF'` 开头
-[ ] 只有一个 `useOrCreateTaskSpace` 或 `claimTaskSpace` 调用
-[ ] 只有一个 `openOrReuseTab` 调用（在开头）
-[ ] 所有后续场景都用 `gotoAndWait` 导航
-[ ] 只有一个 `completeTaskSpace` 调用（在结尾）
-[ ] 没有中间出现的 `EOF` 和新的 `ego-browser nodejs <<'EOF'`
+请读取上下文文件并判断：
+- 截图路径：/tmp/cwork-test/screenshots/ai-assert-0-6.png
+- DOM 快照：（见上下文文件）
+- 判断标准："页面显示用户头像和欢迎信息，布局正常，无错位"
+
+判断结果写入：ai-results.json
+格式：{"scenarioIndex": 0, "stepIndex": 6, "pass": true, "reason": "页面布局正常，头像和欢迎信息均显示"}
 ```
 
-**违反示例（绝对禁止）**：
+**AI 操作步骤**：
 
 ```bash
-# ❌ 错误 1：按步骤拆分 heredoc（会导致登录态丢失）
-ego-browser nodejs <<'EOF'
-await openOrReuseTab('http://localhost:3000/login')
-EOF
+# 1. 读取上下文
+cat docs/requirements/{key}/ai-contexts/ai-assert-0-6.json
 
-ego-browser nodejs <<'EOF'  # ← 新进程，tab 状态丢失
-await fillInput('input[name="username"]', 'test')
-EOF
+# 2. 查看截图
+open /tmp/cwork-test/screenshots/ai-assert-0-6.png
 
-# ❌ 错误 2：按场景拆分 heredoc（会导致登录态丢失）
-ego-browser nodejs <<'EOF'
-await openOrReuseTab('http://localhost:3000/login')
-// 场景 1：登录
-EOF
-
-ego-browser nodejs <<'EOF'  # ← 新进程，tab 状态丢失
-// 场景 2：列表页
-await openOrReuseTab('http://localhost:3000/dashboard')  # ← 又开新 tab
-EOF
-
-# ❌ 错误 3：多次调用 openOrReuseTab（会开新页签）
-ego-browser nodejs <<'EOF'
-await openOrReuseTab('http://localhost:3000/login')
-// ...
-await openOrReuseTab('http://localhost:3000/dashboard')  # ← 开新 tab，登录态丢失
-EOF
-```
-
-**正确做法（整个会话一个 heredoc）**：
-
-```bash
-# ✅ 正确：所有场景在一个 heredoc 内
-ego-browser nodejs <<'EOF'
-const task = await useOrCreateTaskSpace('cwork-test-{key}')
-
-// 会话首次打开（唯一一次 openOrReuseTab）
-await openOrReuseTab('http://localhost:3000/login', { wait: true, timeout: 20 })
-
-// 场景1：用户登录
-await fillInput('input[name="username"]', 'testuser')
-await fillInput('input[name="password"]', 'password123')
-await click('button[type="submit"]', { label: '点击登录' })
-await waitForLoad()
-// ...验证登录成功...
-
-// 场景2：数据列表（同一 tab 内导航，不开新页签）
-await gotoAndWait('http://localhost:3000/dashboard')
-await waitForNetworkIdle()
-// ...验证列表数据...
-
-// 场景3：表单提交（继续用 gotoAndWait）
-await gotoAndWait('http://localhost:3000/form')
-await waitForLoad()
-// ...填写表单并提交...
-
-// 全部场景完成后，才关闭任务空间
-await completeTaskSpace(task.id, { keep: false })
-EOF
-```
-
-**错误做法**（步骤级 heredoc，会开新页签）：
-```bash
-# ❌ 每个步骤一个 heredoc → 跨进程 tab 状态丢失 → openOrReuseTab 每次开新 tab
-ego-browser nodejs <<'EOF'
-const task = await useOrCreateTaskSpace('cwork-test-{key}')
-await openOrReuseTab('http://localhost:3000/login', { wait: true })
-EOF
-
-ego-browser nodejs <<'EOF'
-const task = await useOrCreateTaskSpace('cwork-test-{key}')
-await fillInput('input[name="username"]', 'testuser')  # ← 新进程，不知道上一步的 tab
-EOF
-```
-
-#### 语义工作流示例（表单操作）
-
-> 以下示例均默认嵌在**会话级单 heredoc** 内：`openOrReuseTab` 只在整个会话开头调用一次，后续场景用 `gotoAndWait` 同 tab 导航。
-
-```bash
-ego-browser nodejs <<'EOF'
-const task = await useOrCreateTaskSpace('cwork-test-{需求key}')
-
-// 会话首次打开（唯一一次 openOrReuseTab，其后场景全部用 gotoAndWait）
-await openOrReuseTab('http://localhost:3000/login', { wait: true, timeout: 20 })
-
-// 观察页面结构，获取 ref
-const snap1 = await snapshotText()
-cliLog('页面结构：' + snap1.substring(0, 300))
-
-// 填写用户名（通过选择器或 ref）
-await fillInput('input[name="username"]', 'testuser')
-
-// 填写密码
-await fillInput('input[name="password"]', 'password123')
-
-// 点击登录按钮
-await click('button[type="submit"]', { label: '点击登录' })
-
-// 等待页面跳转
-await waitForLoad()
-
-// 验证结果
-const info = await pageInfo()
-const snap2 = await snapshotText()
-const success = info.url.includes('/dashboard') || snap2.includes('欢迎')
-cliLog('登录验证：' + (success ? '✓ 通过' : '✗ 失败'))
-cliLog('当前URL：' + info.url)
-EOF
-```
-
-#### 视觉工作流示例（拖拽/Canvas 操作）
-
-```bash
-ego-browser nodejs <<'EOF'
-const task = await useOrCreateTaskSpace('cwork-test-{需求key}')
-// 场景间导航（同一 tab 内，不开新页签）
-await gotoAndWait('http://localhost:3000/kanban')
-
-// 截图观察当前布局
-const screenshot1 = await captureScreenshot()
-cliLog('初始布局截图：' + screenshot1)
-
-// 通过坐标执行拖拽
-await dragMouse([[120, 200], [350, 200]], { label: '拖拽卡片' })
-
-// 等待动画完成
-await wait(1)
-
-// 截图验证拖拽结果
-const screenshot2 = await captureScreenshot()
-cliLog('拖拽后截图：' + screenshot2)
-EOF
-```
-
-#### DOM/CDP 工作流示例（数据提取与断言）
-
-```bash
-ego-browser nodejs <<'EOF'
-const task = await useOrCreateTaskSpace('cwork-test-{需求key}')
-// 场景间导航（同一 tab 内，不开新页签）
-await gotoAndWait('http://localhost:3000/dashboard')
-
-// 等待数据加载
-await waitForNetworkIdle()
-
-// 提取列表数据
-const data = await js(String.raw`(() => {
-  const rows = document.querySelectorAll('table tbody tr')
-  return {
-    rowCount: rows.length,
-    firstRow: rows[0] ? rows[0].innerText : null,
-    hasData: rows.length > 0
-  }
-})()`)
-cliLog('列表数据：' + JSON.stringify(data))
-cliLog('数据加载验证：' + (data.hasData ? '✓ 通过' : '✗ 失败'))
-
-// 检查 localStorage
-const storage = await js(String.raw`(() => {
-  return JSON.stringify(Object.keys(localStorage).reduce((acc, k) => {
-    acc[k] = localStorage.getItem(k); return acc
-  }, {}))
-})()`)
-cliLog('localStorage：' + storage)
-EOF
-```
-
-#### 控制交接示例（登录/验证码）
-
-当测试遇到需要用户手动操作的场景（登录、验证码、二次确认等）：
-
-```bash
-ego-browser nodejs <<'EOF'
-const task = await useOrCreateTaskSpace('cwork-test-{需求key}')
-// 已在会话内（tab 已存在），用 gotoAndWait 导航到登录页，不开新页签
-await gotoAndWait('http://localhost:3000/login')
-
-// 尝试自动操作
-await fillInput('input[name="username"]', 'testuser')
-await fillInput('input[name="password"]', 'password123')
-await click('button[type="submit"]', { label: '点击登录' })
-await wait(2)
-
-// 检查是否出现验证码
-const snap = await snapshotText()
-if (snap.includes('验证码') || snap.includes('captcha')) {
-  // 将控制权交给用户
-  const result = await handOffTaskSpace(task.id)
-  cliLog('已交接控制权，请用户完成验证码操作')
-  cliLog('交接结果：' + JSON.stringify(result))
-} else {
-  const info = await pageInfo()
-  cliLog('自动登录成功，URL：' + info.url)
+# 3. 判断并写结果
+cat > docs/requirements/{key}/ai-results.json <<'EOF'
+{
+  "0-6": {"pass": true, "reason": "页面布局正常，头像和欢迎信息均显示"}
 }
 EOF
+
+# 4. 继续执行（web-run.cjs 会自动读取 ai-results.json）
 ```
 
-用户完成操作后，用 `takeOverTaskSpace` 恢复：
+### 执行输出格式
 
-```bash
-ego-browser nodejs <<'EOF'
-// 恢复控制权（注意：用 takeOverTaskSpace 而非 useOrCreateTaskSpace）
-const task = await takeOverTaskSpace('cwork-test-{需求key}')
-const info = await pageInfo()
-const snap = await snapshotText()
-const success = info.url.includes('/dashboard') || snap.includes('欢迎')
-cliLog('用户操作后验证：' + (success ? '✓ 通过' : '✗ 失败'))
-EOF
+```
+═══════════════════════════════════════════════════════════════
+【测试执行·Web】场景 1/3：用户登录
+═══════════════════════════════════════════════════════════════
+
+步骤 1：导航到 /login
+  → 结果：✓ 页面加载成功
+
+步骤 2：等待网络空闲
+  → 结果：✓ 网络空闲
+
+步骤 3：填充 input[name='username'] ← "testuser"
+  → 结果：✓ 输入成功
+
+步骤 4：填充 input[name='password'] ← "password123"
+  → 结果：✓ 输入成功
+
+步骤 5：点击 button[type='submit']
+  → 结果：✓ 点击成功
+
+步骤 6：等待页面跳转
+  → 结果：✓ 跳转成功
+
+步骤 7：assertText — h1 包含 "欢迎"
+  → 结果：✓ 文本匹配
+
+步骤 8：assertVisible — .user-avatar
+  → 结果：✓ 元素可见
+
+步骤 9：aiAssert — 页面布局正常
+  → [AI 介入] 上下文已收集，等待 AI 判断...
+  → AI 判断结果：✓ 通过（页面布局正常）
+
+场景 1 结果：✓ 通过（9/9 步骤）
 ```
 
-#### 失败诊断（Web）
+### 失败处理
 
-步骤失败时，收集前端诊断信息 + **抓取网络请求**（判断是否后端接口问题）：
+```
+步骤 7：assertText — h1 包含 "欢迎"
+  → 结果：✗ 失败
+  → 实际文本："登录失败，请重试"
+  → 截图：screenshots/场景1-步骤7-fail.png
 
-```bash
-ego-browser nodejs <<'EOF'
-const task = await useOrCreateTaskSpace('cwork-test-{需求key}')
+  诊断：
+  → 当前 URL：/login
+  → 网络请求：POST /api/user/login 返回 401
+  → 可能原因：密码错误
 
-// ① 先排空页面累积的网络事件（关键：抓接口调用结果）
-const events = await drainEvents()
-cliLog('--- 失败诊断（前端） ---')
-
-// ② 页面基本信息
-const info = await pageInfo()
-const snap = await snapshotText()
-const screenshot = await captureScreenshot()
-cliLog('当前URL：' + info.url)
-cliLog('页面标题：' + info.title)
-cliLog('截图路径：' + screenshot)
-cliLog('页面快照（前500字符）：' + snap.substring(0, 500))
-
-// ③ 从事件中提取网络请求，标记失败的接口（非 2xx / 报错 / 超时）
-const requests = (events || [])
-  .filter(e => e.type === 'network' || e.request || e.response || e.url)
-  .map(e => ({
-    url: e.request?.url || e.url || '',
-    method: e.request?.method || e.method || '',
-    status: e.response?.status || e.status || '',
-    failed: e.failed || e.errorText || (e.response?.status >= 400),
-    resourceType: e.resourceType || e.type || ''
-  }))
-const failedReq = requests.filter(r => r.failed || r.status === '' || (r.status && r.status >= 400))
-cliLog('网络请求总数：' + requests.length)
-cliLog('失败/异常请求：' + JSON.stringify(failedReq, null, 2))
-
-// ④ 提取可见交互元素（帮助诊断"元素未找到"问题）
-const elements = await js(String.raw`(() => {
-  return [...document.querySelectorAll('button, [role="button"], a, input, select, textarea')]
-    .map(el => ({
-      tag: el.tagName,
-      text: el.innerText?.substring(0, 50) || '',
-      type: el.type || '',
-      name: el.name || '',
-      placeholder: el.placeholder || ''
-    }))
-    .filter(e => e.text || e.name || e.placeholder)
-})()`)
-cliLog('可见交互元素：' + JSON.stringify(elements))
-
-// ⑤ 提取页面 JS 报错（控制台 error）
-const consoleErrors = await js(String.raw`(() => {
-  return (window.__cworkErrors__ || []).slice(-10)
-})()`)
-cliLog('页面 JS 报错：' + JSON.stringify(consoleErrors))
-EOF
+  处理：
+  → 标记场景失败，继续执行下一个场景
+  → 记录到 result.json
 ```
 
-> **关键判断**：若 `失败/异常请求` 列表非空（有接口 4xx/5xx/超时/跨域），或 `页面 JS 报错` 含网络相关异常，说明问题大概率在后端或接口层 → 进入下方"前后端联合诊断"调用 cwork-log 查后端日志。
+---
+
+## Web 阶段四：失败诊断
+
+### 前端诊断（自动收集）
+
+步骤失败时，web-run.cjs 自动收集以下诊断信息：
+
+```json
+{
+  "failedStep": {
+    "scenario": "用户登录",
+    "stepIndex": 7,
+    "action": "assertText",
+    "selector": "h1",
+    "expected": "欢迎",
+    "actual": "登录失败，请重试"
+  },
+  "pageInfo": {
+    "url": "http://localhost:3000/login",
+    "title": "登录页"
+  },
+  "screenshot": "screenshots/场景1-步骤7-fail.png",
+  "networkRequests": [
+    {
+      "url": "/api/user/login",
+      "method": "POST",
+      "status": 401,
+      "responseBody": {"error": "密码错误"}
+    }
+  ],
+  "consoleErrors": []
+}
+```
 
 ### 前后端联合诊断（联动 cwork-log / cwork-config）
 
-当失败诊断显示**后端接口异常**或**疑似配置问题**时，单看前端无法定位根因，需调用相关技能。
+当失败诊断显示**后端接口异常**（4xx/5xx/超时）或**疑似配置问题**时，调用相关技能。
 
-#### 自动联动机制（新增，关键）
+#### 自动联动机制
 
 **失败诊断后自动检查是否需要联动，无需人工判断：**
 
 ```javascript
-// 失败诊断时自动执行
-const events = await drainEvents();
-const failedRequests = events
-  .filter(e => e.type === 'network' || e.request || e.response)
-  .filter(e => e.failed || e.errorText || (e.response?.status >= 400));
+// 从 result.json 中提取失败步骤的网络请求
+const failedRequests = result.scenarios
+  .flatMap(s => s.steps)
+  .filter(step => !step.ok)
+  .flatMap(step => step.networkRequests || [])
+  .filter(req => req.status >= 400 || req.failed);
 
 if (failedRequests.length > 0) {
   // 自动联动 cwork-log
   console.log('【自动联动】检测到后端接口失败，调用 cwork-log');
   for (const req of failedRequests) {
-    const traceId = req.response?.headers?.['x-trace-id'] || req.response?.headers?.['trace-id'];
-    const url = req.request?.url || req.url;
-    const status = req.response?.status;
+    const traceId = req.responseHeaders?.['x-trace-id'] || req.responseHeaders?.['trace-id'];
+    const url = req.url;
+    const status = req.status;
     console.log(`  → 接口：${url}，状态：${status}，traceId：${traceId}`);
   }
   // 触发 cwork-log 查询（见下方调用示例）
@@ -604,23 +616,20 @@ if (failedRequests.length > 0) {
 ```
 测试步骤失败
   │
-  ├─ 抓取网络请求（drainEvents）
+  ├─ 从 result.json 提取网络请求
   │
   ├─ 是否有后端接口失败（4xx/5xx/超时）？
-  │    ├─ 否 → 纯前端问题：查截图 + 可见元素 + JS 报错 → 修前端代码
+  │    ├─ 否 → 纯前端问题：查截图 + 选择器 + 文本 → 修前端代码
   │    │
   │    └─ 是 → 调用 cwork-log 查后端：
-	  │            1. 从失败请求取 traceId（若有）/ 接口路径 / 时间戳 / 服务名
-	  │            2. cwork-log 自动域感知路由（覆盖 16 域：CTP/Device/EMP/ZDL/DMP/OSP/IOP/银行/OMP/出站/MQ等）
-	  │            3. sls_query.sh logs <logstore> 搜日志（logstore 已自动选择）
-	  │            4. arms_trace.sh 还原链路，找耗时点/异常点
-	  │            5. 判断：前端传参错？后端逻辑错？下游依赖超时？
+  │            1. 从失败请求取 traceId（若有）/ 接口路径 / 时间戳 / 服务名
+  │            2. cwork-log 自动域感知路由（覆盖 16 域）
+  │            3. sls_query.sh logs <logstore> 搜日志
+  │            4. arms_trace.sh 还原链路，找耗时点/异常点
+  │            5. 判断：前端传参错？后端逻辑错？下游依赖超时？
   │
-  └─ 是否疑似配置问题（开关未生效/阈值不对/行为与预期不符）？
-       └─ 是 → 调用 cwork-config 查 Nacos 配置：
-                1. 定 env + 服务名
-                2. nacos_query.sh get/search 查配置真值
-                3. 配置 ↔ 现象对应，定位根因
+  └─ 是否疑似配置问题（开关未生效/阈值不对）？
+       └─ 是 → 调用 cwork-config 查 Nacos 配置
 ```
 
 #### 调用 cwork-log 的场景
@@ -648,7 +657,7 @@ bash scripts/arms_trace.sh "<pid>" "<traceId>" <ts_ms>
 bash scripts/sls_query.sh <env> logs all "order/submit and ERROR" 100
 ```
 
-> **traceId 来源**：ego-browser 抓到的失败请求响应头里常有 `x-trace-id` / `trace-id`；或在响应体 / 页面日志的 `trace` 字段。拿到后直接喂 `arms_trace.sh` 还原完整链路。
+> **traceId 来源**：result.json 的 `networkRequests[].responseHeaders['x-trace-id']`。拿到后直接喂 `arms_trace.sh` 还原完整链路。
 
 #### 诊断结论输出
 
@@ -657,7 +666,7 @@ bash scripts/sls_query.sh <env> logs all "order/submit and ERROR" 100
 【失败诊断】场景 3·表单提交
 ═══════════════════════════════════════════════════════════════
 
-前端证据：
+前端证据（来自 result.json）：
 - 接口 POST /api/order/submit 返回 500
 - traceId: abc123def456
 - 截图：screenshots/场景3-步骤3-fail.png
@@ -674,142 +683,24 @@ bash scripts/sls_query.sh <env> logs all "order/submit and ERROR" 100
 
 > **联动原则**：cwork-test 负责"发现问题并定位到前后端哪一侧"，cwork-log 负责"深挖后端根因"。前端代码问题直接修；后端问题把日志证据带回来，定位到具体文件:行号再修。
 
-### page-agent 执行模式（备选）
+---
 
-当 ego-browser 不可用时，使用 page-agent 自然语言驱动：
+## 输出文件
 
-```javascript
-const agent = new PageAgent({
-    model: '当前使用的模型',
-    baseURL: '模型 API 地址',
-    apiKey: 'API Key',
-    language: 'zh-CN',
-})
-
-await agent.execute('点击登录按钮')
-await agent.execute('在用户名输入框中输入 "testuser"')
-await agent.execute('在密码输入框中输入 "password123"')
-await agent.execute('点击提交按钮')
-const result = await agent.execute('检查页面是否显示"欢迎"或用户头像')
-```
-
-### Web 执行流程
-
-```
-整个测试会话在一个 heredoc 内执行：
-
-1. 创建任务空间：useOrCreateTaskSpace('cwork-test-{key}')
-2. 首个场景：openOrReuseTab(url) 打开唯一标签页
-3. 对于每个测试场景：
-    a. 输出当前场景名称
-    b. 场景间导航：gotoAndWait(url)（同一 tab 内，不开新页签）
-    c. 等待页面加载：waitForLoad() 或 waitForNetworkIdle()
-    d. 根据工作流类型执行步骤：
-       - 语义：snapshotText() → click('@N') / fillInput('@N', text)
-       - 视觉：captureScreenshot() → click([x,y]) / typeText(text)
-       - DOM/CDP：js(...) / cdp(...)
-    e. 每步执行后验证结果
-    f. 记录通过/失败
-    g. 失败时：
-       - captureScreenshot() 截图
-       - drainEvents() 抓网络请求 + snapshotText() 收集前端诊断
-       - 若有后端接口失败 → 调用 cwork-log 查后端日志/链路（见"前后端联合诊断"）
-       - 综合前后端证据定位根因 → 尝试自动修复并重试（最多 3 次）
-    h. 遇到"用户控制中"错误：
-       - handOffTaskSpace() 交接控制权
-       - 等待用户确认
-       - takeOverTaskSpace() 恢复控制权
-
-全部场景完成后：
-    completeTaskSpace(task.id, { keep: false })
-```
-
-### Web 执行输出格式
-
-**ego-browser 模式：**
-
-```
-═══════════════════════════════════════════════════════════════
-【测试执行·Web】场景 1/3·语义：用户登录
-═══════════════════════════════════════════════════════════════
-
-步骤 1：打开 /login
-  → ego-browser: gotoAndWait('http://localhost:3000/login')
-  → 结果：✓ 页面加载成功
-
-步骤 2：输入用户名
-  → ego-browser: fillInput('input[name="username"]', 'testuser')
-  → 结果：✓ 输入成功
-
-步骤 3：输入密码
-  → ego-browser: fillInput('input[name="password"]', 'password123')
-  → 结果：✓ 输入成功
-
-步骤 4：点击登录
-  → ego-browser: click('button[type="submit"]')
-  → 结果：✓ 按钮点击成功
-
-步骤 5：验证跳转
-  → ego-browser: pageInfo() → url 包含 /dashboard
-  → 结果：✓ 验证通过
-
-场景 1 结果：✓ 通过（5/5 步骤）
-```
-
-**page-agent 模式：**
-
-```
-═══════════════════════════════════════════════════════════════
-【测试执行·Web】场景 1/3：用户登录
-═══════════════════════════════════════════════════════════════
-
-步骤 1：打开 /login
-  → page-agent: "导航到登录页面"
-  → 结果：✓ 页面加载成功
-
-步骤 2：输入用户名
-  → page-agent: "在用户名输入框输入 testuser"
-  → 结果：✓ 输入成功
-
-场景 1 结果：✓ 通过（5/5 步骤）
-```
-
-### Web 失败处理
-
-**ego-browser 模式：**
-
-```
-步骤 4：点击登录
-  → ego-browser: click('button[type="submit"]')
-  → 结果：✗ 元素未找到
-
-  诊断：
-  → 截图：screenshots/场景1-步骤4-fail.png
-  → 当前 URL：/login
-  → 可见按钮：["注册", "忘记密码"]
-  → 可见输入框：[{"tag":"INPUT","name":"username"}, {"tag":"INPUT","name":"password"}]
-  → 可能原因：提交按钮选择器不匹配
-
-  处理：
-  → 尝试替代选择器：click('button.login-btn')
-  → 重试结果：✓ 找到并点击成功
-```
-
-**page-agent 模式：**
-
-```
-步骤 4：点击登录
-  → page-agent: "点击登录按钮"
-  → 结果：✗ 按钮未找到
-
-  诊断：
-  → 页面当前 URL：/login
-  → 页面可见按钮：["注册", "忘记密码"]
-  → 可能原因：登录按钮文字与预期不符
-
-  处理：
-  → 尝试替代指令："点击包含'登录'文字的按钮"
-  → 重试结果：✓ 找到并点击成功
-```
+| 文件 | 说明 | 提交 |
+|------|------|------|
+| `plan.json` | 测试计划（声明式） | 提交 |
+| `result.json` | 测试结果（含截图路径） | 提交 |
+| `ai-results.json` | AI 判断结果（aiAssert） | 提交 |
+| `ai-contexts/` | aiAssert 上下文（截图+DOM） | 不提交 |
+| `screenshots/` | 截图证据 | 提交 |
 
 ---
+
+## 自动衔接
+
+1. **写测试报告**：无论通过/失败，均生成 `test-report.md`（含截图证据）
+2. **有失败场景**：询问用户"测试有失败场景，是否调起 cwork-bug 进行代码修复？"
+   - 用户确认 → 进入 cwork-bug 修复 → 修复后重新执行失败场景 → 全部通过 → 进入 cwork-commit
+   - 用户跳过 → 直接进入 cwork-commit
+3. **全部通过**：询问用户是否调起 commit 技能进行代码提交，经用户确认后再进入 commit
