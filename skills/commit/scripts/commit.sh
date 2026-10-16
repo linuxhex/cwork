@@ -55,25 +55,39 @@ check_branch() {
   fi
 }
 
-# 推送防护：显式推到 origin/<当前分支>，禁止裸 git push（裸 push 走 upstream，upstream 错时会把特性代码推到 master 等错误分支）
+# 探测远端名：优先 origin；不存在（如仓库远端叫 origin-ali）取第一个远端
+detect_remote() {
+  local repo="$1"
+  if git -C "$repo" remote | grep -qx 'origin'; then
+    echo 'origin'
+  else
+    git -C "$repo" remote | head -1
+  fi
+}
+
+# 推送防护：显式推到 <远端>/<当前分支>，禁止裸 git push（裸 push 走 upstream，upstream 错时会把特性代码推到 master 等错误分支）
 # - upstream 指向别的分支 → 阻断推送，提示修正
-# - 无 upstream（新分支首次推送）→ push -u origin <当前分支>，建立正确关联
+# - 无 upstream（新分支首次推送）→ push -u <远端> <当前分支>，建立正确关联
 push_current_branch() {
   local repo="$1"
   local branch
   branch=$(git -C "$repo" branch --show-current)
   [[ -n "$branch" ]] || fail "detached HEAD，无法推送: $repo"
 
+  local remote
+  remote=$(detect_remote "$repo")
+  [[ -n "$remote" ]] || fail "推送中止: $repo 没有配置任何远端"
+
   local upstream
   upstream=$(git -C "$repo" rev-parse --abbrev-ref --symbolic-full-name @{upstream} 2>/dev/null || true)
-  if [[ -n "$upstream" && "$upstream" != "origin/$branch" ]]; then
-    fail "推送中止: $repo 当前分支 $branch 的 upstream 是 $upstream（非同名远端分支）。先执行 git branch --set-upstream-to=origin/$branch $branch 修正后再推送"
+  if [[ -n "$upstream" && "$upstream" != "$remote/$branch" ]]; then
+    fail "推送中止: $repo 当前分支 $branch 的 upstream 是 $upstream（非 $remote 下同名远端分支）。先执行 git branch --set-upstream-to=$remote/$branch $branch 修正后再推送"
   fi
 
   if [[ -z "$upstream" ]]; then
-    git -C "$repo" push -u origin "$branch" >/dev/null 2>&1 || fail "推送失败: $repo (origin/$branch)"
+    git -C "$repo" push -u "$remote" "$branch" >/dev/null 2>&1 || fail "推送失败: $repo ($remote/$branch)"
   else
-    git -C "$repo" push origin "$branch" >/dev/null 2>&1 || fail "推送失败: $repo (origin/$branch)"
+    git -C "$repo" push "$remote" "$branch" >/dev/null 2>&1 || fail "推送失败: $repo ($remote/$branch)"
   fi
 }
 

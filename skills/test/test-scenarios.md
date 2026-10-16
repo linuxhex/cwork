@@ -34,20 +34,23 @@
 | **优惠券** | pages/user/coupon/index | 打开优惠券 | 优惠券列表 + 状态筛选 |
 | **充电记录** | pages/user/card/consume-records/index | 打开消费记录 | 记录列表 + 时间筛选 |
 
-## 小程序特有测试场景
+## 小程序特有测试场景（plan 动作映射）
 
-| 场景 | 测试内容 | 实现方式 |
-|------|---------|---------|
-| **页面生命周期** | onLoad 参数接收、onShow 刷新、onHide 暂停、onUnload 清理 | `evaluate_script` 检查 data 状态 |
-| **页面参数传递** | navigateTo 带 query 参数，目标页面 onLoad 接收 | `evaluate_script` 调 `wx.navigateTo({ url: 'pages/xxx?param=val' })` |
-| **分包加载** | 首次进入分包页面的加载耗时和正确性 | `evaluate_script` 跳转 + `wait_for({ timeout: 10000 })` |
-| **TabBar 切换** | 5 个 Tab 页面间切换，页面状态保持 | `evaluate_script` 调 `wx.switchTab` + `assert_text` |
-| **页面栈管理** | 连续 navigateTo 不超 10 层，navigateBack 正确回退 | 循环 `evaluate_script` 跳转/返回 |
-| **下拉刷新** | 列表页下拉触发刷新，数据更新 | `evaluate_script` 触发 `onPullDownRefresh` |
-| **登录态依赖** | 未登录时访问需登录页面，自动跳转登录页 | `evaluate_script` 清除登录态 + `evaluate_script` 调 `wx.reLaunch` |
-| **网络异常处理** | 接口超时/5xx 时页面展示错误提示 | 开发者工具 Network 面板模拟 + `assert_text` |
-| **轮播图交互** | Swiper 自动播放 + 手动滑动 + 点击跳转 | `evaluate_script` 调用 `swiper.setCurrent()` |
-| **长列表滚动** | ScrollView / 列表页上拉加载更多 | `evaluate_script` 设置 `scrollTop` + `wait_for` 新数据 |
-| **web-view 页面** | 嵌套 H5 页面加载和交互 | `evaluate_script` 跳转 + `get_page_snapshot` 结构断言 |
+> 「plan 写法」列使用 mini-run.cjs 的 plan.json 动作词汇（navigate/back/click/input/callMethod/setData/evaluate/wait/expectPage/expectData/expectText/expectElement），选择器必须来自 `--snapshot` 实测。
 
-> ⚠️ **禁止使用 MCP 的 `navigate_to`/`navigate_back`/`switch_tab`/`relaunch`/`screenshot` 工具**——底层裸调 automator，回包丢失会永久挂起（小程序一直加载中、点击无反应，只能重启开发者工具恢复）。导航一律 `evaluate_script` 调 `wx.*` API，留证一律 `get_page_snapshot` + data 断言，详见 mini-test.md「挂起检测与恢复」。
+| 场景 | 测试内容 | plan 写法 |
+|------|---------|----------|
+| **页面生命周期** | onLoad 参数接收、onShow 刷新、onHide 暂停、onUnload 清理 | `evaluate`（返回页面 data 状态）+ `expectData` 断言 |
+| **页面参数传递** | navigateTo 带 query 参数，目标页面 onLoad 接收 | `navigate`（url 带 `?param=val`）+ `expectData` 断言接收值 |
+| **分包加载** | 首次进入分包页面的加载耗时和正确性 | `navigate` + `wait 5000` + `expectPage` |
+| **TabBar 切换** | 5 个 Tab 页面间切换，页面状态保持 | `navigate` `type:"switchTab"` + `expectPage`（TabBar 页必须 switchTab） |
+| **页面栈管理** | 连续 navigateTo 不超 10 层，navigateBack 正确回退 | 循环 `navigate` + `back` + `expectPage` 验证回退目标 |
+| **下拉刷新** | 列表页下拉触发刷新，数据更新 | `callMethod`（`{"method":"onPullDownRefresh"}`）+ `expectData` 断言刷新后数据 |
+| **登录态依赖** | 未登录时访问需登录页面，自动跳转登录页 | `evaluate` 清 storage（`wx.clearStorageSync()`）+ `navigate` `type:"reLaunch"` + `expectPage` 登录页 |
+| **轮播图交互** | Swiper 自动播放 + 手动滑动 + 点击跳转 | `wait` 等自动播放 + `expectData`（current 变化）+ `click` 圆点/图 + `expectPage` |
+| **长列表滚动** | ScrollView / 列表页上拉加载更多 | `callMethod` 或 `evaluate` 触发加载（如 `onReachBottom`）+ `expectData` 断言列表长度增加 |
+| **web-view 页面** | 嵌套 H5 页面加载 | 仅 `navigate` + `expectPage` 断言跳转；**web-view 内部 H5 元素 automator 不可达，交互场景标人工** |
+
+> **网络异常场景（接口超时/5xx）不在 plan 里模拟**：mini-run.cjs 直连引擎的设计原则是「不 mock 任何 wx API」（mock 会污染业务请求，MCP 时代根因）。需弱网/断网场景时人工用开发者工具 Network 面板模拟，或在报告中标注未覆盖。
+
+> ⚠️ **执行链路唯一**：测试执行一律 `mini-run.cjs --plan`（直连 automator，导航内部即 evaluate 调 `wx.*`，每操作 15s 超时 + 全局看门狗，无 MCP 挂起风险）。MCP 工具（`navigate_to`/`evaluate_script` 等）仅作探索降级备选，详见 mini-test.md；禁止用 MCP 跑测试——其导航类工具底层裸调 automator 回包丢失会永久挂起（实测：小程序一直加载中、点击无反应，只能重启开发者工具恢复）。

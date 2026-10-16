@@ -57,14 +57,24 @@ cmd_jobs() {
   local svc
   svc=$(lookup_service "$appName") || { fail "服务 '$appName' 未在映射中找到"; exit 1; }
 
-  local buildJob executeJobs
-  buildJob=$(echo "$svc" | python3 -c "import json,sys; print(json.load(sys.stdin).get('buildJob',''))")
+  local buildJob executeJobs singleInfo
+  buildJob=$(echo "$svc" | python3 -c "
+import json,sys
+b = json.load(sys.stdin).get('buildJob','')
+print(b if isinstance(b,str) else ' / '.join(f'{k}:{v}' for k,v in sorted(b.items())))
+")
   executeJobs=$(echo "$svc" | python3 -c "
 import json,sys
 s = json.load(sys.stdin)
 ej = s.get('executeJob', {})
 for env, job in sorted(ej.items()):
     print(f'  {env}: {job}')
+")
+  singleInfo=$(echo "$svc" | python3 -c "
+import json,sys
+s = json.load(sys.stdin)
+if s.get('singleJob'):
+    print(f\"  模式: 单 job（构建即部署） | 参数: {s.get('buildParam','BRANCH_TAG')} | 独立实例: {s.get('jenkinsCred','-')}\")
 ")
 
   echo ""
@@ -74,14 +84,74 @@ for env, job in sorted(ej.items()):
   echo "  构建作业 (buildJob): $buildJob"
   echo "  部署作业 (executeJob):"
   echo "$executeJobs"
+  [[ -n "$singleInfo" ]] && echo "$singleInfo"
   echo "═══════════════════════════════════════════════════════════════"
+}
+
+# ── 解析 buildJob（支持字符串或按环境对象） ──
+# 字符串直接用；对象（{"test": "测试环境/OMP"}）按 env 取，取不到回退 default
+resolve_build_job() {
+  echo "$1" | python3 -c "
+import json, sys
+b = json.load(sys.stdin).get('buildJob', '')
+if isinstance(b, dict):
+    print(b.get('$2', '') or b.get('default', ''))
+else:
+    print(b)
+"
+}
+
+# ── 应用服务级 Jenkins 实例覆盖 ──
+# 独立 Jenkins 实例（如 omp-shop 前端走 172.16.5.252:8078）：service-map.json 条目配 jenkinsCred=JENKINS_OMP，
+# .config.local.sh 配 JENKINS_OMP_URL / JENKINS_OMP_USER / JENKINS_OMP_PASS（凭证不入 service-map）
+apply_jenkins_override() {
+  local svcJson="$1"
+  local cred
+  cred=$(echo "$svcJson" | python3 -c "import json,sys; print(json.load(sys.stdin).get('jenkinsCred',''))" 2>/dev/null || echo "")
+  [[ -z "$cred" ]] && return 0
+
+  local url user pass
+  eval "url=\"\${${cred}_URL:-}\""
+  eval "user=\"\${${cred}_USER:-}\""
+  eval "pass=\"\${${cred}_PASS:-}\""
+  if [[ -z "$user" || -z "$pass" ]]; then
+    fail "服务条目配置了 jenkinsCred=$cred，但 .config.local.sh 缺少 ${cred}_USER / ${cred}_PASS"
+    exit 1
+  fi
+  [[ -n "$url" ]] && JENKINS_URL="$url"
+  JENKINS_USER="$user"
+  JENKINS_PASS="$pass"
+  info "使用独立 Jenkins 实例: ${JENKINS_URL%/}（凭证 ${cred}_USER）" >&2
+}
+
+# ── 解析 job 输入（服务名或裸作业名） ──
+# 传 appName（如 omp-shop）时应用服务级实例覆盖，并解析为其默认作业名；否则原样返回
+# 结果写入全局 RESOLVED_JOB（不能经 $(...) 子 shell 返回——override 的凭证要在当前 shell 生效）
+resolve_job_input() {
+  local input="$1"
+  local svc
+  svc=$(lookup_service "$input" 2>/dev/null || echo "")
+  if [[ -n "$svc" ]]; then
+    apply_jenkins_override "$svc"
+    local resolved
+    resolved=$(resolve_build_job "$svc" "default")
+    if [[ -z "$resolved" ]]; then
+      resolved=$(echo "$svc" | python3 -c "
+import json,sys
+b = json.load(sys.stdin).get('buildJob', '')
+print(next(iter(b.values())) if isinstance(b, dict) and b else b)
+")
+    fi
+    [[ -n "$resolved" ]] && RESOLVED_JOB="$resolved" && return 0
+  fi
+  RESOLVED_JOB="$input"
 }
 
 # ── 获取最后构建号 ──
 get_last_build_number() {
   local jobName="$1"
   local num
-  num=$(jenkins_get "/job/${jobName}/lastBuild/buildNumber" 2>/dev/null || echo "")
+  num=$(jenkins_get "$(jenkins_job_path "$jobName")/lastBuild/buildNumber" 2>/dev/null || echo "")
   if [[ -z "$num" || ! "$num" =~ ^[0-9]+$ ]]; then
     echo ""
     return 1
@@ -91,22 +161,27 @@ get_last_build_number() {
 
 # ── 触发构建作业 ──
 # 对应 JenkinsController.buildJob: 参数 RELEASE=origin/{branch}, PATCH=default
+# 返回: stdout=新构建号；触发失败/轮询超时 return 1（错误信息走 stderr）
 trigger_build_job() {
   local jobName="$1"
   local branch="$2"
+  local jobPath
+  jobPath=$(jenkins_job_path "$jobName")
 
   local lastNum newNum
   lastNum=$(get_last_build_number "$jobName" 2>/dev/null || echo "0")
 
-  # 触发构建（POST buildWithParameters）
-  local resp
-  resp=$(jenkins_post "/job/${jobName}/buildWithParameters" \
-    --data-urlencode "RELEASE=origin/${branch}" \
-    --data-urlencode "PATCH=default" 2>&1 || true)
+  # 触发失败必须中止——若吞掉错误继续轮询，超时后会把旧构建的 SUCCESS 误报为本次结果
+  if ! jenkins_post "${jobPath}/buildWithParameters" \
+      --data-urlencode "RELEASE=origin/${branch}" \
+      --data-urlencode "PATCH=default" >&2; then
+    echo "触发构建失败: $jobName" >&2
+    return 1
+  fi
 
-  # 轮询等待新构建号出现
+  # 轮询等待新构建号出现（容忍排队，排队时 lastBuild 不变）
   local i=0
-  local max_wait=60
+  local max_wait=150
   while [[ $i -lt $max_wait ]]; do
     newNum=$(get_last_build_number "$jobName" 2>/dev/null || echo "0")
     if [[ "$newNum" -gt "$lastNum" ]]; then
@@ -117,14 +192,13 @@ trigger_build_job() {
     i=$((i + 1))
   done
 
-  # 超时但可能已触发，返回当前最新号
-  newNum=$(get_last_build_number "$jobName" 2>/dev/null || echo "0")
-  echo "$newNum"
-  return 0
+  echo "触发超时: $jobName 在 $((max_wait * 2))s 内未出现新构建号（lastBuild 仍为 #${lastNum}），可用 deploy.sh status $jobName 检查是否排队中" >&2
+  return 1
 }
 
 # ── 触发部署作业 ──
 # 对应 JenkinsController.executeJob: 参数 IMAGE_VERSION={dateTime}----{branch}
+# 返回: stdout=新构建号；触发失败/轮询超时 return 1（错误信息走 stderr）
 trigger_execute_job() {
   local jobName="$1"
   local branch="$2"
@@ -134,13 +208,14 @@ trigger_execute_job() {
   lastNum=$(get_last_build_number "$jobName" 2>/dev/null || echo "0")
 
   local imageVersion="${dateTime}----${branch}"
-  local resp
-  resp=$(jenkins_post "/job/${jobName}/buildWithParameters" \
-    --data-urlencode "IMAGE_VERSION=${imageVersion}" 2>&1 || true)
+  if ! jenkins_post "$(jenkins_job_path "$jobName")/buildWithParameters" \
+      --data-urlencode "IMAGE_VERSION=${imageVersion}" >&2; then
+    echo "触发部署失败: $jobName" >&2
+    return 1
+  fi
 
-  # 轮询等待新构建号
   local i=0
-  local max_wait=60
+  local max_wait=150
   while [[ $i -lt $max_wait ]]; do
     newNum=$(get_last_build_number "$jobName" 2>/dev/null || echo "0")
     if [[ "$newNum" -gt "$lastNum" ]]; then
@@ -151,9 +226,8 @@ trigger_execute_job() {
     i=$((i + 1))
   done
 
-  newNum=$(get_last_build_number "$jobName" 2>/dev/null || echo "0")
-  echo "$newNum"
-  return 0
+  echo "触发超时: $jobName 在 $((max_wait * 2))s 内未出现新构建号（lastBuild 仍为 #${lastNum}），可用 deploy.sh status $jobName 检查是否排队中" >&2
+  return 1
 }
 
 # ── 触发部署（deploy job，带 MASTER_APPNAME/SUB_APPNAME/BRANCH 参数） ──
@@ -167,22 +241,27 @@ trigger_deploy_job() {
   local lastNum newNum
   lastNum=$(get_last_build_number "$deployJob" 2>/dev/null || echo "0")
 
-  local resp
   if [[ -n "$swim" ]]; then
-    resp=$(jenkins_post "/job/${deployJob}/buildWithParameters" \
-      --data-urlencode "MASTER_APPNAME=${appName}" \
-      --data-urlencode "SUB_APPNAME=${swim}" \
-      --data-urlencode "BRANCH=${branch}" 2>&1 || true)
+    if ! jenkins_post "$(jenkins_job_path "$deployJob")/buildWithParameters" \
+        --data-urlencode "MASTER_APPNAME=${appName}" \
+        --data-urlencode "SUB_APPNAME=${swim}" \
+        --data-urlencode "BRANCH=${branch}" >&2; then
+      echo "触发部署失败: $deployJob" >&2
+      return 1
+    fi
   else
     # 无泳道时不传 SUB_APPNAME（prod 环境 / 部署作业不需要泳道参数的场景）
-    resp=$(jenkins_post "/job/${deployJob}/buildWithParameters" \
-      --data-urlencode "MASTER_APPNAME=${appName}" \
-      --data-urlencode "BRANCH=${branch}" 2>&1 || true)
+    if ! jenkins_post "$(jenkins_job_path "$deployJob")/buildWithParameters" \
+        --data-urlencode "MASTER_APPNAME=${appName}" \
+        --data-urlencode "BRANCH=${branch}" >&2; then
+      echo "触发部署失败: $deployJob" >&2
+      return 1
+    fi
   fi
 
   # 轮询等待新构建号
   local i=0
-  local max_wait=60
+  local max_wait=150
   while [[ $i -lt $max_wait ]]; do
     newNum=$(get_last_build_number "$deployJob" 2>/dev/null || echo "0")
     if [[ "$newNum" -gt "$lastNum" ]]; then
@@ -193,9 +272,49 @@ trigger_deploy_job() {
     i=$((i + 1))
   done
 
-  newNum=$(get_last_build_number "$deployJob" 2>/dev/null || echo "0")
-  echo "$newNum"
-  return 0
+  echo "触发超时: $deployJob 在 $((max_wait * 2))s 内未出现新构建号（lastBuild 仍为 #${lastNum}），可用 deploy.sh status $deployJob 检查是否排队中" >&2
+  return 1
+}
+
+# ── 触发单 job 部署（前端类：构建+上传+发布一个 job 完成） ──
+# service-map.json: singleJob=true, buildParam=BRANCH_TAG（参数值传 origin/{branch}）
+# 返回: stdout=新构建号；触发失败/轮询超时 return 1（错误信息走 stderr）
+trigger_single_job() {
+  local jobName="$1"
+  local branch="$2"
+  local param="${3:-BRANCH_TAG}"
+  local jobPath
+  jobPath=$(jenkins_job_path "$jobName")
+
+  local lastNum newNum
+  lastNum=$(get_last_build_number "$jobName" 2>/dev/null || echo "0")
+
+  # GitParameter 类型参数的取值为分支引用（origin/test），无 origin/ 前缀时自动补
+  local paramValue="$branch"
+  [[ "$branch" != origin/* ]] && paramValue="origin/${branch}"
+
+  # 触发失败必须中止——若吞掉错误继续轮询，超时后会把旧构建（如 #2488 SUCCESS）误报为本次部署成功
+  if ! jenkins_post "${jobPath}/buildWithParameters" \
+      --data-urlencode "${param}=${paramValue}" >&2; then
+    echo "触发部署失败: $jobName" >&2
+    return 1
+  fi
+
+  # 轮询等待新构建号出现（容忍排队，排队时 lastBuild 不变）
+  local i=0
+  local max_wait=150
+  while [[ $i -lt $max_wait ]]; do
+    newNum=$(get_last_build_number "$jobName" 2>/dev/null || echo "0")
+    if [[ "$newNum" -gt "$lastNum" ]]; then
+      echo "$newNum"
+      return 0
+    fi
+    sleep 2
+    i=$((i + 1))
+  done
+
+  echo "触发超时: $jobName 在 $((max_wait * 2))s 内未出现新构建号（lastBuild 仍为 #${lastNum}），可用 deploy.sh status $jobName 检查是否排队中" >&2
+  return 1
 }
 
 # ── 检查构建状态 ──
@@ -205,7 +324,7 @@ get_job_status() {
   local buildNum="$2"
 
   local console
-  console=$(jenkins_get "/job/${jobName}/${buildNum}/consoleText" 2>/dev/null || echo "")
+  console=$(jenkins_get "$(jenkins_job_path "$jobName")/${buildNum}/consoleText" 2>/dev/null || echo "")
 
   if [[ -z "$console" ]]; then
     echo "unknown"
@@ -260,7 +379,7 @@ report_jenkins_result() {
   local buildNum="$3"
   local label="$4"
 
-  local consoleUrl="${JENKINS_URL:-http://172.16.98.169:18001}/job/${jobName}/${buildNum}/console"
+  local consoleUrl="${JENKINS_URL:-http://172.16.98.169:18001}$(jenkins_job_path "$jobName")/${buildNum}/console"
 
   case "$status" in
     success)
@@ -296,7 +415,7 @@ get_build_timestamp() {
 
   # 从 Jenkins API 获取构建信息中的 timestamp（毫秒）
   local ts
-  ts=$(jenkins_get "/job/${jobName}/${buildNum}/api/json" 2>/dev/null | \
+  ts=$(jenkins_get "$(jenkins_job_path "$jobName")/${buildNum}/api/json" 2>/dev/null | \
     python3 -c "
 import json,sys,datetime
 try:
@@ -658,11 +777,13 @@ cmd_build() {
   fi
 
   # 默认走 Jenkins
+  apply_jenkins_override "$svc"
+
   local buildJob
-  buildJob=$(echo "$svc" | python3 -c "import json,sys; print(json.load(sys.stdin).get('buildJob',''))")
+  buildJob=$(echo "$svc" | python3 -c "import json,sys; b=json.load(sys.stdin).get('buildJob',''); print(b if isinstance(b,str) else b.get('default',''))")
 
   if [[ -z "$buildJob" ]]; then
-    fail "服务 '$appName' 没有配置 buildJob"
+    fail "服务 '$appName' 没有配置 buildJob（按环境区分作业的服务请用 deploy 命令）"
     exit 1
   fi
 
@@ -676,9 +797,34 @@ cmd_build() {
   echo "═══════════════════════════════════════════════════════════════"
   echo ""
 
+  # 单 job 模式（前端类）：构建即部署，用服务的自定义参数（默认 BRANCH_TAG=origin/{branch}）
+  local isSingle
+  isSingle=$(echo "$svc" | python3 -c "import json,sys; print('true' if json.load(sys.stdin).get('singleJob') else 'false')")
+  if [[ "$isSingle" == "true" ]]; then
+    local buildParam
+    buildParam=$(echo "$svc" | python3 -c "import json,sys; print(json.load(sys.stdin).get('buildParam','BRANCH_TAG'))")
+    info "单 job 部署: $buildJob (参数 ${buildParam}=origin/$branch)"
+    local buildNum
+    if ! buildNum=$(trigger_single_job "$buildJob" "$branch" "$buildParam"); then
+      fail "触发失败，部署中止（见上方错误信息）"
+      exit 1
+    fi
+    ok "已触发，构建号: #$buildNum"
+    echo ""
+    info "等待完成..."
+    local buildStatus
+    buildStatus=$(wait_jenkins_job_complete "$buildJob" "$buildNum" "部署")
+    echo ""
+    report_jenkins_result "$buildStatus" "$buildJob" "$buildNum" "部署"
+    return
+  fi
+
   info "触发构建作业: $buildJob (分支: $branch)"
   local buildNum
-  buildNum=$(trigger_build_job "$buildJob" "$branch")
+  if ! buildNum=$(trigger_build_job "$buildJob" "$branch"); then
+    fail "触发失败，中止（见上方错误信息）"
+    exit 1
+  fi
   ok "构建已触发，构建号: #$buildNum"
   echo ""
 
@@ -708,6 +854,16 @@ cmd_execute() {
   fi
 
   # 默认走 Jenkins
+  apply_jenkins_override "$svc"
+
+  # 单 job 模式服务无独立部署作业
+  local isSingle
+  isSingle=$(echo "$svc" | python3 -c "import json,sys; print('true' if json.load(sys.stdin).get('singleJob') else 'false')")
+  if [[ "$isSingle" == "true" ]]; then
+    fail "服务 '$appName' 是单 job 模式（构建即部署），请直接使用 deploy 命令"
+    exit 1
+  fi
+
   local executeJob
   executeJob=$(echo "$svc" | python3 -c "
 import json,sys
@@ -746,7 +902,10 @@ print(ej.get('$env', ''))
 
   info "触发部署作业: $executeJob"
   local deployNum
-  deployNum=$(trigger_execute_job "$executeJob" "$branch" "$dateTime")
+  if ! deployNum=$(trigger_execute_job "$executeJob" "$branch" "$dateTime"); then
+    fail "触发失败，中止（见上方错误信息）"
+    exit 1
+  fi
   ok "部署已触发，构建号: #$deployNum"
   echo ""
 
@@ -776,8 +935,51 @@ cmd_deploy() {
   fi
 
   # 默认走 Jenkins
+  apply_jenkins_override "$svc"
+
+  # 单 job 模式（前端类）：一个 job 完成构建+上传+发布，按环境选作业
+  local isSingle
+  isSingle=$(echo "$svc" | python3 -c "import json,sys; print('true' if json.load(sys.stdin).get('singleJob') else 'false')")
+  if [[ "$isSingle" == "true" ]]; then
+    local singleJobName buildParam
+    singleJobName=$(resolve_build_job "$svc" "$env")
+    if [[ -z "$singleJobName" ]]; then
+      fail "服务 '$appName' 没有配置 $env 环境的 buildJob（singleJob 模式按环境取 buildJob 对象）"
+      exit 1
+    fi
+    buildParam=$(echo "$svc" | python3 -c "import json,sys; print(json.load(sys.stdin).get('buildParam','BRANCH_TAG'))")
+
+    echo ""
+    echo "═══════════════════════════════════════════════════════════════"
+    echo "  单 job 部署（构建 → 上传 → 发布 一步完成）"
+    echo "═══════════════════════════════════════════════════════════════"
+    echo "  服务:       $appName"
+    echo "  环境:       $env"
+    echo "  分支:       $branch"
+    echo "  作业:       $singleJobName"
+    echo "  参数:       ${buildParam}=origin/${branch}"
+    echo "═══════════════════════════════════════════════════════════════"
+    echo ""
+
+    info "触发部署作业: $singleJobName (分支: $branch)"
+    local buildNum
+    if ! buildNum=$(trigger_single_job "$singleJobName" "$branch" "$buildParam"); then
+      fail "触发失败，部署中止（见上方错误信息）"
+      exit 1
+    fi
+    ok "已触发，构建号: #$buildNum"
+    echo ""
+
+    info "等待部署完成（前端构建+上传通常需要 3~10 分钟）..."
+    local buildStatus
+    buildStatus=$(wait_jenkins_job_complete "$singleJobName" "$buildNum" "部署")
+    echo ""
+    report_jenkins_result "$buildStatus" "$singleJobName" "$buildNum" "部署"
+    return
+  fi
+
   local buildJob executeJob
-  buildJob=$(echo "$svc" | python3 -c "import json,sys; print(json.load(sys.stdin).get('buildJob',''))")
+  buildJob=$(resolve_build_job "$svc" "$env")
   executeJob=$(echo "$svc" | python3 -c "
 import json,sys
 s = json.load(sys.stdin)
@@ -823,7 +1025,10 @@ print(ej.get('$env', ''))
   # ── 步骤 1: 触发构建 ──
   info "[1/3] 触发构建作业: $buildJob (分支: $branch)"
   local buildNum
-  buildNum=$(trigger_build_job "$buildJob" "$branch")
+  if ! buildNum=$(trigger_build_job "$buildJob" "$branch"); then
+    fail "触发失败，中止（见上方错误信息）"
+    exit 1
+  fi
   ok "构建已触发，构建号: #$buildNum"
   echo ""
 
@@ -838,7 +1043,7 @@ print(ej.get('$env', ''))
     echo ""
     info "查看构建日志:"
     echo "  deploy.sh console $buildJob $buildNum"
-    echo "  ${JENKINS_URL:-http://172.16.98.169:18001}/job/${buildJob}/${buildNum}/console"
+    echo "  ${JENKINS_URL:-http://172.16.98.169:18001}$(jenkins_job_path "$buildJob")/${buildNum}/console"
     exit 1
   fi
 
@@ -860,7 +1065,10 @@ print(ej.get('$env', ''))
 
   info "[3/3] 触发部署作业: $executeJob"
   local deployNum
-  deployNum=$(trigger_execute_job "$executeJob" "$branch" "$dateTime")
+  if ! deployNum=$(trigger_execute_job "$executeJob" "$branch" "$dateTime"); then
+    fail "触发失败，中止（见上方错误信息）"
+    exit 1
+  fi
   ok "部署已触发，构建号: #$deployNum"
   echo ""
 
@@ -885,6 +1093,9 @@ print(ej.get('$env', ''))
 cmd_status() {
   local jobName="$1"
   local buildNum="${2:-}"
+
+  # 支持传服务名（omp-shop）：自动应用独立实例凭证并解析默认作业
+  resolve_job_input "$jobName"; jobName="$RESOLVED_JOB"
 
   if [[ -z "$buildNum" ]]; then
     buildNum=$(get_last_build_number "$jobName" 2>/dev/null || echo "")
@@ -925,8 +1136,11 @@ cmd_console() {
   local jobName="$1"
   local buildNum="$2"
 
+  # 支持传服务名（omp-shop）：自动应用独立实例凭证并解析默认作业
+  resolve_job_input "$jobName"; jobName="$RESOLVED_JOB"
+
   local console
-  console=$(jenkins_get "/job/${jobName}/${buildNum}/consoleText" 2>/dev/null || echo "")
+  console=$(jenkins_get "$(jenkins_job_path "$jobName")/${buildNum}/consoleText" 2>/dev/null || echo "")
 
   if [[ -z "$console" ]]; then
     fail "无法获取构建日志，检查作业名和构建号是否正确"
@@ -994,6 +1208,13 @@ cwork-deploy — Jenkins + 云效 构建部署工具（curl 封装）
   service-map.json 中 platform=jenkins 的服务走 Jenkins REST API
   其余走云效 AppStack API（默认）
   也可设置环境变量 DEPLOY_DEFAULT_PLATFORM=jenkins 全局切换
+
+单 job 模式（前端类服务，如 omp-shop）:
+  service-map.json 条目配 singleJob=true + buildParam=BRANCH_TAG
+  一个 Jenkins job 完成构建+上传+发布，deploy/build 一步到位，execute 不适用
+  独立 Jenkins 实例: 条目配 jenkinsCred=JENKINS_OMP，.config.local.sh 配
+  JENKINS_OMP_URL / JENKINS_OMP_USER / JENKINS_OMP_PASS
+  作业名支持文件夹路径（如 "测试环境/OMP"）
 
 参数:
   appName   服务名（如 order-server, charge-server）

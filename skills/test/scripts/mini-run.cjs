@@ -188,6 +188,7 @@ class Runner {
           return { ok: true, detail: `data.${step.key} = ${JSON.stringify(actual)}` };
         }
         case 'expectText': {
+          if (step.contains === undefined) throw new Error('expectText 需要 contains 字段（漏写会变成断言"包含 undefined"的静默假行为）');
           const el = await this.findElement(step.selector, step.index);
           const text = await this.t(el.text(), `读取文本 ${step.selector}`);
           if (String(text || '').indexOf(String(step.contains)) < 0) {
@@ -319,9 +320,14 @@ async function main() {
     }
 
     const runner = new Runner(mp, stepTimeoutMs);
+    const scenarios = plan.scenarios || [];
+    // 空计划防护：静默跑 0 场景会输出「通过 0 失败 0」假绿，必须响亮失败
+    if (!Array.isArray(scenarios) || scenarios.length === 0) {
+      throw new Error('plan.json 无 scenarios（或为空数组）——拒绝执行空测试计划');
+    }
     let failedScenarios = 0;
 
-    for (const sc of plan.scenarios || []) {
+    for (const sc of scenarios) {
       console.log(`\n【场景】${sc.name}（${sc.priority || 'P1'}）`);
       const result = { name: sc.name, priority: sc.priority || 'P1', steps: [], ok: true };
       for (let i = 0; i < (sc.steps || []).length; i++) {

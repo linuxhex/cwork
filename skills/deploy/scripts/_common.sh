@@ -40,6 +40,17 @@ jenkins_ensure_config() {
   fi
 }
 
+# ── Jenkins job 路径（支持文件夹作业，如 "测试环境/OMP"） ──
+# "测试环境/OMP" → "/job/%E6%B5%8B%E8%AF%95%E7%8E%AF%E5%A2%83/job/OMP"；"order-server" → "/job/order-server"
+jenkins_job_path() {
+  local jobName="$1"
+  python3 -c "
+import urllib.parse, sys
+segs = sys.argv[1].split('/')
+print(''.join('/job/' + urllib.parse.quote(seg, safe='') for seg in segs))
+" "$jobName"
+}
+
 # ── Jenkins 基本认证参数 ──
 jenkins_auth_args() {
   echo "-u ${JENKINS_USER}:${JENKINS_PASS}"
@@ -57,8 +68,37 @@ jenkins_get() {
   $CURL -s -u "${JENKINS_USER}:${JENKINS_PASS}" "${url}${path}" "$@"
 }
 
-# ── 带鉴权的 Jenkins POST 请求 ──
-# 用法: jenkins_post "/job/xxx/buildWithParameters" -d "key=value"
+# ── 获取 Jenkins CSRF crumb（与 session cookie 绑定） ──
+# Jenkins 开 CSRF 保护时 POST 必须带 crumb；crumb 与 session cookie 绑定，
+# 单带 crumb 仍 403，必须同一会话先 GET crumbIssuer 存 cookie，POST 时同时带 crumb + cookie。
+# 输出三行: crumbRequestField / crumb / cookie文件路径；失败 return 1（部分实例关闭 CSRF 时调用方可降级）
+jenkins_crumb() {
+  local url="${JENKINS_URL:-http://172.16.98.169:18001}"
+  url="${url%/}"
+  local cookie_file
+  cookie_file=$(mktemp "${TMPDIR:-/tmp}/jenkins-crumb-cookie.XXXXXX")
+
+  local crumb_json
+  crumb_json=$($CURL -s -c "$cookie_file" -u "${JENKINS_USER}:${JENKINS_PASS}" \
+    "${url}/crumbIssuer/api/json" 2>/dev/null || echo "")
+
+  local crumb field
+  crumb=$(echo "$crumb_json" | python3 -c "import json,sys; print(json.load(sys.stdin).get('crumb',''))" 2>/dev/null || echo "")
+  field=$(echo "$crumb_json" | python3 -c "import json,sys; print(json.load(sys.stdin).get('crumbRequestField','Jenkins-Crumb'))" 2>/dev/null || echo "Jenkins-Crumb")
+
+  if [[ -z "$crumb" ]]; then
+    rm -f "$cookie_file"
+    return 1
+  fi
+
+  echo "$field"
+  echo "$crumb"
+  echo "$cookie_file"
+}
+
+# ── 带鉴权 + CSRF crumb 的 Jenkins POST 请求 ──
+# 用法: jenkins_post "/job/xxx/buildWithParameters" --data-urlencode "key=value"
+# 自带 crumb + session cookie（解决 POST 403），检查 HTTP 状态码：非 2xx/3xx 输出错误到 stderr 并 return 1
 jenkins_post() {
   jenkins_ensure_config
   local path="$1"
@@ -66,7 +106,34 @@ jenkins_post() {
   local url="${JENKINS_URL:-http://172.16.98.169:18001}"
   url="${url%/}"
 
-  $CURL -s -u "${JENKINS_USER}:${JENKINS_PASS}" -X POST "${url}${path}" "$@"
+  local crumb_field="" crumb_val="" crumb_cookie=""
+  local crumb_info
+  if crumb_info=$(jenkins_crumb 2>/dev/null); then
+    crumb_field=$(echo "$crumb_info" | sed -n '1p')
+    crumb_val=$(echo "$crumb_info" | sed -n '2p')
+    crumb_cookie=$(echo "$crumb_info" | sed -n '3p')
+  fi
+
+  local crumb_args=()
+  [[ -n "$crumb_field" && -n "$crumb_val" ]] && crumb_args+=(-H "${crumb_field}: ${crumb_val}")
+  [[ -n "$crumb_cookie" && -f "$crumb_cookie" ]] && crumb_args+=(-b "$crumb_cookie")
+
+  local raw http_code body
+  raw=$($CURL -s -w $'\n%{http_code}' -u "${JENKINS_USER}:${JENKINS_PASS}" -X POST \
+    "${crumb_args[@]}" "$@" "${url}${path}" 2>/dev/null)
+  http_code=$(echo "$raw" | tail -n1)
+  body=$(echo "$raw" | sed '$d')
+
+  [[ -n "$crumb_cookie" ]] && rm -f "$crumb_cookie"
+
+  if [[ "$http_code" =~ ^2 || "$http_code" =~ ^3 ]]; then
+    echo "$body"
+    return 0
+  fi
+
+  echo "Jenkins POST 失败: HTTP ${http_code} → ${url}${path}" >&2
+  [[ -n "$body" ]] && echo "$body" | head -5 >&2
+  return 1
 }
 
 # ============================================================
@@ -191,7 +258,11 @@ for s in data.get('services', []):
     name = s.get('appName', '')
     ej = s.get('executeJob', {})
     yx = s.get('yxDeploy', {})
-    envs = ','.join(sorted(set(list(ej.keys()) + list(yx.keys()))))
+    bj = s.get('buildJob', {})
+    bj_keys = list(bj.keys()) if isinstance(bj, dict) else []
+    envs = ','.join(sorted(set(list(ej.keys()) + list(yx.keys()) + bj_keys)))
+    if s.get('singleJob'):
+        envs = (envs + ',' if envs else '') + 'single'
     platform = s.get('platform', '-')
     print(f'{name}  [{envs}]  platform={platform}')
 "

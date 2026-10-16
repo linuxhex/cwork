@@ -530,7 +530,8 @@ if (userInfo == null) {
 刚改完代码，本阶段 `codegraph affected` / 推演查图谱前，**必须**先增量 sync 一次，保证推演用的是最新图谱（未装 / 锁占用则跳过，不阻塞）：
 
 ```bash
-codegraph sync $CODE_WORKSPACE -q
+# CODE_WORKSPACE 未设置时兜底默认工作区；禁止加 -q（-q 会吞掉"未初始化"报错，无输出导致误判未安装）
+codegraph sync "${CODE_WORKSPACE:-$HOME/Work/code-projects}"
 ```
 
 ### 逻辑推演

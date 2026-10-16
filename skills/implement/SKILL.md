@@ -43,8 +43,8 @@ description: 需求分析（对话式）+ 编写计划 + 执行计划 + 推演�
 **需求分析阶段开始时，主动探测是否涉及多服务，避免识别滞后导致文档重写：**
 
 ```bash
-# 需求分析开始时执行
-cd $CODE_WORKSPACE && codegraph status
+# 需求分析开始时执行（CODE_WORKSPACE 未设置时兜底默认工作区）
+cd "${CODE_WORKSPACE:-$HOME/Work/code-projects}" && codegraph status
 
 if 已索引：
   # 探测跨服务调用
@@ -333,14 +333,25 @@ git rev-parse --abbrev-ref @{upstream} 2>/dev/null
 
 implement 过程中**禁止提交代码**，最终由 cwork-commit 统一提交并推送。
 
-**commit message 格式**：
+**commit message 格式（两行，强制）**——CodeUp pre-receive 钩子按正则 `^Merge.*|#OMJF-\d{1,}\n.{1,}` 校验提交注释，`#OMJF-数字` 必须单独成行（第一行），说明在第二行；挤成一行会被远端拒绝推送：
 ```
+#OMJF-{需求ID}
 【{需求简称}】<{type}> {说明}
 ```
 
 **bug 修复格式**：
 ```
+#OMJF-{需求ID}
 【{修复问题简述}】<fix> {问题的具体描述}
+```
+
+**手工提交必须用 heredoc 保证换行**（单行 `-m "..."` 会把两行挤成一行）：
+```bash
+git commit -m "$(cat <<'EOF'
+#OMJF-12345
+【用户导出】<add> 新增导出功能
+EOF
+)"
 ```
 
 **type 允许值**：`add|del|modify|fix|refactor|docs`

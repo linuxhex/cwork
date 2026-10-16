@@ -15,6 +15,13 @@
 : "${JENKINS_USER:=<your-username>}"
 : "${JENKINS_PASS:=<your-password>}"
 
+# ---- 独立 Jenkins 实例（可选，服务级覆盖） ----
+# service-map.json 中条目配 jenkinsCred=JENKINS_OMP 时，读取以下变量覆盖默认实例
+# 变量前缀与 jenkinsCred 值一致（如 JENKINS_PRODWEB_* 对应 jenkinsCred=JENKINS_PRODWEB）
+: "${JENKINS_OMP_URL:=http://172.16.5.252:8078}"
+: "${JENKINS_OMP_USER:=<your-username>}"
+: "${JENKINS_OMP_PASS:=<your-password>}"
+
 # ---- devops 中间服务地址（仅用于 sync 命令更新服务映射） ----
 : "${DEVOPS_URL:=http://172.16.149.95:81}"
 
