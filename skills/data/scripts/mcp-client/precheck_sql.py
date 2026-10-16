@@ -662,6 +662,18 @@ def precheck_sql(
     metadata_query = first in {"show", "desc", "describe", "explain"}
     has_tables = _RE_TABLE_REF.search(normalized) is not None
 
+    # 跨 catalog 关联拦截：Doris 跨 catalog JOIN 会把外部 catalog 数据拉取到 coordinator，
+    # 大表关联极易 OOM/超时——跨源需求改为分别查各 catalog 取回小结果集本地关联，
+    # 或优先用 internal 等价表替代 jdbc/hive 表（不做大小表白名单，机械拦截最可靠）
+    if is_select and has_tables and len(catalogs) >= 2:
+        issues.append(
+            _issue(
+                "cross_catalog_join",
+                "禁止跨 catalog 关联查询（检测到 " + " + ".join(sorted(catalogs)) + "）",
+                suggest="跨 catalog JOIN 性能极差（外表数据全量拉取，易 OOM/超时）；改为分别查各 catalog 取回小结果集（≤1000 行）本地关联，或先用 internal 等价表替代 jdbc/hive 表",
+            )
+        )
+
     need_missing_partition = False
     if (
         is_select
@@ -684,6 +696,20 @@ def precheck_sql(
                 "missing_partition_filter",
                 "数据查询必须包含分区字段过滤条件",
                 suggest="先用 DESC/SHOW CREATE TABLE 确认真实分区键，再补充 dt/dt_month/`month` 等过滤",
+            )
+        )
+
+    # 无 WHERE 全表扫描拦截：分区校验只覆盖 internal/hive 的 dt 分区表，
+    # jdbc catalog（无分区概念）与 internal/hive 非 dt 分区表会漏网——
+    # 统一按「SELECT 必须带 WHERE 过滤」机械拦截；LIMIT 不豁免（SKILL 规则
+    # 要求非日期分区表「高选择性条件 + LIMIT」两者兼备）。与
+    # missing_partition_filter 可能双报，补一个分区/业务键 WHERE 即同消。
+    if is_select and has_tables and not re.search(r"\bwhere\b", normalized, re.IGNORECASE):
+        issues.append(
+            _issue(
+                "full_table_scan",
+                "禁止无 WHERE 全表扫描查询",
+                suggest="补充高选择性过滤条件（分区列/业务键）+ LIMIT；确认表结构用 DESC/SHOW CREATE TABLE；全表行数统计改用带时间/分区条件的 count",
             )
         )
 

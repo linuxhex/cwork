@@ -71,7 +71,7 @@ git push origin "$branch"
 2. 检查当前分支名（格式：{type}/{YYYYMMDD}_{description}，type 为 feature/hotfix/bugfix/refactor）
 3. 检查是否有未提交的改动
 4. 确定需求 ID（格式：OMJF-数字）：**优先沿用对话中已有的衔接上下文**（如由 cwork-bug 自动衔接进入，直接用其携带的需求 ID），对话中没有再询问用户，用户回车跳过则用默认 `OMJF-00000`
-5. 确定 commit message（需求名称）：同样优先沿用衔接上下文（bug 场景用问题现象简述，type 用 `fix`），没有再询问
+5. 确定 commit message（需求名称）：同样优先沿用衔接上下文（bug 场景用问题现象简述，type 用 `fix`），没有再询问；**格式必须为下方「commit message 格式」的两行格式**（第一行 `#OMJF-数字` 单独成行），手工提交用 heredoc 保证换行
 6. 直接执行提交
 
 ## 关联执行模式（存在 workflow-state）
@@ -101,7 +101,8 @@ git push origin "$branch"
 **提交前触发图谱更新（必须）**：代码已改完，提交前**必须**增量 sync 一次，保证图谱新鲜供后续查询（未装 / 锁占用则跳过，不阻塞）：
 
 ```bash
-codegraph sync $CODE_WORKSPACE -q
+# CODE_WORKSPACE 未设置时兜底默认工作区；禁止加 -q（-q 会吞掉"未初始化"报错，无输出导致误判未安装）
+codegraph sync "${CODE_WORKSPACE:-/Users/caomunian/Work/code-projects}"
 ```
 
 ### 提交前多服务检查（新增，关键）
@@ -173,17 +174,17 @@ fi
 ├─────────────────────────────────────────────────────────────────┤
 │  user-service:                                                  │
 │    → git add .                                                  │
-│    → git commit -m "【用户导出】<add> 新增用户数据查询接口"         │
+│    → git commit -m "$COMMIT_MSG"（两行格式见下方）                  │
 │    → git push origin feature/20260529_user_export                   │
 │                                                                 │
 │  order-service:                                                 │
 │    → git add .                                                  │
-│    → git commit -m "【用户导出】<add> 新增订单查询接口"             │
+│    → git commit -m "$COMMIT_MSG"（两行格式见下方）                  │
 │    → git push origin feature/20260529_user_export                   │
 │                                                                 │
 │  main-service:                                                  │
 │    → git add .                                                  │
-│    → git commit -m "【用户导出】<add> 新增导出功能"                │
+│    → git commit -m "$COMMIT_MSG"（两行格式见下方）                  │
 │    → git push origin feature/20260529_user_export                   │
 └─────────────────────────────────────────────────────────────────┘
                          │
@@ -203,6 +204,17 @@ fi
 ```
 #OMJF-{需求ID}
 【{需求简称}】<{type}> {说明}
+```
+
+**硬约束（CodeUp pre-receive 钩子强制校验）**：提交注释必须匹配正则 `^Merge.*|#OMJF-\d{1,}\n.{1,}`——`#OMJF-数字` 单独成行（第一行只有它），说明在第二行。**挤成一行**（如 `#OMJF-12345 <fix> xxx`）会被远端拒绝推送。
+
+**手工提交（不跑 commit.sh）必须用 heredoc 保证换行**：
+```bash
+git commit -m "$(cat <<'EOF'
+#OMJF-12345
+【用户导出】<add> 新增导出功能
+EOF
+)"
 ```
 
 **注意**：第一行为需求ID（如 #OMJF-12345），第二行为需求说明。

@@ -187,6 +187,10 @@ function installQoder() {
     log(skillName);
   }
 
+  // USAGE_NOTES.md 单文件同步：它在 skills 根目录、不在技能目录遍历内，漏同步导致全局副本与源仓库分叉复发
+  const usageSrcQ = join(SKILLS_DIR, 'USAGE_NOTES.md');
+  if (existsSync(usageSrcQ)) writeFileSync(join(target, 'USAGE_NOTES.md'), readFileSync(usageSrcQ));
+
   // 分发共享规范文件（skills/common/ → ~/.qoder/skills/cwork-common/）
   installCommonFiles(target);
 }
@@ -576,6 +580,9 @@ function syncClaudeGlobal() {
     }
     log(skillName);
   }
+  // USAGE_NOTES.md 单文件同步（同 installQoder：skills 根目录文件不在技能目录遍历内）
+  const usageSrcC = join(SKILLS_DIR, 'USAGE_NOTES.md');
+  if (existsSync(usageSrcC)) writeFileSync(join(target, 'USAGE_NOTES.md'), readFileSync(usageSrcC));
   // 分发共享规范文件（skills/common/ → ~/.claude/skills/cwork-common/，含 git-guard.md 分支防护规范）
   installCommonFiles(target);
 }

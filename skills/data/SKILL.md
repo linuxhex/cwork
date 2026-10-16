@@ -13,7 +13,7 @@ description: 数仓数据查询，对话式查 Doris 数仓（internal/hive/JDBC
 
 3 步走（AI 内部推进，决策点才停）：
 1. **明确目标 + 选表**：按问题定 catalog（internal/hive/jdbc_catalog）和分层表（ads/dws/dwd/dim/ods），优先 DWD 宽表
-2. **校验 + 执行**：`mcp_client.py query` 跑 SQL（自带 precheck：分区/反引号/只读/日期范围/替代表建议）
+2. **校验 + 执行**：`mcp_client.py query` 跑 SQL（自带 precheck：分区/反引号/只读/日期范围/跨 catalog 关联/无 WHERE 全表扫描/替代表建议）
 3. **结果输出**：默认前 10 行；大结果集走 count 分级或异步导出；数据 ↔ 问题对应下结论
 
 **核心原则**：
@@ -38,6 +38,8 @@ description: 数仓数据查询，对话式查 Doris 数仓（internal/hive/JDBC
 
 - 缺少凭证（`scripts/mcp-client/.mcp_config.json` 未配置且无 `MCP_USER/MCP_PASS` 环境变量），**禁止执行**，先 `python3 mcp_client.py setup-check` 看提示配置
 - **强制只读**：只允许 `SELECT`/`SHOW`/`DESC`/`EXPLAIN`；`INSERT`/`UPDATE`/`DELETE`/`DROP`/`ALTER`/`CREATE`/`TRUNCATE` 一律禁止
+- **禁止跨 catalog 关联**：一条 SQL 只允许一个 catalog（precheck 已机械拦截 `cross_catalog_join`）；跨源需求分别查各 catalog 取回小结果集本地关联，或优先用 internal 等价表替代 jdbc/hive 表
+- **禁止无 WHERE 全表扫描**：每条 SELECT 必须带 WHERE 过滤（precheck 已机械拦截 `full_table_scan`，LIMIT 不豁免）；先 DESC 确认表结构，再补分区列/业务键条件 + LIMIT
 - 查询无结果，提示用户调整时间范围/表/条件，**不臆造数据**
 - 数据结论必须基于真实查询结果，**不猜**
 
@@ -118,7 +120,7 @@ cd scripts/mcp-client
 python3 mcp_client.py query --sql "<SQL>"
 ```
 
-`mcp_client.py` 会自动：① 校验分区/反引号/只读/日期范围；② 对 ODS/JDBC 复杂查询（多表 JOIN / GROUP BY+聚合 / 跨月范围）给**替代表建议**（命中先返回建议，不直接跑）；③ 对 internal 点查做索引校验。**被拦截时按建议修正 SQL 再跑**，不绕过。
+`mcp_client.py` 会自动：① 校验分区/反引号/只读/日期范围，拦截无 WHERE 全表扫描（LIMIT 不豁免）；② 拦截跨 catalog 关联（跨 catalog JOIN 需把外表数据拉到 coordinator，大表关联极易 OOM/超时——改为分别查各 catalog 取回小结果集本地关联）；③ 对 ODS/JDBC 复杂查询（多表 JOIN / GROUP BY+聚合 / 跨月范围）给**替代表建议**（命中先返回建议，不直接跑）；④ 对 internal 点查做索引校验。**被拦截时按建议修正 SQL 再跑**，不绕过。
 
 ### 2.3 大结果集分级（先 count 看规模）
 
@@ -184,6 +186,8 @@ JDBC/ODS 点查耗时 **>1s** 必须诊断，**不靠调大超时绕过**：① 
 
 - 不确认 catalog/表就发 SQL（先选表，JDBC/ODS 先探等价表）
 - 漏分区条件 / 日期超 3 个月（会被 precheck 拦，也别绕过）
+- 跨 catalog 关联（一条 SQL 混 internal + jdbc/hive 表，会被 precheck 拦；跨源需求分别查再本地关联）
+- 无 WHERE 全表扫描（SELECT 必带 WHERE 过滤 + LIMIT，LIMIT 不豁免，会被 precheck 拦）
 - 关键词字段不加反引号（语法报错）
 - 大结果集直接 `query` 拉（先 `count` 分级，>1000 走异步导出）
 - 查询无结果臆造数据（如实说，换条件）

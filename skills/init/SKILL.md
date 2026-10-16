@@ -151,8 +151,8 @@ description: 对话式初始化，自动查找工程路径，多服务分支切�
 ┌─────────────────────────────────────────────────────────────────┐
 │  触发 codegraph 图谱更新                                          │
 ├─────────────────────────────────────────────────────────────────┤
-│  codegraph sync $CODE_WORKSPACE -q          │
-│  （未装 / 锁占用则跳过，不阻塞）                                    │
+│  codegraph sync "${CODE_WORKSPACE:-默认工作区}"  │
+│  （未装 / 锁占用则跳过，不阻塞；禁止 -q 静默吞错）                 │
 └─────────────────────────────────────────────────────────────────┘
                          │
                          ▼
@@ -250,7 +250,8 @@ cat .cwork/backup-log.json
 分支切换完成后，**必须**触发 codegraph 增量同步，保证后续 implement/bug 阶段的图谱查询基于最新代码（未装 / 锁占用则跳过，不阻塞）：
 
 ```bash
-codegraph sync $CODE_WORKSPACE -q
+# CODE_WORKSPACE 未设置时兜底默认工作区；禁止加 -q（-q 会吞掉"未初始化"报错，无输出导致误判未安装）
+codegraph sync "${CODE_WORKSPACE:-/Users/caomunian/Work/code-projects}"
 ```
 
 ## 产物
