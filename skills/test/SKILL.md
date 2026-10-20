@@ -74,7 +74,7 @@ fi
 
 > **按需加载**：PROJECT_TYPE=web 时 Read 同目录 `web-test.md`，不随本文件全量加载。
 >
-> **核心变化**：Web 链路从"AI 每次写 heredoc"改为"AI 生成 plan.json → web-run.cjs 执行器确定性执行"。执行器内部自动生成 ego-browser heredoc，保证整个测试会话在一个 heredoc 内（单 tab、登录态不丢失）。AI 只在 aiAssert 点介入（视觉/语义判断），其他断言交给执行器精确匹配。
+> **核心架构**：Web 链路 = "AI 生成 plan.json → web-run.cjs 执行器**单遍**执行 → AI 跑后判断合入"。执行器内部自动生成 ego-browser heredoc，保证整个测试会话在一个 heredoc 内（单 tab、登录态不丢失）；确定性断言（数据/布局/样式/接口/URL）直接判定，aiAssert 仅采集证据（步骤标 aiPending 不计 passed），跑完输出 AI_ASSERT_PENDING 由 AI 判断合入 result.json，**不重跑**。执行器内置假通过防线（aiAssert 声明数 vs 采集数比对）与 plan 生成期校验（空场景/凑数等待/登录无确定性判据拒绝执行）。
 
 ---
 
@@ -271,6 +271,7 @@ if 测试失败:
 - **操作卡死防线（Web/小程序通用）**：页面操作不生效时必须走「探索套路」——每轮「观察 → 操作 → 验证」闭环、换通道前必须先观察（截图 + 真实 DOM，本地有源码直接查组件事件绑定），禁止无观察连环盲试；同一目标 3 次操作无效标 BLOCKED 继续后续步骤，场景失败即收场，全局预算到点停止输出报告（详见 web-test.md「探索套路与止损极值」）
 - **每个测试场景必须真实点击/交互执行，无例外**：plan 里的所有场景都要在真实浏览器中实际操作并验证，禁止模拟执行、跳过执行、复用历史执行结果充当本次结果
 - **回归测试禁止复用历史 plan.json**：每次测试必须重新快照生成 plan（防页面变更后选择器软失效漏报）；选择器失效时整场景 plan 重新生成
+- **登录成功判据必须是确定性 URL 断言**：登录场景必须含 `waitForUrl`/`assertUrl`（URL 离开登录页），禁止以 aiAssert/按钮状态/凑数等待作为登录成功的唯一判据（执行器 validatePlan 已机械拦截；实战根因：选择器点错隐藏弹窗 → 校验接口从未发出 → 登录灰死 → 凑数断言跑出假通过）
 - 所有 P0 场景必须通过才能进入 cwork-commit（唯一例外：用户明确确认「带 P0 失败提交」，见自动衔接）
 - P1/P2 场景失败可记录但不阻塞提交
 - 调用 cwork-log 查后端日志需阿里云密钥已配置（`scripts/.config.local.sh` 或环境变量），未配置时跳过后端诊断，仅保留前端证据
@@ -329,7 +330,7 @@ cwork-test 也可以独立使用（不依赖 cwork-implement）：
 | | `scrollToBottomUntil(fn)` | 滚动到底部直到条件满足 |
 | **执行** | `js(expr)` | 在浏览器中执行 JS |
 | | `cdp(method, params)` | 调用 Chrome DevTools Protocol |
-| **输出** | `cliLog(value)` | 输出到终端（heredoc 内唯一输出方式） |
+| **输出** | `cliLog(value)` | 输出到终端（heredoc 内唯一输出方式；**注意：ego nodejs 运行时 cliLog 实际走 stderr 不是 stdout**，外部脚本检测其输出必须双通道扫描） |
 
 > **注意**：`@N` ref 仅对最近一次 `snapshotText()` 有效。跨步骤引用元素时，使用 `loc=...` 值或 CSS 选择器。
 
@@ -338,8 +339,8 @@ cwork-test 也可以独立使用（不依赖 cwork-implement）：
 | 文件 | 说明 | 提交 |
 |------|------|------|
 | plan.json | 测试计划（声明式，Web 链路必须） | 提交 |
-| result.json | 测试结果（含截图路径） | 提交 |
-| ai-contexts/s{i}_i{j}.result.json | AI 判断结果（aiAssert 两阶段 per-step，ctx-dir 临时文件） | 不提交 |
+| result.json | 测试结果（含截图路径；aiAssert 步骤由 AI 跑后判断合入） | 提交 |
+| ctx 目录 s{i}_i{j}.json | aiAssert 证据上下文（截图+DOM，AI 跑后判断依据，临时文件） | 不提交 |
 | test-report.md | 测试报告 | 提交 |
 | screenshots/ | 截图证据目录 | 提交 |
 
