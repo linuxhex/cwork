@@ -326,25 +326,49 @@ echo "✓ ego-browser 可用：$(command -v ego-browser)"
 | `navigate` | `url` | 导航到页面；相对路径自动拼 baseUrl，绝对 URL 原样使用 |
 | `waitForNetworkIdle` | 无 | 等待网络空闲 |
 | `waitForLoad` / `waitForNavigation` | 无 | 等待页面加载/跳转完成（两者等价） |
-| `click` | `selector` | 点击元素（ego click，带遮挡检查） |
-| `dispatchClick` | `selector`, `index?` | JS 合成 MouseEvent click（bubbles），绕过遮挡检查；用于被悬浮横幅遮挡、ego click 静默点在横幅上的按钮（如 OMP top-tip 横幅盖住筛选按钮）。对标准 @click 监听的按钮有效 |
-| `clickCdp` | `selector`, `index?` | CDP 真实鼠标坐标点击（mousePressed/Released 全链）；用于自定义组件勾选框、依赖真实鼠标事件的元素 |
+| `waitForElement` | `selector`, `timeout?`（秒，默认 10） | **等待元素出现**再采集——根治动态渲染导致的选择器乱跑。超时后标记 BLOCKED 继续后续步骤，不报错 |
+| `click` | `selector`, `fallback?` | 点击元素（ego click，带遮挡检查）。`fallback` 见「选择器自愈」 |
+| `dispatchClick` | `selector`, `index?`, `fallback?` | JS 合成 MouseEvent click（bubbles），绕过遮挡检查；用于被悬浮横幅遮挡、ego click 静默点在横幅上的按钮（如 OMP top-tip 横幅盖住筛选按钮）。对标准 @click 监听的按钮有效 |
+| `clickCdp` | `selector`, `index?`, `fallback?` | CDP 真实鼠标坐标点击（mousePressed/Released 全链）；用于自定义组件勾选框、依赖真实鼠标事件的元素 |
 | `openDatePicker` | `selector`, `index?` | JS 合成事件打开 el-date-picker 面板（element-ui 专用，见下） |
-| `fill` | `selector`, `value` | 填充输入框 |
+| `fill` | `selector`, `value`, `fallback?` | 填充输入框 |
 | `responsive` | `viewport: {width, height}`, `steps: [...]` | 切换视口执行子步骤后恢复（响应式测试） |
 
 **确定性断言**：
 
 | action | 参数 | 说明 |
 |--------|------|------|
-| `assertVisible` | `selector` | 真实可见性：元素存在 + 宽高 > 0 + 未被 display:none/visibility:hidden 隐藏 |
-| `assertText` | `selector`, `expectContains` 或 `expect` | 文本包含 / 全等匹配（trim 后） |
+| `assertVisible` | `selector`, `fallback?` | 真实可见性：元素存在 + 宽高 > 0 + 未被 display:none/visibility:hidden 隐藏 |
+| `assertText` | `selector`, `expectContains` 或 `expect`, `fallback?` | 文本包含 / 全等匹配（trim 后） |
 | `assertCount` | `selector`, `expect` 或 `min`/`max` 至少其一 | 元素数量精确匹配或范围 |
 | `assertStyle` | `selector`, `property`, `expect` 或 `expectPattern` | computed style 精确匹配或正则匹配 |
 | `assertLayout` | `selector`, `expectAlign: "center"` 或 `expectGrid: {columns: N}` | 居中（偏差 ≤ 10px）/ 网格列数 |
 | `assertApi` | `urlPattern`, `expectStatus?`, `expectBodyCode?` | 接口断言：状态码 / 业务码（body.code）；同接口多次调用取**最新**一条 |
 | `assertDataConsistency` | `selector`, `urlPattern`, `apiField` | **页面 ↔ 接口一致性**：页面元素文本 vs 接口响应字段（apiField 支持 `data.orders[0].orderNo` 路径语法）；生成期强制要求 urlPattern + apiField |
+| `exportApi` | `urlPattern` 或 `urlPatterns[]`, `filename`, `filter?` | **导出完整 API 响应到文件**（result.json 同目录）。支持单接口或多接口批量导出；`filter: { status: 200 }` 过滤条件。用于 Doris vs ES 数据比对等场景 |
 | `aiAssert` | `prompt`, `capture?: ["screenshot","dom","apiResponses"]` | AI 判断兜底：collect 收集上下文 → AI 写结果文件 → run 校验；run 模式结果文件**缺失即失败**（不静默跳过） |
+
+**选择器自愈（fallback 策略，所有支持 selector 的 action 通用）**：
+
+主选择器失败时，执行器自动按 fallback 顺序尝试备选定位策略，根治动态 class/id 导致的选择器乱跑：
+
+```json
+{
+  "action": "click",
+  "selector": ".el-button--primary",
+  "fallback": {
+    "text": "登录",
+    "classContains": "login-btn",
+    "containerAndIndex": { "container": ".login-form", "tag": "button", "index": 0 }
+  }
+}
+```
+
+| fallback 字段 | 说明 |
+|--------------|------|
+| `text` | 找包含指定文本的可点击元素（BUTTON/A/有 onclick 的元素） |
+| `classContains` | 找 class 包含关键字的元素 |
+| `containerAndIndex` | 在指定容器内找第 N 个元素（`{container, tag, index}`） |
 
 每个 step 可带 `desc`（人类可读描述，输出与 result.json 使用）。
 
