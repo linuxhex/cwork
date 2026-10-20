@@ -208,6 +208,8 @@ Web 测试采用 **"AI 生成计划 → 执行器单遍执行 → AI 跑后判�
 1. **登录成功唯一判据 = 确定性 URL 断言（`waitForUrl` / `assertUrl`），禁止其他判据**：
    - plan 中登录场景最后一步必须写 `{ "action": "waitForUrl", "notContains": "/login", "desc": "登录成功判据：URL 已离开登录页" }`
    - **禁止**用 aiAssert/按钮状态/checkbox class/凑数等待判断登录成功——aiAssert 只是证据采集不计入 passed，凑数等待掩盖真实结果（根因 2 的假通过来源）
+   - **登录跳转竞态（OMJF-18841 实战，2026-10-20）**：登录点击后 SPA 路由跳转存在异步窗口期——`waitForNetworkIdle` 在跳转前就可能判定空闲（旧页面请求已结束、新页面请求未发出），随后断言打在登录页/过渡态上产生**瞬态失败**（重跑又通过，时好时坏）。规避：登录点击后**先 `waitForUrl`（确定性轮询）再 `waitForNetworkIdle`**，顺序不能反；禁止在登录场景堆多个 `waitForNetworkIdle` 凑数（生成期只拦「连续 3 个」，中间隔一步就绕过——靠堆等待碰运气本身就是竞态来源）
+   - **登录跳转竞态同理适用于所有页面切换**：navigate/路由跳转后紧接元素断言时，前置 `waitForUrl`（URL 稳定）或 `waitForElement`（目标元素出现）做确定性同步点，再断言——`waitForNetworkIdle` 只能作辅助等待，**永远不能作为跳转完成的判据**
 2. **点击无效果 → 先诊断再动手，禁止换姿势盲试**：点击后页面状态无变化时，第一动作是 `captureScreenshot()` + 抓目标元素真实 DOM/事件绑定，搞清"为什么没生效"再操作。`click icon → click 父级 → CDP` 式连环换姿势 = 乱操作，**每次换操作方式之前必须有一次观察**（截图或 DOM 检查），零观察的连续重试禁止
 3. **YKC 系登录页已知结论**（写 plan / 现场操作直接采用，不重新试错）：协议勾选框是自定义 Vue 组件，JS 合成 click 不触发状态变更，**用 `clickCdp`（真实鼠标坐标）点击勾选框**，随后点击登录按钮，最后断言 URL 跳转
 4. **OMP（云快充运营管理平台）验证码弹窗已知结论**（实测取证，直接采用）：
@@ -381,10 +383,10 @@ echo "✓ ego-browser 可用：$(command -v ego-browser)"
 
 ### element-ui 组件自动化坑（强制，写 plan 前必读）
 
-1. **el-date-picker 面板打开**：合成 click 与 CDP 真实鼠标点击都**打不开**面板（focus 不落地）。必须用 `openDatePicker` action。面板打开后，面板内部元素（日期格 td、上一年/上一月按钮、确定按钮）用普通 `click` 即可（标准 @click 监听）。
+1. **el-date-picker 面板打开**：合成 click 与 CDP 真实鼠标点击都**打不开**面板（focus 不落地）。必须用 `openDatePicker` action。面板打开后，面板内部元素（日期格 td、上一年/上一月按钮、确定按钮）用普通 `click` 即可（标准 @click 监听）。执行器已内置**面板真实打开校验**：派发事件后轮询面板可见性（异步渲染），未打开自动重派发一次事件重试，仍失败才报错——plan 里无需自己加等待步骤（OMJF-18841「面板未开」瞬态失败已由执行器根治）。
 2. **确定按钮真实 class（element-ui 版本差异，勿依赖具体 class）**：不同项目 element-ui 版本确定按钮 class 不同——有的版本是 `plain + size mini`（`button.is-plain`、无 `el-button--primary`），实测另有版本页脚为 `[此刻 el-button--text, 确定 el-button--default]`。**统一写法：`.el-picker-panel__footer button` 取 `index: 1`**（页脚按钮顺序固定：[此刻, 确定]），不猜 class；不确定时先 `--snapshot` 实测页脚结构。
 3. **YKCDateInterval 等区间组件**（`:editable="false"`）：input readonly，`fill` **永不生效**，只能 `openDatePicker` + 面板点击。时间框真实 placeholder 通常是「选择时间」（不是「开始日期/结束日期」），写 plan 前必须用 `assertCount` 实测确认。**OMP ykc interval 实测补充**（2026-10-16）：控件实际是「单日期+时间」面板（el-date-picker has-time）而非 daterange——每个输入框独立开面板、**必须点面板「确定」才提交表单值**；input0 的面板重复选日期会覆盖起始值（建议每输入框一次性选完整值）；日历 tbody 有空首行导致 `tr:nth-child(N)` 错位（选格前先 `--snapshot` 确认行号）；输入框显示值可与表单真值不一致（断言用 `assertDataConsistency` 或 `__vue__` 链读 searchForm 真值，勿信 input 显示值）。
-4. **面板步进 selector**（element-ui 标准）：上一年 `.el-date-picker__prev-btn.el-icon-d-arrow-left`、上一月 `.el-date-picker__prev-btn.el-icon-arrow-left`（class token 精确匹配，不会互串）、日期格 `.el-date-table tr:nth-child(N) td:nth-child(M)`（第一列为周日）、确定 `.el-picker-panel__footer button` 取 `index: 1`（见坑 2，勿依赖 `.is-plain` 等具体 class）。
+4. **面板步进 selector**（element-ui 标准）：上一年 `.el-date-picker__prev-btn.el-icon-d-arrow-left`、上一月 `.el-date-picker__prev-btn.el-icon-arrow-left`（class token 精确匹配，不会互串）、日期格 `.el-date-table tr:nth-child(N) td:nth-child(M)`（第一列为周日）、确定 `.el-picker-panel__footer button` 取 `index: 1`（见坑 2，勿依赖 `.is-plain` 等具体 class）。**「prev-btn 不可见」瞬态失败（OMJF-18841 实战）**：根因几乎总是前置的 openDatePicker 面板未真正打开（异步渲染竞态），步进按钮没渲染出来——不是选择器错。执行器已内置面板打开校验+重试；plan 修正循环中遇此失败先核对上一步 `openDatePicker[dbg]` 日志确认面板状态，**禁止直接换/改 prev-btn 选择器盲试**。另注意面板步进后立即选格可能竞态（日历重渲染），步进后紧跟的选格步骤前可加 `waitForElement .el-date-table`（1s 级短超时）做确定性同步。
 5. **同 selector 多个输入框**：用 `index` 字段取第 N 个（如页面 4 个「选择时间」框：0/1=开始充电组、2/3=结束充电组，按渲染顺序）。
 6. **列表页筛选区默认收起**（YKC OMP 系页面只显 3 项）：先 `click .ykc-search-arrow` 展开再操作深部筛选控件，否则 v-show 隐藏元素全部 Element not found。
 7. **多 tab 会话**：登录态不跨任务空间——新 taskSpaceName 必须自带登录场景。
