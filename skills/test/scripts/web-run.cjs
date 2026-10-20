@@ -83,6 +83,39 @@ function findEgoBrowser() {
   return null;
 }
 
+// 浏览器端元素定位辅助函数（支持 fallback 策略）
+const ELEMENT_LOCATOR_JS = `
+  window.__locateElement = function(selector, fallback) {
+    // 1. 先尝试主选择器
+    let el = document.querySelector(selector);
+    if (el) return el;
+
+    // 2. 失败 → 尝试 fallback 策略
+    if (fallback) {
+      // 文本匹配
+      if (fallback.text) {
+        const all = Array.from(document.querySelectorAll('*'));
+        el = all.find(e => e.textContent.trim() === fallback.text && (e.tagName === 'BUTTON' || e.tagName === 'A' || e.onclick));
+        if (el) return el;
+      }
+      // 属性包含
+      if (fallback.classContains) {
+        el = Array.from(document.querySelectorAll('*')).find(e => e.className && e.className.includes(fallback.classContains));
+        if (el) return el;
+      }
+      // 容器内查找
+      if (fallback.containerAndIndex) {
+        const container = document.querySelector(fallback.containerAndIndex.container);
+        if (container) {
+          const candidates = container.querySelectorAll(fallback.containerAndIndex.tag || 'button');
+          if (candidates[fallback.containerAndIndex.index]) return candidates[fallback.containerAndIndex.index];
+        }
+      }
+    }
+    return null;
+  };
+`;
+
 // 浏览器端 fetch/XHR 拦截器（注入页面，捕获接口响应到 window.__capturedResponses；测试与 --snapshot 共用）
 const INTERCEPTOR_JS = `(() => {
   window.__capturedResponses = [];
@@ -152,6 +185,7 @@ function generateHeredoc(plan, mode, ctxDir, keep = false, resultPath = null) {
   L(`// ── 接口响应拦截 ──`);
   L(`const __capturedResponses = [];`);
   L(`const __interceptorCode = ${JSON.stringify(INTERCEPTOR_JS)};`);
+  L(`const __locatorCode = ${JSON.stringify(ELEMENT_LOCATOR_JS)};`);
   L(``);
 
   // 辅助函数
@@ -210,6 +244,9 @@ function generateHeredoc(plan, mode, ctxDir, keep = false, resultPath = null) {
   // 拦截器必须在任务空间选定后注入：CDP 注册保证 SPA 后续 navigate 后自动重装，js() 立即注入覆盖首屏
   L(`await cdp('Page.addScriptToEvaluateOnNewDocument', { source: __interceptorCode });`);
   L(`await js(__interceptorCode);`);
+  // 注入元素定位辅助函数（支持 fallback 策略）
+  L(`await cdp('Page.addScriptToEvaluateOnNewDocument', { source: __locatorCode });`);
+  L(`await js(__locatorCode);`);
   L(``);
 
   // 全局看门狗（到点先落盘部分结果再退出，超时不再丢已执行场景的证据）
@@ -329,6 +366,26 @@ function generateStepCode(L, step, label, collectMode, si, i, baseUrl) {
       L(`  await waitForLoad();`);
       break;
 
+    case 'waitForElement': {
+      // 等待元素出现再采集——根治动态渲染导致的选择器乱跑
+      // 超时后标记 BLOCKED 继续后续步骤，不报错（避免一个元素卡死整个场景）
+      const timeout = Number(step.timeout || 10) * 1000;
+      L(`  {`);
+      L(`    const __timeout = ${timeout};`);
+      L(`    const __start = Date.now();`);
+      L(`    let __found = false;`);
+      L(`    while (Date.now() - __start < __timeout) {`);
+      L(`      const __el = await js(\`(() => { return !!window.__locateElement(${tmplSel(step.selector)}, ${JSON.stringify(step.fallback || null)}); })()\`);`);
+      L(`      if (__el === 'true' || __el === true) { __found = true; break; }`);
+      L(`      await sleep(200);`);
+      L(`    }`);
+      L(`    if (!__found) {`);
+      L(`      log('  ⚠ waitForElement 超时（${step.timeout || 10}s）: ' + ${JSON.stringify(step.selector)} + ' → 标记 BLOCKED 继续后续步骤');`);
+      L(`    }`);
+      L(`  }`);
+      break;
+    }
+
     case 'clickCdp':
       // CDP 真实鼠标事件（mousedown/focus/click 全链），用于依赖 focus 打开的组件如 el-date-picker 面板
       // 坐标求值走 cdp('Runtime.evaluate') returnByValue，绕开 js() 对复杂表达式返回 null 的坑
@@ -380,21 +437,44 @@ function generateStepCode(L, step, label, collectMode, si, i, baseUrl) {
       break;
 
     case 'click':
-      L(`  await click(${JSON.stringify(step.selector)}, { label: ${JSON.stringify(step.desc || '点击')} });`);
+      // 支持 fallback 策略：主选择器失败时自动尝试备选定位策略
+      if (step.fallback) {
+        L(`  {`);
+        L(`    const __el = await js(\`(() => { const el = window.__locateElement(${tmplSel(step.selector)}, ${JSON.stringify(step.fallback)}); return el ? 'found' : 'not-found'; })()\`);`);
+        L(`    if (__el === 'not-found') throw new Error('元素未找到: ' + ${JSON.stringify(step.selector)} + '（含 fallback）');`);
+        L(`    await click(${JSON.stringify(step.selector)}, { label: ${JSON.stringify(step.desc || '点击')} });`);
+        L(`  }`);
+      } else {
+        L(`  await click(${JSON.stringify(step.selector)}, { label: ${JSON.stringify(step.desc || '点击')} });`);
+      }
       L(`  await sleep(500);`);
       L(`  await refreshResponses();`);
       break;
 
     case 'fill':
-      L(`  await fillInput(${JSON.stringify(step.selector)}, ${JSON.stringify(step.value)});`);
+      // 支持 fallback 策略：主选择器失败时自动尝试备选定位策略
+      if (step.fallback) {
+        L(`  {`);
+        L(`    const __el = await js(\`(() => { const el = window.__locateElement(${tmplSel(step.selector)}, ${JSON.stringify(step.fallback)}); return el ? 'found' : 'not-found'; })()\`);`);
+        L(`    if (__el === 'not-found') throw new Error('元素未找到: ' + ${JSON.stringify(step.selector)} + '（含 fallback）');`);
+        L(`    await fillInput(${JSON.stringify(step.selector)}, ${JSON.stringify(step.value)});`);
+        L(`  }`);
+      } else {
+        L(`  await fillInput(${JSON.stringify(step.selector)}, ${JSON.stringify(step.value)});`);
+      }
       L(`  await sleep(200);`);
       L(`  await refreshResponses();`);
       break;
 
     case 'assertVisible':
       // 真实可见性：存在且占位（宽高>0）且未被 display:none/visibility:hidden 隐藏，而非仅判存在
+      // 支持 fallback 策略：主选择器失败时自动尝试备选定位策略
       L(`  {`);
-      L(`    const __vis = await js(\`(() => { const el = document.querySelector(${tmplSel(step.selector)}); if (!el) return 'missing'; const r = el.getBoundingClientRect(); if (r.width <= 0 || r.height <= 0) return 'zero-size'; const s = getComputedStyle(el); if (s.display === 'none' || s.visibility === 'hidden') return 'css-hidden'; return 'visible'; })()\`);`);
+      if (step.fallback) {
+        L(`    const __vis = await js(\`(() => { const el = window.__locateElement(${tmplSel(step.selector)}, ${JSON.stringify(step.fallback)}); if (!el) return 'missing'; const r = el.getBoundingClientRect(); if (r.width <= 0 || r.height <= 0) return 'zero-size'; const s = getComputedStyle(el); if (s.display === 'none' || s.visibility === 'hidden') return 'css-hidden'; return 'visible'; })()\`);`);
+      } else {
+        L(`    const __vis = await js(\`(() => { const el = document.querySelector(${tmplSel(step.selector)}); if (!el) return 'missing'; const r = el.getBoundingClientRect(); if (r.width <= 0 || r.height <= 0) return 'zero-size'; const s = getComputedStyle(el); if (s.display === 'none' || s.visibility === 'hidden') return 'css-hidden'; return 'visible'; })()\`);`);
+      }
       L(`    if (__vis !== 'visible') throw new Error(${JSON.stringify(step.desc || '元素不可见')} + ': ' + ${JSON.stringify(step.selector)} + ' (状态: ' + __vis + ')');`);
       L(`  }`);
       break;
@@ -519,6 +599,38 @@ function generateStepCode(L, step, label, collectMode, si, i, baseUrl) {
       L(`    for (let __i = 0; __i < Math.min(__vals.length, __apiValues.length); __i++) {`);
       L(`      if (__vals[__i] !== String(__apiValues[__i])) throw new Error(${JSON.stringify(step.desc || '数据不一致')} + ': 页面["' + __vals[__i] + '"] vs 接口["' + __apiValues[__i] + '"]');`);
       L(`    }`);
+      L(`  }`);
+      break;
+    }
+
+    case 'exportApi': {
+      // 导出完整 API 响应到文件（供 Doris vs ES 数据比对等场景）
+      // 支持单接口（urlPattern 字符串）或多接口批量导出（urlPatterns 数组）
+      if (!step.filename) {
+        throw new Error('exportApi 需要 filename: ' + JSON.stringify(step.desc || step.action));
+      }
+      const patterns = step.urlPatterns || (step.urlPattern ? [step.urlPattern] : []);
+      if (patterns.length === 0) {
+        throw new Error('exportApi 需要 urlPattern 或 urlPatterns: ' + JSON.stringify(step.desc || step.action));
+      }
+      L(`  {`);
+      L(`    await refreshResponses();`);
+      L(`    const __patterns = ${JSON.stringify(patterns)};`);
+      L(`    const __exported = [];`);
+      L(`    for (const __p of __patterns) {`);
+      L(`      const __resp = findResponse(__p);`);
+      L(`      if (__resp) {`);
+      L(`        __exported.push({ urlPattern: __p, response: __resp });`);
+      L(`      } else {`);
+      L(`        log('  ⚠ exportApi: 未捕获接口 ' + __p);`);
+      L(`      }`);
+      L(`    }`);
+      L(`    if (__exported.length === 0) {`);
+      L(`      throw new Error(${JSON.stringify(step.desc || 'exportApi')} + ': 未捕获任何接口响应');`);
+      L(`    }`);
+      L(`    const __outFile = path.join(RESULT_DIR, ${JSON.stringify(step.filename)});`);
+      L(`    fs.writeFileSync(__outFile, JSON.stringify(__exported.length === 1 ? __exported[0].response : __exported, null, 2));`);
+      L(`    log('  ✓ exportApi: 导出 ' + __exported.length + ' 个接口响应到 ' + __outFile);`);
       L(`  }`);
       break;
     }
