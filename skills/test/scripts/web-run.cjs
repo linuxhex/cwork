@@ -2,20 +2,17 @@
 /**
  * cwork-test Web 测试执行器（ego-browser 驱动）
  *
- * 设计思路：
- *   AI 生成 plan.json（声明式测试计划）→ web-run.cjs 生成 heredoc → ego-browser 执行
- *   基础断言（数据/布局/样式/接口）在执行器内确定性完成
- *   AI 断言（视觉/语义）走两阶段：收集上下文 → AI 判断 → 带结果重跑
+ * 设计思路（单遍执行）：
+ *   AI 生成 plan.json（声明式测试计划）→ web-run.cjs 生成 heredoc → ego-browser 单遍跑完
+ *   确定性断言（URL/元素/文本/数量/样式/布局/接口）在执行器内即时判定
+ *   aiAssert 只做证据采集（截图/DOM/接口/页面信息），跑到即存不阻塞，跑完后输出
+ *   AI_ASSERT_PENDING（证据文件清单），AI 读证据统一判断并把结论合入 test-report.md
+ *   ——不再有第二遍重跑
  *
  * 用法：
- *   node web-run.cjs --plan plan.json [--ctx-dir DIR] [--out result.json]
- *     → 完整流程：plan 无 aiAssert 时单遍直通；有 aiAssert 时 collect → AI 判断 → run
- *
- *   node web-run.cjs --collect --plan plan.json --ctx-dir DIR
- *     → 只执行到 aiAssert 点，收集上下文（截图+DOM+接口响应），输出 AI_ASSERT_PENDING
- *
- *   node web-run.cjs --run --plan plan.json --ctx-dir DIR
- *     → 带预判断结果执行（读 CTX_DIR/s{i}_i{j}.result.json，缺失 = 该步失败，不跳过）
+ *   node web-run.cjs --plan plan.json [--ctx-dir DIR] [--out result.json] [--keep]
+ *     → 单遍执行测试；含 aiAssert 时结束时输出 AI_ASSERT_PENDING
+ *       假通过防线：plan 声明的 aiAssert 数 > 实际采集数时响亮告警，结果不可视为通过
  *
  *   node web-run.cjs --snapshot --url <baseUrl> [--out snap.json]
  *     → 标准化采集：打开页面 + 注入接口拦截器 + snapshotText + pageInfo + 截图
@@ -44,9 +41,12 @@
  *       {"action": "assertLayout", "selector": ".order-item", "expectGrid": {"columns": 3}},
  *       {"action": "assertApi", "urlPattern": "/api/orders", "expectStatus": 200, "expectBodyCode": 0},
  *       {"action": "assertDataConsistency", "selector": ".order-no", "urlPattern": "/api/orders", "apiField": "orders[0].orderNo"},
+ *       {"action": "waitForUrl", "notContains": "/login", "timeout": 15, "desc": "等待跳转离开登录页"},
+ *       {"action": "assertUrl", "contains": "#/orders", "desc": "断言当前路由"},
  *       {"action": "click", "selector": ".order-item:first-child"},
  *       {"action": "fill", "selector": "input.search", "value": "ORD001"},
  *       {"action": "aiAssert", "prompt": "检查订单列表布局是否美观", "capture": ["screenshot", "dom"]},
+ *         aiAssert 仅采集证据不阻塞执行：步骤标 pending 不计入 passed，跑完后 AI 读 ctx 文件判断
  *       {"action": "responsive", "viewport": {"width": 375, "height": 812}, "steps": [...]}
  *     ]
  *   }]
@@ -158,13 +158,12 @@ const INTERCEPTOR_JS = `(() => {
 
 // ── heredoc 代码生成 ──
 
-function generateHeredoc(plan, mode, ctxDir, keep = false, resultPath = null) {
+function generateHeredoc(plan, ctxDir, keep = false, resultPath = null) {
   const lines = [];
   const L = (s) => lines.push(s);
 
   const baseUrl = plan.baseUrl || 'http://localhost:3000';
   const taskName = plan.taskSpaceName || plan.taskName || 'cwork-test';
-  const collectMode = mode === 'collect';
   const rp = resultPath || path.resolve(process.cwd(), 'result.json');
 
   // 基础设施（ESM import：ego nodejs 运行时存在顶层 await，require 混用会报模块格式歧义）
@@ -173,7 +172,6 @@ function generateHeredoc(plan, mode, ctxDir, keep = false, resultPath = null) {
   L(`import path from 'node:path';`);
   L(``);
   L(`const CTX_DIR = ${JSON.stringify(ctxDir)};`);
-  L(`const MODE = ${JSON.stringify(mode)};`);
   L(`const RESULT_PATH = ${JSON.stringify(rp)};`);
   L(`const RESULT_DIR = path.dirname(RESULT_PATH);`);
   L(`const SHOT_DIR = path.join(RESULT_DIR, 'screenshots');`);
@@ -194,6 +192,11 @@ function generateHeredoc(plan, mode, ctxDir, keep = false, resultPath = null) {
   L(`let __scenarioIdx = 0;`);
   L(`const __results = [];`);
   L(`let __currentScenario = null;`);
+  // AI 断言证据采集：aiAssert 步骤把证据文件路径挂到 __aiPendingCtx，外层步骤包装读取后归档
+  L(`const __aiPendingList = [];`);
+  L(`let __aiPendingCtx = null;`);
+  // P0 场景失败后阻断后续场景（防登录失败后后续场景照跑给假通过）
+  L(`let __blockedAfterP0 = false;`);
   L(``);
   L(`function log(msg) { cliLog(msg); }`);
   L(``);
@@ -222,11 +225,15 @@ function generateHeredoc(plan, mode, ctxDir, keep = false, resultPath = null) {
   L(``);
 
   // 结果落盘（汇总与看门狗共用：中断时已执行场景的结果不丢）
+  // passed 不含 aiPending 场景（AI 判断未完成不能算通过）；blocked 单列不计入 failed
   L(`function __flushResults(extra) {`);
   L(`  const __summary = Object.assign({`);
   L(`    scenarios: __results,`);
-  L(`    passed: __results.filter(r => r.ok).length,`);
-  L(`    failed: __results.filter(r => !r.ok).length,`);
+  L(`    passed: __results.filter(r => r.ok === true && !r.aiPending && !r.blocked).length,`);
+  L(`    failed: __results.filter(r => r.ok === false && !r.blocked).length,`);
+  L(`    blocked: __results.filter(r => r.blocked).length,`);
+  L(`    aiPending: __aiPendingList.slice(),`);
+  L(`    hasPendingAI: __aiPendingList.length > 0,`);
   L(`    total: __results.length,`);
   L(`    finishedAt: new Date().toISOString()`);
   L(`  }, extra || {});`);
@@ -268,14 +275,21 @@ function generateHeredoc(plan, mode, ctxDir, keep = false, resultPath = null) {
   const scenarios = plan.scenarios || [];
   for (let si = 0; si < scenarios.length; si++) {
     const sc = scenarios[si];
+    const pri = sc.priority || 'P1';
     L(`// ══════ 场景 ${si + 1}: ${sc.name} ══════`);
-    L(`__scene_${si}: {`);
     L(`__scenarioIdx = ${si};`);
     L(`__currentScenario = ${JSON.stringify(sc.name)};`);
     L(`log('');`);
-    L(`log('【场景】' + __currentScenario + '（${sc.priority || 'P1'}）');`);
-    L(`const __result_${si} = { name: __currentScenario, priority: ${JSON.stringify(sc.priority || 'P1')}, steps: [], ok: true };`);
+    L(`log('【场景】' + __currentScenario + '（${pri}）');`);
+    // P0 失败阻断：被阻断的场景不执行，结果标 blocked（不计入 passed/failed）
+    L(`if (__blockedAfterP0) {`);
+    L(`  log('  ⬜ BLOCKED——前置 P0 场景失败，跳过执行');`);
+    L(`  __results.push({ name: __currentScenario, priority: ${JSON.stringify(pri)}, steps: [], ok: false, blocked: true });`);
+    L(`} else {`);
+    // __result 声明在 labeled block 外：场景内 break 跳出后仍要做 aiPending 归档与 P0 阻断判断
+    L(`const __result_${si} = { name: __currentScenario, priority: ${JSON.stringify(pri)}, steps: [], ok: true };`);
     L(`__results.push(__result_${si});`);
+    L(`__scene_${si}: {`);
     L(``);
 
     const steps = sc.steps || [];
@@ -284,41 +298,49 @@ function generateHeredoc(plan, mode, ctxDir, keep = false, resultPath = null) {
       const stepLabel = `场景${si + 1} 步骤${i + 1}`;
       L(`try {`);
       L(`  __stepIdx = ${i};`);
-      generateStepCode(L, step, stepLabel, collectMode, si, i, baseUrl);
-      L(`  __result_${si}.steps.push({ action: ${JSON.stringify(step.action)}, ok: true, desc: ${JSON.stringify(step.desc || step.action)} });`);
-      L(`  log('  ✓ ' + ${JSON.stringify(step.desc || step.action)});`);
+      L(`  __aiPendingCtx = null;`);
+      generateStepCode(L, step, stepLabel, si, i, baseUrl);
+      L(`  if (__aiPendingCtx) {`);
+      L(`    __result_${si}.steps.push({ action: 'aiAssert', ok: null, pending: true, desc: ${JSON.stringify(step.desc || 'AI断言')}, ctx: __aiPendingCtx });`);
+      L(`    __aiPendingList.push(__aiPendingCtx);`);
+      L(`    log('  ◌ AI证据已采集: ' + __aiPendingCtx);`);
+      L(`  } else {`);
+      L(`    __result_${si}.steps.push({ action: ${JSON.stringify(step.action)}, ok: true, desc: ${JSON.stringify(step.desc || step.action)} });`);
+      L(`    log('  ✓ ' + ${JSON.stringify(step.desc || step.action)});`);
+      L(`  }`);
       L(`} catch (err) {`);
       L(`  __result_${si}.steps.push({ action: ${JSON.stringify(step.action)}, ok: false, desc: ${JSON.stringify(step.desc || step.action)}, error: err.message });`);
       L(`  log('  ✗ ' + ${JSON.stringify(step.desc || step.action)} + ': ' + err.message);`);
       L(`  __result_${si}.ok = false;`);
-      if (collectMode) {
-        L(`  // collect 模式：失败也继续（尽量多收集上下文）`);
-      } else {
-        L(`  // run 模式：首败即停`);
-        // 失败截图归档到 result.json 同目录 screenshots/（ego 临时目录被清理后仍可回溯证据）
-        L(`  try {`);
-        L(`    const __failShot = await captureScreenshot();`);
-        L(`    if (__failShot && fs.existsSync(__failShot)) {`);
-        L(`      const __shotPath = path.join(SHOT_DIR, 'fail-s' + __scenarioIdx + '-i' + __stepIdx + '.png');`);
-        L(`      fs.copyFileSync(__failShot, __shotPath);`);
-        L(`      __result_${si}.screenshot = __shotPath;`);
-        L(`      log('  失败截图: ' + __shotPath);`);
-        L(`    } else {`);
-        L(`      __result_${si}.screenshot = __failShot;`);
-        L(`      log('  失败截图: ' + __failShot);`);
-        L(`    }`);
-        // 失败瞬间语义快照摘录（选择器为什么没命中/页面实际长什么样，免得诊断时再跑一轮观察）
-        L(`    try {`);
-        L(`      __result_${si}.failSnapshot = String(await snapshotText() || '').slice(0, 3000);`);
-        L(`    } catch (_) {}`);
-        L(`  } catch(e) {}`);
-        L(`  break __scene_${si};`);
-      }
+      // 首败即停 + 失败截图归档到 result.json 同目录 screenshots/（ego 临时目录被清理后仍可回溯证据）
+      L(`  try {`);
+      L(`    const __failShot = await captureScreenshot();`);
+      L(`    if (__failShot && fs.existsSync(__failShot)) {`);
+      L(`      const __shotPath = path.join(SHOT_DIR, 'fail-s' + __scenarioIdx + '-i' + __stepIdx + '.png');`);
+      L(`      fs.copyFileSync(__failShot, __shotPath);`);
+      L(`      __result_${si}.screenshot = __shotPath;`);
+      L(`      log('  失败截图: ' + __shotPath);`);
+      L(`    } else {`);
+      L(`      __result_${si}.screenshot = __failShot;`);
+      L(`      log('  失败截图: ' + __failShot);`);
+      L(`    }`);
+      // 失败瞬间语义快照摘录（选择器为什么没命中/页面实际长什么样，免得诊断时再跑一轮观察）
+      L(`    try {`);
+      L(`      __result_${si}.failSnapshot = String(await snapshotText() || '').slice(0, 3000);`);
+      L(`    } catch (_) {}`);
+      L(`  } catch(e) {}`);
+      L(`  break __scene_${si};`);
       L(`}`);
       L(``);
     }
 
-    L(`log('  场景结果: ' + (__result_${si}.ok ? '✓ 通过' : '✗ 失败'));`);
+    L(`}`);
+    L(`if (__result_${si}.steps.some(s => s.pending)) __result_${si}.aiPending = true;`);
+    L(`log('  场景结果: ' + (__result_${si}.aiPending ? '◌ 待AI判断（确定性步骤' + (__result_${si}.ok ? '已全过' : '有失败') + '）' : (__result_${si}.ok ? '✓ 通过' : '✗ 失败')));`);
+    L(`if (!__result_${si}.ok && ${JSON.stringify(pri)} === 'P0') {`);
+    L(`  __blockedAfterP0 = true;`);
+    L(`  log('⛔ P0 场景失败，后续场景全部标记 BLOCKED');`);
+    L(`}`);
     L(`}`);
     L(``);
   }
@@ -335,7 +357,7 @@ function generateHeredoc(plan, mode, ctxDir, keep = false, resultPath = null) {
   L(``);
   L(`log('');`);
   L(`log('结果已写入: ' + RESULT_PATH);`);
-  L(`log('═══ 结果: 通过 ' + __summary.passed + ' / 失败 ' + __summary.failed + ' (共 ' + __summary.total + ' 场景) ═══');`);
+  L(`log('═══ 结果: 通过 ' + __summary.passed + ' / 失败 ' + __summary.failed + ' / 阻断 ' + __summary.blocked + ' / 待AI判断 ' + __summary.aiPending.length + ' (共 ' + __summary.total + ' 场景) ═══');`);
   L(`log('RESULT_JSON=' + JSON.stringify(__summary));`);
 
   const code = lines.join('\n');
@@ -343,7 +365,7 @@ function generateHeredoc(plan, mode, ctxDir, keep = false, resultPath = null) {
 }
 
 // 生成单个步骤的执行代码
-function generateStepCode(L, step, label, collectMode, si, i, baseUrl) {
+function generateStepCode(L, step, label, si, i, baseUrl) {
   const action = step.action || step.type;
 
   switch (action) {
@@ -560,6 +582,52 @@ function generateStepCode(L, step, label, collectMode, si, i, baseUrl) {
       L(`  }`);
       break;
 
+    // URL 条件构造：contains/notContains/matches 至少其一，多条件 AND
+    // （登录自动化唯一可靠的成功判据 = URL 离开 /login，禁止用按钮 disabled/loading 状态或 aiAssert 凑数）
+    case 'waitForUrl':
+    case 'assertUrl': {
+      const conds = [];
+      if (step.contains) conds.push({ kind: 'contains', v: String(step.contains) });
+      if (step.notContains) conds.push({ kind: 'notContains', v: String(step.notContains) });
+      if (step.matches) conds.push({ kind: 'matches', v: String(step.matches) });
+      if (conds.length === 0) {
+        throw new Error(action + ' 需要 contains/notContains/matches 至少其一: ' + JSON.stringify(step.desc || action));
+      }
+      const checks = conds.map(c =>
+        c.kind === 'matches'
+          ? `new RegExp(${JSON.stringify(c.v)}).test(u)`
+          : c.kind === 'notContains'
+            ? `!u.includes(${JSON.stringify(c.v)})`
+            : `u.includes(${JSON.stringify(c.v)})`
+      ).join(' && ');
+      const failDesc = conds.map(c =>
+        c.kind === 'matches' ? `url 匹配 /${c.v}/` : `url ${c.kind === 'contains' ? '包含' : '不包含'} "${c.v}"`
+      ).join(' 且 ');
+      if (action === 'assertUrl') {
+        L(`  {`);
+        L(`    const __info = await pageInfo();`);
+        L(`    const u = __info.url || '';`);
+        L(`    if (!(${checks})) throw new Error(${JSON.stringify(step.desc || 'URL断言失败')} + ': 期望 ' + ${JSON.stringify(failDesc)} + ', 实际 ' + u);`);
+        L(`  }`);
+      } else {
+        // waitForUrl：轮询直到 URL 条件满足或超时（默认 15s，页面跳转/路由重定向常有延迟）
+        const timeoutS = Number(step.timeout || 15);
+        L(`  {`);
+        L(`    const __deadline = Date.now() + ${timeoutS} * 1000;`);
+        L(`    let __ok = false;`);
+        L(`    let __url = '';`);
+        L(`    while (Date.now() < __deadline) {`);
+        L(`      const __info = await pageInfo();`);
+        L(`      __url = __info.url || '';`);
+        L(`      if (${checks}) { __ok = true; break; }`);
+        L(`      await wait(0.5);`);
+        L(`    }`);
+        L(`    if (!__ok) throw new Error(${JSON.stringify(step.desc || 'URL等待超时')} + ': ${timeoutS}s 内未满足 ' + ${JSON.stringify(failDesc)} + ', 当前 ' + __url);`);
+        L(`  }`);
+      }
+      break;
+    }
+
     case 'assertApi':
       L(`  {`);
       L(`    await refreshResponses();`);
@@ -636,11 +704,12 @@ function generateStepCode(L, step, label, collectMode, si, i, baseUrl) {
     }
 
     case 'aiAssert': {
+      // 单遍直通设计：aiAssert 不做即时判断（原两遍 collect→run 已废弃），只采集证据落盘后标 pending，
+      // 场景结果 aiPending=true、不计入 passed；AI 在跑完后统一读 ctx 文件判断合入报告，不重跑第二遍
       const captures = step.capture || ['screenshot'];
       L(`  {`);
       L(`    const __aiId = 's' + __scenarioIdx + '_i' + __stepIdx;`);
       L(`    const __ctxFile = path.join(CTX_DIR, __aiId + '.json');`);
-      L(`    const __resultFile = path.join(CTX_DIR, __aiId + '.result.json');`);
       L(`    const __ctx = { id: __aiId, desc: ${JSON.stringify(step.desc || 'AI断言')}, prompt: ${JSON.stringify(step.prompt)} };`);
 
       // 截图
@@ -659,19 +728,10 @@ function generateStepCode(L, step, label, collectMode, si, i, baseUrl) {
       L(`    try { __ctx.pageInfo = await pageInfo(); } catch(e) {}`);
 
       L(`    fs.writeFileSync(__ctxFile, JSON.stringify(__ctx, null, 2));`);
-
-      if (collectMode) {
-        // collect 模式：只收集上下文，不判断
-        L(`    log('  [AI_ASSERT] 上下文已收集: ' + __ctxFile);`);
-        L(`    log('AI_ASSERT_COLLECTED:' + __ctxFile);`);
-      } else {
-        // run 模式：读取 AI 预判断结果；缺失 = 该步失败（静默跳过会让 AI 断言形同虚设）
-        L(`    if (!fs.existsSync(__resultFile)) throw new Error('AI断言结果缺失: ' + __resultFile + '（collect 后必须由 AI 写入判断结果再 --run）');`);
-        L(`    const __aiResult = JSON.parse(fs.readFileSync(__resultFile, 'utf8'));`);
-        L(`    if (!__aiResult.pass) throw new Error('AI断言失败[' + ${JSON.stringify(step.desc || '')} + ']: ' + __aiResult.reason);`);
-        L(`    log('  [AI] ' + ${JSON.stringify(step.desc || 'AI断言')} + ': ✓ ' + (__aiResult.reason || ''));`);
-      }
-
+      L(`    __aiPendingCtx = __ctxFile;`);
+      L(`    log('  [AI证据] 已采集: ' + __ctxFile);`);
+      // 标记给 Node 侧统计（executeHeredoc 有 chunk 边界切行风险，close 后还会对完整 stdout 兜底重扫）
+      L(`    log('AI_ASSERT_COLLECTED:' + __ctxFile);`);
       L(`  }`);
       break;
     }
@@ -689,7 +749,7 @@ function generateStepCode(L, step, label, collectMode, si, i, baseUrl) {
       for (let j = 0; j < subSteps.length; j++) {
         const sub = subSteps[j];
         L(`  try {`);
-        generateStepCode(L, sub, `${label} responsive.${j}`, collectMode, si, `${i}_r${j}`, baseUrl);
+        generateStepCode(L, sub, `${label} responsive.${j}`, si, `${i}_r${j}`, baseUrl);
         L(`    log('    ✓ ' + ${JSON.stringify(sub.desc || sub.action)});`);
         L(`  } catch(err) {`);
         L(`    log('    ✗ ' + ${JSON.stringify(sub.desc || sub.action)} + ': ' + err.message);`);
@@ -736,12 +796,25 @@ function executeHeredoc(code, egoPath) {
     });
 
     child.stderr.on('data', (chunk) => {
-      stderr += chunk.toString();
+      const text = chunk.toString();
+      stderr += text;
+      // cliLog 在 ego nodejs 运行时实际走 stderr（实测 AI_ASSERT_COLLECTED 全在 stderr），
+      // 标记实时检测必须双通道，只扫 stdout 会漏 → 误报"假通过"
+      for (const line of text.split('\n')) {
+        if (line.startsWith('AI_ASSERT_COLLECTED:')) {
+          aiMarkers.push(line.replace('AI_ASSERT_COLLECTED:', '').trim());
+        }
+      }
       process.stderr.write(chunk); // 透传错误
     });
 
     child.on('close', (code) => {
-      resolve({ code, stdout, stderr, aiMarkers });
+      // 兜底重扫：标记行可能被 chunk 边界切开，实时检测会漏——
+      // 漏检的后果是 plan 里明明有 aiAssert 却被判"无 AI 断言"假直通（历史假通过事故根因）
+      // stdout + stderr 双通道：cliLog 实际走 stderr
+      const fullScan = [...(stdout + '\n' + stderr).matchAll(/AI_ASSERT_COLLECTED:(\S+)/g)].map(m => m[1]);
+      const merged = [...new Set([...aiMarkers, ...fullScan])];
+      resolve({ code, stdout, stderr, aiMarkers: merged });
     });
 
     child.on('error', reject);
@@ -752,51 +825,61 @@ function executeHeredoc(code, egoPath) {
   });
 }
 
-// ── 完整流程（collect → 等 AI → run）──
+// ── 完整流程（单遍：执行 + AI 证据采集，AI 判断在跑完后由外部完成，不重跑）──
+
+// 统计 plan 声明的 aiAssert 步骤数（含 responsive 子步骤）——
+// 与实际采集数比对，缺失说明有 aiAssert 没执行到（此前单遍直通漏检导致的假通过根因）
+function countAiAssert(plan) {
+  let n = 0;
+  for (const sc of (plan.scenarios || [])) {
+    for (const st of (sc.steps || [])) {
+      if (st.action === 'aiAssert') n++;
+      for (const sub of (st.steps || [])) {
+        if (sub.action === 'aiAssert') n++;
+      }
+    }
+  }
+  return n;
+}
 
 async function runFullFlow(plan, ctxDir, resultPath, egoPath, keep = false) {
   fs.mkdirSync(ctxDir, { recursive: true });
 
-  // Pass 1: collect（plan 无 aiAssert 时即单遍直通，result.json 已由执行器写入 resultPath）
-  console.log('═══ Pass 1: 执行测试并收集 AI 断言上下文 ═══');
-  const collectCode = generateHeredoc(plan, 'collect', ctxDir, keep, resultPath);
-  const collectResult = await executeHeredoc(collectCode, egoPath);
+  const planAiCount = countAiAssert(plan);
 
-  if (collectResult.aiMarkers.length === 0) {
-    console.log('无 AI 断言，单遍直通完成，结果: ' + resultPath);
-    return collectResult.code;
+  console.log('═══ 单遍执行测试计划（aiAssert 仅采集证据，判断由 AI 跑后完成）═══');
+  const code = generateHeredoc(plan, ctxDir, keep, resultPath);
+  const result = await executeHeredoc(code, egoPath);
+
+  // 假通过防线：plan 声明了 aiAssert 但一个都没采集到 → 执行器/标记链路有问题，结果不可信
+  if (planAiCount > 0 && result.aiMarkers.length === 0) {
+    console.error('');
+    console.error('❌⚠️  假通过告警：plan 声明了 ' + planAiCount + ' 个 aiAssert，但一个 AI 证据都没采集到！');
+    console.error('   原因排查方向：步骤在 aiAssert 之前失败 / AI_ASSERT_COLLECTED 标记丢失。');
+    console.error('   ⚠️  result.json 中的通过数不可视为真实通过，请人工核查 result.json 全文。');
+    console.error('');
+    if (result.code === 0) process.exitCode = 2;
+  } else if (planAiCount > 0 && result.aiMarkers.length < planAiCount) {
+    console.error('');
+    console.error('⚠️  AI 证据采集不完整：声明 ' + planAiCount + ' 个，实际采集 ' + result.aiMarkers.length + ' 个（部分步骤未到达或标记丢失）');
+    console.error('');
   }
 
-  // 输出 AI 待处理标记
-  console.log('');
-  console.log('AI_ASSERT_PENDING:' + JSON.stringify({
-    contexts: collectResult.aiMarkers,
-    ctxDir,
-  }));
-  console.log('');
-
-  // 等待 AI 结果文件（轮询，最长 5 分钟）
-  console.log('等待 AI 判断结果...');
-  const deadline = Date.now() + 5 * 60 * 1000;
-  for (const ctxFile of collectResult.aiMarkers) {
-    const resultFile = ctxFile.replace('.json', '.result.json');
-    while (!fs.existsSync(resultFile) && Date.now() < deadline) {
-      await sleep(2000);
-    }
-    if (!fs.existsSync(resultFile)) {
-      console.error(`❌ AI 判断超时: ${resultFile}`);
-      return 2;
-    }
+  if (result.aiMarkers.length > 0) {
+    console.log('');
+    console.log('AI_ASSERT_PENDING:' + JSON.stringify({
+      contexts: result.aiMarkers,
+      ctxDir,
+      planTotal: planAiCount,
+      resultPath,
+    }));
+    console.log('');
+    console.log('→ 以上 AI 断言仅为证据采集（步骤标 aiPending，不计入 passed），');
+    console.log('  请读取各 ctx 文件后判断 pass/fail，再合入 ' + resultPath + ' 出报告。');
   }
 
-  // Pass 2: run with AI results
-  console.log('');
-  console.log('═══ Pass 2: 带 AI 结果执行完整测试 ═══');
-  const runCode = generateHeredoc(plan, 'run', ctxDir, keep, resultPath);
-  const runResult = await executeHeredoc(runCode, egoPath);
   console.log('结果: ' + resultPath);
-
-  return runResult.code;
+  return result.code;
 }
 
 // ── 标准化采集 heredoc（观察类操作：供 AI 写 plan 选择器 / 手工诊断，不属于测试执行）──
@@ -848,6 +931,43 @@ function generateSnapshotHeredoc(url, outPath, shotPath) {
   return lines.join('\n');
 }
 
+// ── plan 生成期校验（在执行前拦截 AI 写 plan 的常见坏味道，防"凑数等待+AI兜底"假测试）──
+
+function validatePlan(plan) {
+  const errors = [];
+  for (const sc of (plan.scenarios || [])) {
+    const steps = sc.steps || [];
+
+    // ① 空 steps 场景 = 无操作无断言，跑出来必是假通过
+    if (steps.length === 0) {
+      errors.push(`场景「${sc.name}」没有任何 steps，拒绝执行（空场景 = 假通过）`);
+      continue;
+    }
+
+    // ② 连续 ≥3 个 waitForNetworkIdle = 靠堆等待凑数，网络空闲≠页面就绪≠断言
+    let streak = 0;
+    let maxStreak = 0;
+    for (const st of steps) {
+      if (st.action === 'waitForNetworkIdle') { streak++; maxStreak = Math.max(maxStreak, streak); }
+      else streak = 0;
+    }
+    if (maxStreak >= 3) {
+      errors.push(`场景「${sc.name}」连续 ${maxStreak} 个 waitForNetworkIdle（凑数等待），改用 waitForUrl/assertVisible/assertApi 等确定性判据`);
+    }
+
+    // ③ 登录场景必须有确定性成功判据（URL/可见性/文本/接口），纯 aiAssert 判断 = 无判据假通过高发区
+    if (/登录|login/i.test(sc.name || '')) {
+      const hasDeterministic = steps.some(st =>
+        ['waitForUrl', 'assertUrl', 'assertVisible', 'assertText', 'assertApi', 'assertDataConsistency'].includes(st.action)
+      );
+      if (!hasDeterministic) {
+        errors.push(`场景「${sc.name}」是登录场景但无确定性成功判据，必须含 waitForUrl/assertUrl/assertVisible/assertText/assertApi 之一（aiAssert 不能作为登录成功的唯一判据）`);
+      }
+    }
+  }
+  return errors;
+}
+
 // ── main ──
 
 async function main() {
@@ -855,8 +975,6 @@ async function main() {
   const planFile = getArg(args, '--plan');
   const ctxDir = getArg(args, '--ctx-dir') || '/tmp/cwork-web-test-ctx';
   const outFile = getArg(args, '--out');
-  const collectOnly = args.includes('--collect');
-  const runOnly = args.includes('--run');
   const snapshotMode = args.includes('--snapshot');
   const snapshotUrl = getArg(args, '--url');
   const keep = args.includes('--keep');
@@ -882,7 +1000,7 @@ async function main() {
   }
 
   if (!planFile) {
-    console.error('用法: node web-run.cjs --plan plan.json [--ctx-dir DIR] [--out result.json] [--collect | --run]');
+    console.error('用法: node web-run.cjs --plan plan.json [--ctx-dir DIR] [--out result.json] [--keep]');
     console.error('      node web-run.cjs --snapshot --url <页面地址> [--out snap.json]');
     process.exit(1);
   }
@@ -895,29 +1013,21 @@ async function main() {
     process.exit(1);
   }
 
+  // 生成期校验：凑数等待 / 空场景 / 登录无判据 在执行前拦截
+  const planErrors = validatePlan(plan);
+  if (planErrors.length > 0) {
+    console.error('❌ plan.json 校验未通过，拒绝执行（请修正 plan 后重跑）：');
+    for (const e of planErrors) console.error('   - ' + e);
+    process.exit(1);
+  }
+
   // result.json 落点：--out 优先，否则 plan.json 同目录（此前写 ctxDir 父目录，plan 与结果分离难回溯）
   const resultPath = outFile
     ? path.resolve(outFile)
     : path.join(path.dirname(path.resolve(planFile)), 'result.json');
 
-  if (collectOnly) {
-    fs.mkdirSync(ctxDir, { recursive: true });
-    const code = generateHeredoc(plan, 'collect', ctxDir, keep, resultPath);
-    const result = await executeHeredoc(code, egoPath);
-    if (result.aiMarkers.length > 0) {
-      console.log('AI_ASSERT_PENDING:' + JSON.stringify({ contexts: result.aiMarkers, ctxDir }));
-    }
-    process.exitCode = result.code;
-  } else if (runOnly) {
-    fs.mkdirSync(ctxDir, { recursive: true });
-    const code = generateHeredoc(plan, 'run', ctxDir, keep, resultPath);
-    const result = await executeHeredoc(code, egoPath);
-    process.exitCode = result.code;
-  } else {
-    // 完整流程
-    const exitCode = await runFullFlow(plan, ctxDir, resultPath, egoPath, keep);
-    process.exitCode = exitCode;
-  }
+  const exitCode = await runFullFlow(plan, ctxDir, resultPath, egoPath, keep);
+  process.exitCode = exitCode;
 }
 
 function getArg(args, name) {

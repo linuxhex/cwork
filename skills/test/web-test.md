@@ -67,9 +67,9 @@
 
 ## 执行模型：Plan + Executor
 
-### 核心架构
+### 核心架构（单遍执行）
 
-Web 测试采用 **"AI 生成计划 → 执行器确定性执行"** 模型，解决传统 AI 写 heredoc 的不稳定问题：
+Web 测试采用 **"AI 生成计划 → 执行器单遍执行 → AI 跑后判断"** 模型，解决传统 AI 写 heredoc 的不稳定问题：
 
 ```
 ┌─────────────────┐
@@ -78,21 +78,19 @@ Web 测试采用 **"AI 生成计划 → 执行器确定性执行"** 模型，解
          │
          ▼
 ┌─────────────────┐
-│  web-run.cjs    │  读取 plan.json → 生成 ego-browser heredoc → 执行
+│  web-run.cjs    │  读取 plan.json → 生成 ego-browser heredoc → 单遍执行
 │  （执行器）      │  确定性断言（数据/布局/样式/接口）直接判定
-│                  │  aiAssert 标记点收集上下文（截图+DOM）
+│                  │  aiAssert 点仅采集证据（截图+DOM），步骤标 aiPending 不计 passed
 └────────┬────────┘
          │
          ▼
 ┌─────────────────┐
-│  AI（你）        │  读取 aiAssert 上下文（截图+DOM）→ 判断 → 写 per-step 结果文件
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  web-run.cjs    │  带 AI 判断结果重跑 → 输出 result.json
+│  AI（你）        │  读 AI_ASSERT_PENDING 输出的 ctx 文件（截图+DOM）
+│  （跑后判断）    │  → 判断 pass/fail → 合入 result.json → 出报告
 └─────────────────┘
 ```
+
+**单遍契约（关键）**：执行器只跑一遍。aiAssert 步骤不重跑、不阻塞——步骤标 `{ok: null, pending: true}`，场景标 `aiPending`，**不计入 passed**；跑完输出 `AI_ASSERT_PENDING:{contexts, ctxDir, planTotal, resultPath}`，AI 读取各 ctx 文件判断 pass/fail 后**直接合入 result.json 出报告**，不再触发第二次执行。
 
 ### 为什么这样设计
 
@@ -110,9 +108,7 @@ Web 测试采用 **"AI 生成计划 → 执行器确定性执行"** 模型，解
 
 | 命令 | 用途 |
 |------|------|
-| `node web-run.cjs --plan plan.json` | **完整流程（默认推荐）**：无 aiAssert 单遍直通；有 aiAssert 时 collect → AI 判断 → run |
-| `node web-run.cjs --plan plan.json --collect` | 只执行到 aiAssert 点，收集上下文，输出 AI_ASSERT_PENDING |
-| `node web-run.cjs --plan plan.json --run` | 带预判断结果执行（读 CTX_DIR/s{i}_i{j}.result.json，缺失 = 该步失败） |
+| `node web-run.cjs --plan plan.json` | **完整流程（默认推荐）**：单遍执行——确定性断言直接判定，aiAssert 仅采集证据；跑完输出 AI_ASSERT_PENDING，AI 跑后判断合入 result.json |
 | `node web-run.cjs --snapshot --url <页面地址>` | **标准化采集**（观察类操作）：打开页面 + 接口拦截 + snapshotText + pageInfo + 截图 |
 
 通用参数：`--ctx-dir DIR`（aiAssert 上下文目录，默认 `/tmp/cwork-web-test-ctx`）、`--out FILE`（result.json 落点）、`--keep`（结束后移交任务空间保持登录态，人工核验用）。
@@ -124,7 +120,7 @@ Web 测试采用 **"AI 生成计划 → 执行器确定性执行"** 模型，解
 | `result.json` | `--out` 指定；未指定时写 **plan.json 同目录** |
 | 失败截图 | result.json 同目录 `screenshots/fail-s{场景}-i{步骤}.png` |
 | aiAssert 上下文 | `--ctx-dir`（默认 /tmp/cwork-web-test-ctx），文件名 `s{场景}_i{步骤}.json` |
-| AI 判断结果 | 同目录 `s{场景}_i{步骤}.result.json`（AI 写入，run 模式读取） |
+| AI 判断依据 | ctx-dir `s{场景}_i{步骤}.json`（截图+DOM 证据，AI 跑后读取） |
 | --snapshot 输出 | `--out` 指定；未指定时写 ctx-dir/snapshot.json + 同名 .png |
 
 ---
@@ -199,18 +195,27 @@ Web 测试采用 **"AI 生成计划 → 执行器确定性执行"** 模型，解
 | 单场景 | 场景含 BLOCKED 步骤 / 失败重试 2 次 | 场景失败收场，跳下一场景，禁止无限诊断 |
 | 全局 | totalBudgetMs 预算到点 | 执行器看门狗触发：落盘部分结果 → 退出 → 输出已完成结果 + 阻塞清单，等人工介入 |
 
-**plan 执行与止损的关系**：plan 驱动执行时 run 模式**首败即停**（场景内第一个失败步骤自动截图 → 结束该场景 → 继续下一场景），失败原因在 result.json 的 `steps[].error`；止损极值约束的是**生成 plan 前的探索与 plan 修正循环**（快照 → 修 plan → 重跑），不是单次 plan 执行内部。
+**plan 执行与止损的关系**：plan 驱动执行时**首败即停**（场景内第一个失败步骤自动截图 → 结束该场景 → 继续下一场景），失败原因在 result.json 的 `steps[].error`；止损极值约束的是**生成 plan 前的探索与 plan 修正循环**（快照 → 修 plan → 重跑），不是单次 plan 执行内部。
 
 **禁止**：无观察的连续重试、同一通道反复重试、在未验证上一操作效果的状态下继续下一步。
 
 ### 登录 SOP（最高频卡点，强制）
 
-> 实战根因（OMJF-18923 UAT 验证，2026-10-16）：协议勾选框 JS click 后 class 不变 → AI 换姿势盲试 3+ 轮；实际其中一次 CDP 点击已勾选且登录成功，但 AI 未验证 URL，误判"还在登录页"继续折腾——登录环节白耗 10+ 轮，整个测试被阻塞。
+> 实战根因 1（OMJF-18923 UAT 验证，2026-10-16）：协议勾选框 JS click 后 class 不变 → AI 换姿势盲试 3+ 轮；实际其中一次 CDP 点击已勾选且登录成功，但 AI 未验证 URL，误判"还在登录页"继续折腾——登录环节白耗 10+ 轮。
+>
+> 实战根因 2（OMJF-18923 UAT 取证，2026-10-20）：验证码弹窗确认按钮选择器 `.el-dialog__footer button:has-text('确认')` 匹配到**隐藏 el-dialog**（忘记密码/多账号弹窗），不是验证码弹窗真实按钮 → 点击无效 → 校验接口从未发出 → 弹窗滞留 + 登录按钮永久灰死（loginDisabled=true 不复位），而 plan 里"等待+aiAssert 凑数"照样跑出通过——假通过。
 
-1. **登录成功唯一判据 = `pageInfo()` 验证 URL 已离开登录页**（出现系统主界面路由/右上角用户信息）。**禁止**用"checkbox class 是否变化"判断勾选态——自定义组件点击后 class 不一定变，也不反映登录结果
+1. **登录成功唯一判据 = 确定性 URL 断言（`waitForUrl` / `assertUrl`），禁止其他判据**：
+   - plan 中登录场景最后一步必须写 `{ "action": "waitForUrl", "notContains": "/login", "desc": "登录成功判据：URL 已离开登录页" }`
+   - **禁止**用 aiAssert/按钮状态/checkbox class/凑数等待判断登录成功——aiAssert 只是证据采集不计入 passed，凑数等待掩盖真实结果（根因 2 的假通过来源）
 2. **点击无效果 → 先诊断再动手，禁止换姿势盲试**：点击后页面状态无变化时，第一动作是 `captureScreenshot()` + 抓目标元素真实 DOM/事件绑定，搞清"为什么没生效"再操作。`click icon → click 父级 → CDP` 式连环换姿势 = 乱操作，**每次换操作方式之前必须有一次观察**（截图或 DOM 检查），零观察的连续重试禁止
 3. **YKC 系登录页已知结论**（写 plan / 现场操作直接采用，不重新试错）：协议勾选框是自定义 Vue 组件，JS 合成 click 不触发状态变更，**用 `clickCdp`（真实鼠标坐标）点击勾选框**，随后点击登录按钮，最后断言 URL 跳转
-4. **风控/验证码预案**：弹验证码输入框 → 填测试验证码（UAT 通常 666666）后提交；弹"登录地址发生变化"类风控提示但主界面已可见 → 判定登录成功，在报告中记录说明
+4. **OMP（云快充运营管理平台）验证码弹窗已知结论**（实测取证，直接采用）：
+   - 弹窗来源：`Login.vue verifyCodePop()` 用 `$cusDialog`（ykc-dialog 自绘组件）动态挂 body，**不是 el-dialog**——DOM 里 `.el-dialog__footer` 属于登录页隐藏的忘记密码/多账号弹窗，与验证码弹窗无关
+   - 弹窗出现条件：`isCommonlyUsed==='1'`（登录 IP 判断）——换 IP 可能不弹，plan 用 `waitForElement .customize-dialog` 短超时探测分支，超时不代表失败
+   - 正确选择器：弹窗容器 `.customize-dialog`；标题 `.customize-dialog .title`（文案"登录地址发生变化，请输入验证码"）；验证码输入框 `#verificationCode input`（ykc-input 的 id 透传到根 div，需后代选择器，见 element-ui 坑 11）；确认按钮 `.customize-dialog .bnt-right`；取消按钮 `.customize-dialog .bnt-box button` 第 1 个
+   - **验证码是真实短信验证码**：点"获取验证码"会真实发短信（URL_SENDVERIFYCODEBYACCOUNTID）。自动测试**禁止点获取验证码**（零副作用原则）；有万能码/测试码用之，没有则该分支标 BLOCKED 转人工——**禁止瞎填 666666 等猜测值当通过**
+5. **风控/验证码预案**：弹"登录地址发生变化"类风控提示但主界面已可见 → 判定登录成功，在报告中记录说明；验证码分支走不通按第 4 条标 BLOCKED，不阻塞后续无需登录的场景
 
 ---
 
@@ -287,8 +292,8 @@ echo "✓ ego-browser 可用：$(command -v ego-browser)"
         { "action": "fill", "selector": "input[placeholder='密码']", "value": "***", "desc": "输入密码" },
         { "action": "clickCdp", "selector": ".login-agreement .el-checkbox__inner", "desc": "CDP 点击协议勾选框" },
         { "action": "click", "selector": ".login-btn", "desc": "点击登录" },
-        { "action": "waitForNavigation", "desc": "等待跳转" },
-        { "action": "aiAssert", "prompt": "登录成功：URL 已离开 /login，主界面可见", "capture": ["screenshot", "dom"] }
+        { "action": "waitForUrl", "notContains": "/login", "desc": "登录成功唯一判据：URL 离开登录页" },
+        { "action": "aiAssert", "prompt": "取证：登录后首屏主界面渲染正常", "capture": ["screenshot", "dom"] }
       ]
     },
     {
@@ -327,6 +332,7 @@ echo "✓ ego-browser 可用：$(command -v ego-browser)"
 | `waitForNetworkIdle` | 无 | 等待网络空闲 |
 | `waitForLoad` / `waitForNavigation` | 无 | 等待页面加载/跳转完成（两者等价） |
 | `waitForElement` | `selector`, `timeout?`（秒，默认 10） | **等待元素出现**再采集——根治动态渲染导致的选择器乱跑。超时后标记 BLOCKED 继续后续步骤，不报错 |
+| `waitForUrl` | `contains?`/`notContains?`/`matches?`（至少其一，多条件 AND）, `timeout?`（秒，默认 15） | **轮询等待 URL 满足条件**——登录成功判据的标准写法（`waitForUrl notContains /login`）。超时后标记 BLOCKED 继续后续步骤，不报错 |
 | `click` | `selector`, `fallback?` | 点击元素（ego click，带遮挡检查）。`fallback` 见「选择器自愈」 |
 | `dispatchClick` | `selector`, `index?`, `fallback?` | JS 合成 MouseEvent click（bubbles），绕过遮挡检查；用于被悬浮横幅遮挡、ego click 静默点在横幅上的按钮（如 OMP top-tip 横幅盖住筛选按钮）。对标准 @click 监听的按钮有效 |
 | `clickCdp` | `selector`, `index?`, `fallback?` | CDP 真实鼠标坐标点击（mousePressed/Released 全链）；用于自定义组件勾选框、依赖真实鼠标事件的元素 |
@@ -339,6 +345,7 @@ echo "✓ ego-browser 可用：$(command -v ego-browser)"
 | action | 参数 | 说明 |
 |--------|------|------|
 | `assertVisible` | `selector`, `fallback?` | 真实可见性：元素存在 + 宽高 > 0 + 未被 display:none/visibility:hidden 隐藏 |
+| `assertUrl` | `contains?`/`notContains?`/`matches?`（至少其一，多条件 AND） | **立即断言当前 URL**（不轮询）——页面跳转后核对落点、防止误停留在登录页/错误页 |
 | `assertText` | `selector`, `expectContains` 或 `expect`, `fallback?` | 文本包含 / 全等匹配（trim 后） |
 | `assertCount` | `selector`, `expect` 或 `min`/`max` 至少其一 | 元素数量精确匹配或范围 |
 | `assertStyle` | `selector`, `property`, `expect` 或 `expectPattern` | computed style 精确匹配或正则匹配 |
@@ -346,7 +353,7 @@ echo "✓ ego-browser 可用：$(command -v ego-browser)"
 | `assertApi` | `urlPattern`, `expectStatus?`, `expectBodyCode?` | 接口断言：状态码 / 业务码（body.code）；同接口多次调用取**最新**一条 |
 | `assertDataConsistency` | `selector`, `urlPattern`, `apiField` | **页面 ↔ 接口一致性**：页面元素文本 vs 接口响应字段（apiField 支持 `data.orders[0].orderNo` 路径语法）；生成期强制要求 urlPattern + apiField |
 | `exportApi` | `urlPattern` 或 `urlPatterns[]`, `filename`, `filter?` | **导出完整 API 响应到文件**（result.json 同目录）。支持单接口或多接口批量导出；`filter: { status: 200 }` 过滤条件。用于 Doris vs ES 数据比对等场景 |
-| `aiAssert` | `prompt`, `capture?: ["screenshot","dom","apiResponses"]` | AI 判断兜底：collect 收集上下文 → AI 写结果文件 → run 校验；run 模式结果文件**缺失即失败**（不静默跳过） |
+| `aiAssert` | `prompt`, `capture?: ["screenshot","dom","apiResponses"]` | AI 判断兜底：**单遍契约下仅采集证据**（截图+DOM 写 ctx 文件），步骤标 aiPending 不计入 passed；跑完 AI 读 ctx 判断后合入 result.json。prompt 必须写成可判定判据 |
 
 **选择器自愈（fallback 策略，所有支持 selector 的 action 通用）**：
 
@@ -384,6 +391,8 @@ echo "✓ ego-browser 可用：$(command -v ego-browser)"
 8. **展开/收起 toggle 操作前必须先读状态**（实战：恢复默认保留了展开态，AI 以为要展开又点一次 toggle，反而收起）：toggle 是**反向操作**，点之前用 js 查容器可见元素数或展开态 class 确认当前状态——「恢复默认/翻页/切 tab 后状态可能被重置」，历史状态不可信，盲点 toggle 必反。
 9. **v-show 隐藏元素：DOM 存在 ≠ 可点**：收起状态下筛选控件仍留在 DOM（`querySelectorAll` 找得到、assertCount 也能过）但坐标/宽高全 0，click 无效或被遮挡拦截。判可交互必须查可见性（`assertVisible` 已内置 zero-size 检查；探索时用 js 查 `getBoundingClientRect`），plan 里对筛选控件的步骤必须前置「展开容器」步骤，不用元素存在性断言替代可见性。
 10. **ego click 遮挡检查被拦 / 静默点在横幅上（OMP top-tip 横幅实战）**：ego 对被遮挡元素会拒绝 click（遮挡检查）；更隐蔽的是**静默落空**——横幅盖住按钮行时 ego 宽松点击实际点在横幅上，查询不发出产生假结果。plan 中直接改用 `dispatchClick`（JS 合成事件通道，绕过遮挡检查，对标准 @click 监听的按钮有效）；`dispatchClick` 无效（自定义组件不监听合成事件）再升 `clickCdp` 真实鼠标坐标，每次升级前先观察一次（铁律：探索套路）。
+11. **ykc 系组件 id 透传在根 div，内部 input 需后代选择器**：Vue 2 非 prop 属性继承——`<ykc-input :id="verificationCode">` 的 id 落在组件根 div（`.ykc-input-box`）上，**内部 `<input>` 没有该 id**。`fill #verificationCode` 会报 Element not found，正确写法是后代选择器 `#verificationCode input`（OMP 验证码输入框实测）。同理适用 ykc-select/ykc-date 等所有 ykc 封装组件。
+12. **`:has-text()` 仅操作类通道支持，断言类原生 querySelector 会炸**：执行器 `window.__locateElement` 自定义解析支持 `:has-text`（click/dispatchClick/clickCdp/fill 可用），但 **assertVisible/assertText/assertCount 无 fallback 时走原生 `document.querySelector`，遇到 `:has-text` 直接 SyntaxError**（伪类不是标准 CSS）。断言类步骤的文本匹配用 `assertText` + `expectContains`，不要往 selector 里塞 `:has-text`。另注意：**同名选择器可能匹配到隐藏弹窗**——`.el-dialog__footer button:has-text('确认')` 这类宽选择器会命中页面上隐藏 el-dialog 的按钮（OMP 登录页假点击根因），断言/点击前先 `assertCount` 确认匹配数，弹窗类操作限定容器（如 `.customize-dialog .bnt-right`）。
 
 ### 登录场景模板（固化复用，选择器必须实测）
 
@@ -400,14 +409,15 @@ echo "✓ ego-browser 可用：$(command -v ego-browser)"
     { "action": "fill", "selector": "{实测：密码输入框}", "value": "{测试密码}" },
     { "action": "clickCdp", "selector": "{实测：协议勾选框}", "desc": "YKC 系协议框 JS click 无效，必须 CDP" },
     { "action": "click", "selector": "{实测：登录按钮}" },
-    { "action": "waitForNavigation" },
-    { "action": "aiAssert", "prompt": "登录成功判据：URL 已离开 /login 且主界面可见（唯一判据，禁止以 checkbox class 判断）", "capture": ["screenshot", "dom"] }
+    { "action": "waitForUrl", "notContains": "/login", "desc": "登录成功唯一判据：URL 已离开登录页（确定性断言，禁止用 aiAssert/按钮状态替代）" },
+    { "action": "aiAssert", "prompt": "取证：主界面已渲染（导航/菜单可见），记录登录后首屏状态", "capture": ["screenshot", "dom"] }
   ]
 }
 ```
 
 - 通用系统（协议框是原生 checkbox）把 `clickCdp` 换成普通 `click` 即可
-- 验证码预案：弹验证码输入框 → `fill` 测试验证码（UAT 通常 666666）→ 提交
+- **登录成功判据必须是 `waitForUrl`（确定性）**，aiAssert 只做跑后取证不计入 passed——凭"按钮变灰/等待 N 秒/aiAssert 兜底"判登录成功 = 假通过（实战根因 2）
+- **验证码预案（见登录 SOP 第 4 条）**：验证码分支用 `waitForElement .customize-dialog` 短超时探测；确认按钮限定弹窗容器（OMP：`.customize-dialog .bnt-right`）；**验证码是真实短信码，禁止点"获取验证码"、禁止瞎填猜测值当通过**，无万能码则该分支标 BLOCKED 转人工
 - 登录失败重跑不换账号——先按「登录 SOP」诊断，禁止盲换账号或盲改密码
 
 ### 复杂场景降级路径（plan 表达不了时，强制）
@@ -467,7 +477,7 @@ plan.json 已生成：docs/requirements/{key}/plan.json
 ```bash
 cd docs/requirements/{key}
 
-# 完整流程（推荐）：无 aiAssert 单遍直通；有 aiAssert → collect → AI 判断 → run
+# 完整流程（单遍执行）：确定性断言直接判定，aiAssert 仅采集证据；跑完 AI 判断合入 result.json
 node /path/to/skills/test/scripts/web-run.cjs --plan plan.json
 
 # 指定结果落点（默认写 plan.json 同目录 result.json）
@@ -484,10 +494,8 @@ web-run.cjs 内部自动生成 ego-browser heredoc 并执行：
    - 创建任务空间：useOrCreateTaskSpace(taskSpaceName)
    - 打开初始页面：openOrReuseTab(baseUrl)（整个会话唯一一次）
    - 注入接口拦截器（Page.addScriptToEvaluateOnNewDocument 注册 + 立即注入覆盖首屏）
-   - 逐场景执行 steps（run 模式首败即停：截图归档 → 结束该场景 → 下一场景）
-   - aiAssert 点：
-     - collect 模式：截图 + snapshotText + 接口响应 → 写 CTX_DIR/s{i}_i{j}.json → 输出 AI_ASSERT_COLLECTED 标记
-     - run 模式：读 s{i}_i{j}.result.json → pass=false 或文件缺失 = 该步失败
+   - 逐场景执行 steps（首败即停：截图归档 → 结束该场景 → 下一场景）
+   - aiAssert 点：截图 + snapshotText + 接口响应 → 写 CTX_DIR/s{i}_i{j}.json → 输出 AI_ASSERT_COLLECTED 标记；步骤标 aiPending 不计入 passed
    - 全局看门狗：totalBudgetMs 到点 → 落盘部分结果 → 退出
    - 关闭任务空间：completeTaskSpace(task.id)
 3. 执行 heredoc（spawn ego-browser nodejs）
@@ -510,31 +518,30 @@ web-run.cjs 内部自动生成 ego-browser heredoc 并执行：
 - 下一个 heredoc 无法感知上一个进程的 tab，`openOrReuseTab` 会新开标签页
 - 新标签页没有之前的 cookie/session，**导致登录态丢失，页面跳转到登录页**
 
-### AI 介入 aiAssert（两阶段交接）
+### AI 跑后判断（aiAssert 合入，单遍契约）
 
-完整流程模式下，执行器 collect 完成后输出：
+单遍执行完成后，若 plan 含 aiAssert，执行器输出：
 
 ```
-AI_ASSERT_PENDING:{"contexts":["/tmp/cwork-web-test-ctx/s0_i7.json"],"ctxDir":"/tmp/cwork-web-test-ctx"}
+AI_ASSERT_PENDING:{"contexts":["/tmp/cwork-web-test-ctx/s0_i11.json"],"ctxDir":"/tmp/cwork-web-test-ctx","planTotal":1,"resultPath":"docs/requirements/{key}/result.json"}
 ```
 
-**AI 操作步骤**：
+**AI 操作步骤**（执行器已跑完，不再重跑）：
 
 ```bash
-# 1. 读取上下文（含截图路径、DOM 快照、pageInfo）
-cat /tmp/cwork-web-test-ctx/s0_i7.json
+# 1. 读取上下文（含截图路径、DOM 快照、pageInfo.url）
+cat /tmp/cwork-web-test-ctx/s0_i11.json
 
 # 2. Read 截图文件做视觉判断
 
-# 3. 按 prompt 判据判断，写同目录 per-step 结果文件（文件名 = 上下文名 + .result.json）
-cat > /tmp/cwork-web-test-ctx/s0_i7.result.json <<'EOF'
-{"pass": true, "reason": "URL 已离开 /login，主界面可见"}
-EOF
-
-# 4. 执行器轮询到结果文件后自动进入 Pass 2 重跑（无需手动触发）
+# 3. 按 prompt 判据判断 pass/fail，直接合入 result.json：
+#    对应步骤 {ok: true/false, pending 删除}，场景 aiPending → 按实际结果计 passed/failed
+#    判断依据必须引用证据：pageInfo.url / 截图内容 / DOM 文本，不写"看起来正常"
 ```
 
-**判据要求**：`reason` 写实际观察到的证据（"URL=/orders，列表渲染 12 行"），不写"看起来正常"。
+**假通过防线（执行器已内置）**：plan 声明的 aiAssert 数 vs 实际采集数比对——声明了却一个没采集到（步骤在 aiAssert 之前失败/标记丢失）时响亮告警「result.json 中的通过数不可视为真实通过」，此时必须人工核查 result.json 全文，禁止直接采信。
+
+**判据要求**：合入时 `reason` 写实际观察到的证据（"URL=/orders，列表渲染 12 行"），不写"看起来正常"。
 
 ### 观察与诊断：--snapshot 标准化通道
 
@@ -553,7 +560,7 @@ node web-run.cjs --snapshot --url "http://localhost:3000/login" --out /tmp/snap-
 
 ### 失败处理
 
-run 模式首败即停：场景内第一个失败步骤自动截图归档（`screenshots/fail-s{场景}-i{步骤}.png`）→ 结束该场景 → 继续下一场景。
+执行首败即停：场景内第一个失败步骤自动截图归档（`screenshots/fail-s{场景}-i{步骤}.png`）→ 结束该场景 → 继续下一场景。
 
 ```
 ═══════════════════════════════════════════════════════════════
@@ -577,7 +584,7 @@ run 模式首败即停：场景内第一个失败步骤自动截图归档（`scr
 
 ### 前端证据（自动收集）
 
-run 模式失败时自动归档：
+执行失败时自动归档：
 
 - **失败截图**：result.json 同目录 `screenshots/fail-s{场景}-i{步骤}.png`
 - **失败详情**：result.json 中 `steps[].error`（期望 vs 实际）
@@ -671,7 +678,7 @@ bash scripts/sls_query.sh <env> logs all "order/submit and ERROR" 100
 | `result.json` | 测试结果（--out 或 plan.json 同目录） | 提交 |
 | `screenshots/` | 失败截图证据（result.json 同目录） | 提交 |
 | `s{i}_i{j}.json` | aiAssert 上下文（ctx-dir） | 不提交 |
-| `s{i}_i{j}.result.json` | AI 判断结果（ctx-dir，per-step） | 不提交 |
+| `s{i}_i{j}.json` | aiAssert 证据上下文（ctx-dir，AI 跑后判断依据） | 不提交 |
 | snapshot 快照 | --snapshot 采集（观察用） | 不提交 |
 
 ---
