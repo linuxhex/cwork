@@ -119,15 +119,20 @@ const ELEMENT_LOCATOR_JS = `
 // 浏览器端 fetch/XHR 拦截器（注入页面，捕获接口响应到 window.__capturedResponses；测试与 --snapshot 共用）
 const INTERCEPTOR_JS = `(() => {
   window.__capturedResponses = [];
+  // 前端监控打点（ARMS retcode 等）URL 里编码嵌着业务接口路径子串，会污染 assertApi/exportApi 的
+  // includes 匹配与 findResponse 的「取最新一条」——记录前直接排除
+  const __isTelemetry = (u) => /arms-retcode|retcode\\.aliyuncs\\.com\\/r\\.png/.test(u || '');
   const origFetch = window.fetch;
   window.fetch = async function(...args) {
     const resp = await origFetch.apply(this, args);
+    const __u = typeof args[0] === 'string' ? args[0] : (args[0] && args[0].url) || '';
+    if (__isTelemetry(__u)) return resp;
     const clone = resp.clone();
     clone.text().then(text => {
       let __body = null;
       try { __body = JSON.parse(text); } catch(e) { __body = null; }
       window.__capturedResponses.push({
-        url: typeof args[0] === 'string' ? args[0] : args[0].url,
+        url: __u,
         method: (args[1] && args[1].method) || 'GET',
         status: resp.status,
         body: __body,
@@ -145,6 +150,7 @@ const INTERCEPTOR_JS = `(() => {
   XMLHttpRequest.prototype.send = function() {
     const __reqBody = (typeof arguments[0] === 'string') ? arguments[0] : null;
     this.addEventListener('load', function() {
+      if (__isTelemetry(this.__url)) return;
       let __body = null;
       try { __body = JSON.parse(this.responseText); } catch(e) { __body = null; }
       window.__capturedResponses.push({
@@ -412,17 +418,19 @@ function generateStepCode(L, step, label, si, i, baseUrl) {
       // CDP 真实鼠标事件（mousedown/focus/click 全链），用于依赖 focus 打开的组件如 el-date-picker 面板
       // 坐标求值走 cdp('Runtime.evaluate') returnByValue，绕开 js() 对复杂表达式返回 null 的坑
       // step.index 支持 querySelectorAll 按索引取元素（默认 0）
+      // 可见性过滤 + matchText：index 是「可见元素中的第 N 个」，隐藏面板（v-show 残留 DOM）不再干扰索引
+      // matchText 在可见元素内按 textContent 精确匹配；未命中一律 throw（禁止 fallback els[0] 静默假通过）
       L(`  {`);
-      L(`    const __expr = "(function(){ var el = document.querySelectorAll(" + ${JSON.stringify(JSON.stringify(step.selector))} + ")[" + ${step.index || 0} + "]; if (!el) return 'null'; var r = el.getBoundingClientRect(); return JSON.stringify({ x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) }); })()";`);
+      L(`    const __expr = "(function(){ var els = document.querySelectorAll(" + ${JSON.stringify(JSON.stringify(step.selector))} + "); var vis = []; for (var i = 0; i < els.length; i++) { var b = els[i].getBoundingClientRect(); if (b.width > 0 && b.height > 0) vis.push(els[i]); } var el = vis[" + ${step.index || 0} + "]; var __mt = " + ${JSON.stringify(JSON.stringify(step.matchText || ''))} + "; if (__mt) { el = null; for (var j = 0; j < vis.length; j++) { if (vis[j].textContent.trim() === __mt) { el = vis[j]; break; } } } if (!el) return JSON.stringify({ok:false, err:'not-found', total: els.length, visible: vis.length}); var r = el.getBoundingClientRect(); return JSON.stringify({ok:true, x: Math.round(r.x + r.width/2), y: Math.round(r.y + r.height/2)}); })()";`);
       L(`    const __ev = await cdp('Runtime.evaluate', { expression: __expr, returnByValue: true });`);
       L(`    const __raw = (__ev && __ev.result && typeof __ev.result.value !== 'undefined') ? __ev.result.value : null;`);
-      L(`    let __pos = null;`);
-      L(`    if (typeof __raw === 'string') { try { __pos = JSON.parse(__raw); } catch (e) { __pos = null; } }`);
-      L(`    else if (typeof __raw === 'object' && __raw !== null) { __pos = __raw; }`);
-      L(`    if (!__pos || typeof __pos.x !== 'number' || typeof __pos.y !== 'number') throw new Error('无法获取元素坐标: ${step.selector.replace(/'/g, "\\'")} idx=${step.index || 0} raw=' + JSON.stringify(__ev));`);
-      L(`    await cdp('Input.dispatchMouseEvent', { type: 'mousePressed', x: __pos.x, y: __pos.y, button: 'left', clickCount: 1 });`);
+      L(`    let __r = null;`);
+      L(`    if (typeof __raw === 'string') { try { __r = JSON.parse(__raw); } catch (e) { __r = null; } }`);
+      L(`    else if (typeof __raw === 'object' && __raw !== null) { __r = __raw; }`);
+      L(`    if (!__r || !__r.ok || typeof __r.x !== 'number') throw new Error('clickCdp 无法定位元素: ${step.selector.replace(/'/g, "\\'")} idx=${step.index || 0} raw=' + JSON.stringify(__ev && __ev.result && __ev.result.value));`);
+      L(`    await cdp('Input.dispatchMouseEvent', { type: 'mousePressed', x: __r.x, y: __r.y, button: 'left', clickCount: 1 });`);
       L(`    await sleep(80);`);
-      L(`    await cdp('Input.dispatchMouseEvent', { type: 'mouseReleased', x: __pos.x, y: __pos.y, button: 'left', clickCount: 1 });`);
+      L(`    await cdp('Input.dispatchMouseEvent', { type: 'mouseReleased', x: __r.x, y: __r.y, button: 'left', clickCount: 1 });`);
       L(`  }`);
       L(`  await sleep(600);`);
       L(`  await refreshResponses();`);
@@ -431,28 +439,52 @@ function generateStepCode(L, step, label, si, i, baseUrl) {
     case 'openDatePicker':
       // JS 合成事件通道打开 el-date-picker 面板：对输入框派发 mousedown/focus/mouseup/click 事件序列
       // step.index 支持 querySelectorAll 按索引取元素（默认 0）
+      // 面板渲染是 nextTick 异步：必须轮询确认面板真实打开（打事件后同步 count 永远是 0）；
+      // 未打开时自动重派发一次事件再确认（瞬态竞态自愈），仍失败才报错——根治「面板未开」假失败
       L(`  {`);
-      L(`    const __expr = "(function(){ var el = document.querySelectorAll(" + ${JSON.stringify(JSON.stringify(step.selector))} + ")[" + ${step.index || 0} + "]; if (!el) return JSON.stringify({ok:false, err:'el null'}); el.dispatchEvent(new MouseEvent('mousedown', {bubbles:true, cancelable:true})); el.dispatchEvent(new FocusEvent('focus')); el.dispatchEvent(new MouseEvent('mouseup', {bubbles:true, cancelable:true})); el.dispatchEvent(new MouseEvent('click', {bubbles:true, cancelable:true})); var n = document.querySelectorAll('.el-picker-panel,.el-date-picker,.el-date-range-picker').length; return JSON.stringify({ok:true, panel:n}); })()";`);
-      L(`    const __ev = await cdp('Runtime.evaluate', { expression: __expr, returnByValue: true });`);
-      L(`    const __raw = (__ev && __ev.result && typeof __ev.result.value !== 'undefined') ? __ev.result.value : null;`);
-      L(`    let __r = null; if (typeof __raw === 'string') { try { __r = JSON.parse(__raw); } catch (e) {} }`);
-      L(`    if (!__r || !__r.ok) throw new Error('openDatePicker 失败: ' + JSON.stringify(__ev));`);
-      L(`    cliLog('openDatePicker[dbg] ' + JSON.stringify(__r));`);
+      L(`    const __disp = "(function(){ var el = document.querySelectorAll(" + ${JSON.stringify(JSON.stringify(step.selector))} + ")[" + ${step.index || 0} + "]; if (!el) return JSON.stringify({ok:false, err:'el null'}); el.dispatchEvent(new MouseEvent('mousedown', {bubbles:true, cancelable:true})); el.dispatchEvent(new FocusEvent('focus')); el.dispatchEvent(new MouseEvent('mouseup', {bubbles:true, cancelable:true})); el.dispatchEvent(new MouseEvent('click', {bubbles:true, cancelable:true})); return JSON.stringify({ok:true}); })()";`);
+      L(`    const __panelUp = "(function(){ return JSON.stringify({n: document.querySelectorAll('.el-picker-panel,.el-date-picker,.el-date-range-picker').length, vis: (function(){ var ps = document.querySelectorAll('.el-picker-panel,.el-date-picker,.el-date-range-picker'); for (var i=0;i<ps.length;i++){ var b = ps[i].getBoundingClientRect(); if (b.width>0 && b.height>0) return true; } return false; })()}); })()";`);
+      L(`    const __firePanel = async () => {`);
+      L(`      const __ev = await cdp('Runtime.evaluate', { expression: __disp, returnByValue: true });`);
+      L(`      const __raw = (__ev && __ev.result && typeof __ev.result.value !== 'undefined') ? __ev.result.value : null;`);
+      L(`      let __r = null; if (typeof __raw === 'string') { try { __r = JSON.parse(__raw); } catch (e) {} }`);
+      L(`      if (!__r || !__r.ok) throw new Error('openDatePicker 失败（元素未找到）: ' + JSON.stringify(__raw));`);
+      L(`    };`);
+      L(`    const __waitPanel = async (ms) => {`);
+      L(`      const __deadline = Date.now() + ms;`);
+      L(`      while (Date.now() < __deadline) {`);
+      L(`        const __pev = await cdp('Runtime.evaluate', { expression: __panelUp, returnByValue: true });`);
+      L(`        const __praw = (__pev && __pev.result && typeof __pev.result.value !== 'undefined') ? __pev.result.value : null;`);
+      L(`        let __p = null; if (typeof __praw === 'string') { try { __p = JSON.parse(__praw); } catch (e) {} }`);
+      L(`        if (__p && __p.n > 0 && __p.vis) return true;`);
+      L(`        await sleep(200);`);
+      L(`      }`);
+      L(`      return false;`);
+      L(`    };`);
+      L(`    await __firePanel();`);
+      L(`    let __panelOpen = await __waitPanel(1500);`);
+      L(`    if (!__panelOpen) {`);
+      L(`      cliLog('openDatePicker[retry] 首次派发后面板未开，重派发一次事件再确认');`);
+      L(`      await __firePanel();`);
+      L(`      __panelOpen = await __waitPanel(2000);`);
+      L(`    }`);
+      L(`    if (!__panelOpen) throw new Error('openDatePicker 失败: 面板未打开（已重试 1 次），检查 selector/index 是否指向真实可聚焦输入框，或先用 --snapshot 实测控件结构');`);
+      L(`    cliLog('openDatePicker[dbg] 面板已打开并可见');`);
       L(`  }`);
-      L(`  await sleep(800);`);
+      L(`  await sleep(400);`);
       L(`  await refreshResponses();`);
       break;
 
     case 'dispatchClick':
       // JS 合成 click 事件通道：用于被悬浮横幅遮挡、常规坐标点击无法命中的按钮
       // （如 OMP 异常订单页 top-tip 横幅盖住筛选按钮整行，且主滚动在内部容器无法滚开）
-      // step.index 支持 querySelectorAll 按索引取元素（默认 0）
+      // 可见性过滤 + matchText（与 clickCdp 一致）；未命中 throw，禁止隐藏元素 (0,0) 假通过
       L(`  {`);
-      L(`    const __expr = "(function(){ var el = document.querySelectorAll(" + ${JSON.stringify(JSON.stringify(step.selector))} + ")[" + ${step.index || 0} + "]; if (!el) return JSON.stringify({ok:false, err:'el null'}); el.scrollIntoView({block:'center'}); el.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true})); return JSON.stringify({ok:true}); })()";`);
+      L(`    const __expr = "(function(){ var els = document.querySelectorAll(" + ${JSON.stringify(JSON.stringify(step.selector))} + "); var vis = []; for (var i = 0; i < els.length; i++) { var b = els[i].getBoundingClientRect(); if (b.width > 0 && b.height > 0) vis.push(els[i]); } var el = vis[" + ${step.index || 0} + "]; var __mt = " + ${JSON.stringify(JSON.stringify(step.matchText || ''))} + "; if (__mt) { el = null; for (var j = 0; j < vis.length; j++) { if (vis[j].textContent.trim() === __mt) { el = vis[j]; break; } } } if (!el) return JSON.stringify({ok:false, err:'not-found', total: els.length, visible: vis.length}); el.scrollIntoView({block:'center'}); el.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true})); return JSON.stringify({ok:true}); })()";`);
       L(`    const __ev = await cdp('Runtime.evaluate', { expression: __expr, returnByValue: true });`);
       L(`    const __raw = (__ev && __ev.result && typeof __ev.result.value !== 'undefined') ? __ev.result.value : null;`);
       L(`    let __r = null; if (typeof __raw === 'string') { try { __r = JSON.parse(__raw); } catch (e) {} }`);
-      L(`    if (!__r || !__r.ok) throw new Error('dispatchClick 失败: ' + JSON.stringify(__ev));`);
+      L(`    if (!__r || !__r.ok) throw new Error('dispatchClick 失败: ' + JSON.stringify(__ev && __ev.result && __ev.result.value));`);
       L(`  }`);
       L(`  await sleep(500);`);
       L(`  await refreshResponses();`);
@@ -944,24 +976,28 @@ function validatePlan(plan) {
       continue;
     }
 
-    // ② 连续 ≥3 个 waitForNetworkIdle = 靠堆等待凑数，网络空闲≠页面就绪≠断言
+    // ② waitForNetworkIdle 凑数等待拦截：连续 ≥3 个 = 堆等待；隔步堆（总计 ≥5 个）同样是绕过手法
+    // （OMJF-18841 实战：登录场景隔一步堆 2 个、共 7 个 waitForNetworkIdle 绕过连续性检查）
+    // 网络空闲≠页面就绪≠断言，跳转/渲染同步点必须用 waitForUrl/waitForElement
     let streak = 0;
     let maxStreak = 0;
+    let idleTotal = 0;
     for (const st of steps) {
-      if (st.action === 'waitForNetworkIdle') { streak++; maxStreak = Math.max(maxStreak, streak); }
+      if (st.action === 'waitForNetworkIdle') { streak++; maxStreak = Math.max(maxStreak, streak); idleTotal++; }
       else streak = 0;
     }
     if (maxStreak >= 3) {
       errors.push(`场景「${sc.name}」连续 ${maxStreak} 个 waitForNetworkIdle（凑数等待），改用 waitForUrl/assertVisible/assertApi 等确定性判据`);
+    } else if (idleTotal >= 4) {
+      errors.push(`场景「${sc.name}」共 ${idleTotal} 个 waitForNetworkIdle（隔步堆等待绕过连续性检查），跳转/渲染同步点改用 waitForUrl/waitForElement`);
     }
 
-    // ③ 登录场景必须有确定性成功判据（URL/可见性/文本/接口），纯 aiAssert 判断 = 无判据假通过高发区
+    // ③ 登录场景必须有确定性 URL 判据（waitForUrl/assertUrl）——URL 离开登录页是唯一可信判据；
+    // assertVisible/assertText 等元素判据在登录页误判高发（元素存在≠登录成功），纯 aiAssert = 无判据假通过
     if (/登录|login/i.test(sc.name || '')) {
-      const hasDeterministic = steps.some(st =>
-        ['waitForUrl', 'assertUrl', 'assertVisible', 'assertText', 'assertApi', 'assertDataConsistency'].includes(st.action)
-      );
-      if (!hasDeterministic) {
-        errors.push(`场景「${sc.name}」是登录场景但无确定性成功判据，必须含 waitForUrl/assertUrl/assertVisible/assertText/assertApi 之一（aiAssert 不能作为登录成功的唯一判据）`);
+      const hasUrlAssert = steps.some(st => ['waitForUrl', 'assertUrl'].includes(st.action));
+      if (!hasUrlAssert) {
+        errors.push(`场景「${sc.name}」是登录场景但无确定性 URL 判据，必须含 waitForUrl/assertUrl（如 waitForUrl notContains /login；aiAssert/可见性断言不能作为登录成功的判据）`);
       }
     }
   }
