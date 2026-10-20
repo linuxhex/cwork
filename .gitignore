@@ -38,3 +38,6 @@ skills/.last_analysis_date
 .services-map.md
 skills/data/references/.source-table-mapping.md
 skills/deploy/scripts/service-map.json
+
+# cwork-article 生成的本地图片产物
+vibe_images/
