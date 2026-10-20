@@ -1,5 +1,6 @@
 ---
 name: cwork-doc
+lazy: true
 description: 根据代码改动生成技术方案文档（两种模式：已有需求文档 / 对话式需求分析）
 ---
 

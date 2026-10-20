@@ -1,5 +1,6 @@
 ---
 name: cwork-log
+lazy: true
 description: 找日志分析问题。查 SLS 日志 + ARMS 链路，定位问题根因。适用于：问题排查、性能分析、流量分析、链路追踪。
 ---
 

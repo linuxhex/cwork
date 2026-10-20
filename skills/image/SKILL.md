@@ -1,5 +1,6 @@
 ---
 name: cwork-image
+lazy: true
 description: 本地工程/jar 打包 Docker 镜像 + push registry + 服务端拉起运行
 ---
 

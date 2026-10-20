@@ -1,5 +1,6 @@
 ---
 name: cwork-code
+lazy: true
 description: 代码仓库只读查询 + clone/pull + codegraph 触发，支持 CodeUp（主平台）+ GitLab（前端 fallback），优先使用 codegraph 索引查找代码
 ---
 

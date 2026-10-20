@@ -1,5 +1,6 @@
 ---
 name: cwork-graf
+lazy: true
 description: Grafana 监控数据只读查询，对话式查 K8S 节点/容器/应用/JVM/数据库/业务监控面板，支持 64 个仪表盘按分类检索、面板数据查询、PromQL 即时查询，排查问题时核对资源使用率/性能指标/业务数据佐证根因
 ---
 
