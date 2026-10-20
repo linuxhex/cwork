@@ -1,5 +1,6 @@
 ---
 name: cwork-config
+lazy: true
 description: Nacos 配置只读查询，对话式查多环境(dev/test/uat/prod)的 Nacos 配置内容/清单/差异，排查问题时核对某服务某环境的配置真值（开关/阈值/地址/参数）
 ---
 

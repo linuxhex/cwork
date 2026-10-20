@@ -361,7 +361,12 @@ function installClaude() {
   for (const skill of skills) {
     const md = readSkillMd(skill);
     const { meta } = parseFrontmatter(md);
-    skillList += `- /cwork-${skill} — ${meta.description || skill}\n`;
+    // lazy 技能不生成 rules 常驻文件，清单标注按需加载路径（控制上下文占用）
+    if (String(meta.lazy || '').toLowerCase() === 'true') {
+      skillList += `- /cwork-${skill} — ${meta.description || skill}\n  （按需加载：需要时 Read \`.cwork/refs/cwork-${skill}/SKILL.md\` 获取完整指令，不常驻上下文）\n`;
+    } else {
+      skillList += `- /cwork-${skill} — ${meta.description || skill}\n`;
+    }
   }
 
   const content = `<!-- cwork-skills:begin -->
@@ -407,7 +412,7 @@ ${skillList}
   for (const skill of skills) {
     const skillName = `cwork-${skill}`;
     const md = readSkillMd(skill);
-    const { body } = parseFrontmatter(md);
+    const { meta, body } = parseFrontmatter(md);
 
     // 参考文件复制到 .cwork/refs/<skillName>/ 下（不放 .claude/rules/——rules 下文件会被全量注入上下文，参考文件应按需 Read）
     const files = collectSkillFiles(skill);
@@ -423,6 +428,16 @@ ${skillList}
         writeFileSync(dest, readFileSync(f.path, 'utf-8'));
       }
       refIndex = buildClaudeRefIndex(skillName);
+    }
+
+    // lazy 技能（frontmatter 标 lazy: true 的低频独立工具）：不生成 rules 常驻文件（rules 全量注入上下文，
+    // 17 个技能不分工种常驻是上下文超限根因），改放 .cwork/refs/<skillName>/SKILL.md 按需 Read
+    if (String(meta.lazy || '').toLowerCase() === 'true') {
+      const refDir = join(PROJECT, '.cwork', 'refs', skillName);
+      mkdirSync(refDir, { recursive: true });
+      writeFileSync(join(refDir, 'SKILL.md'), `# ${skillName}\n\n${body}${refIndex}\n`);
+      log(`${skillName}.md（lazy → .cwork/refs/${skillName}/SKILL.md 按需加载，不进 rules 常驻）`);
+      continue;
     }
 
     writeFileSync(join(target, `${skillName}.md`), `# ${skillName}\n\n${body}${refIndex}\n`);
@@ -489,7 +504,7 @@ function checkInstall() {
   for (const skill of skills) {
     const skillName = `cwork-${skill}`;
     const md = readSkillMd(skill);
-    const { body } = parseFrontmatter(md);
+    const { meta, body } = parseFrontmatter(md);
     const files = collectSkillFiles(skill);
     const refFiles = files.filter(f => f.relPath !== 'SKILL.md' && !f.relPath.startsWith('scripts/'));
     let refIndex = '';
@@ -497,6 +512,16 @@ function checkInstall() {
       refIndex = buildClaudeRefIndex(skillName);
     }
     const expected = `# ${skillName}\n\n${body}${refIndex}\n`;
+    // lazy 技能产物在 .cwork/refs/<skillName>/SKILL.md，不在 rules
+    if (String(meta.lazy || '').toLowerCase() === 'true') {
+      const lazyDest = join(PROJECT, '.cwork', 'refs', skillName, 'SKILL.md');
+      if (!existsSync(lazyDest)) {
+        problems.push(`lazy 产物缺失: .cwork/refs/${skillName}/SKILL.md（重装: node bin/cwork.js --tool claude）`);
+      } else if (readFileSync(lazyDest, 'utf-8') !== expected) {
+        problems.push(`lazy 产物与源不一致: .cwork/refs/${skillName}/SKILL.md（重装: node bin/cwork.js --tool claude）`);
+      }
+      continue;
+    }
     const dest = join(PROJECT, '.claude', 'rules', `${skillName}.md`);
     if (!existsSync(dest)) {
       problems.push(`产物缺失: .claude/rules/${skillName}.md（未安装或被删除，重装: node bin/cwork.js --tool claude）`);

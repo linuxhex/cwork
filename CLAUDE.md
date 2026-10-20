@@ -42,20 +42,30 @@ cwork 内置了决策树式追问机制，分两种模式：
 ## 技能清单
 
 - /cwork-article — 微信公众号文章写作助手。自动识别文章类型，补充必要信息（开源地址/GitHub star/系统地址等），生成吸引人的标题，提供精美排版（含 CSS 样式模板），用 ImageGen 强制生成封面图，为文章生成配图（系统真实截图 或 设计图）并嵌入正文，直接写入公众号编辑器。适用于：技术分享、开源项目介绍、产品推广、教程指南。
+  （按需加载：需要时 Read `.cwork/refs/cwork-article/SKILL.md` 获取完整指令，不常驻上下文）
 - /cwork-bug — 快速修复 bug。问题明确时直接修复，问题不明确时先沟通定位（可调用 cwork-log 查日志），然后修复 + 验证 + 提交。适用于：修复线上 bug、修复测试问题、修复代码缺陷。
 - /cwork-code — 代码仓库只读查询 + clone/pull + codegraph 触发，支持 CodeUp（主平台）+ GitLab（前端 fallback），优先使用 codegraph 索引查找代码
+  （按需加载：需要时 Read `.cwork/refs/cwork-code/SKILL.md` 获取完整指令，不常驻上下文）
 - /cwork-commit — 推演收敛后自动提交所有服务工程，不确认
 - /cwork-config — Nacos 配置只读查询，对话式查多环境(dev/test/uat/prod)的 Nacos 配置内容/清单/差异，排查问题时核对某服务某环境的配置真值（开关/阈值/地址/参数）
+  （按需加载：需要时 Read `.cwork/refs/cwork-config/SKILL.md` 获取完整指令，不常驻上下文）
 - /cwork-data — 数仓数据查询，对话式查 Doris 数仓（internal/hive/JDBC catalog）跑只读 SQL 查业务数据/表结构/指标/数据量，自带 SQL 前置校验，排查问题时核对订单/金额/库存/数据量佐证根因
+  （按需加载：需要时 Read `.cwork/refs/cwork-data/SKILL.md` 获取完整指令，不常驻上下文）
 - /cwork-deploy — Jenkins + 云效构建部署触发，通过 curl 直连 Jenkins REST API 或云效 AppStack OpenAPI 触发服务构建和部署，支持 dev/test/uat/prod 多环境，自带服务名→作业映射（56 个服务）+ 双平台自动路由 + 独立 Jenkins 实例路由 + 单 job 前端部署模式，排查问题时快速部署验证修复
+  （按需加载：需要时 Read `.cwork/refs/cwork-deploy/SKILL.md` 获取完整指令，不常驻上下文）
 - /cwork-do — 目标驱动的自主工作流。深度追问确认目标并固化验收标准后，迭代循环「实现/修复 → 部署 → 实测验证 → 收敛评估」不断逼近目标，测试结果 + 理论评估双证据收敛后才提交代码。适用于：独立完成需求开发、bug 修复并部署验证收敛。
 - /cwork-doc — 根据代码改动生成技术方案文档（两种模式：已有需求文档 / 对话式需求分析）
+  （按需加载：需要时 Read `.cwork/refs/cwork-doc/SKILL.md` 获取完整指令，不常驻上下文）
 - /cwork-graf — Grafana 监控数据只读查询，对话式查 K8S 节点/容器/应用/JVM/数据库/业务监控面板，支持 64 个仪表盘按分类检索、面板数据查询、PromQL 即时查询，排查问题时核对资源使用率/性能指标/业务数据佐证根因
+  （按需加载：需要时 Read `.cwork/refs/cwork-graf/SKILL.md` 获取完整指令，不常驻上下文）
 - /cwork-image — 本地工程/jar 打包 Docker 镜像 + push registry + 服务端拉起运行
+  （按需加载：需要时 Read `.cwork/refs/cwork-image/SKILL.md` 获取完整指令，不常驻上下文）
 - /cwork-implement — 需求分析（对话式）+ 编写计划 + 执行计划 + 推演收敛
 - /cwork-init — 对话式初始化，自动查找工程路径，多服务分支切换
 - /cwork-log — 找日志分析问题。查 SLS 日志 + ARMS 链路，定位问题根因。适用于：问题排查、性能分析、流量分析、链路追踪。
+  （按需加载：需要时 Read `.cwork/refs/cwork-log/SKILL.md` 获取完整指令，不常驻上下文）
 - /cwork-requirement — 云效需求只读查询，对话式查云效 Projex 项目需求列表/详情/按日期筛选，实现前核对需求范围、关联变更
+  （按需加载：需要时 Read `.cwork/refs/cwork-requirement/SKILL.md` 获取完整指令，不常驻上下文）
 - /cwork-test — 页面自动化测试，自动识别 Web/小程序项目，分别走 ego-browser 或 miniprogram-automator 链路
 
 ## 技能文件位置
