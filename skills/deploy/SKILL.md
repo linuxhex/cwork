@@ -49,7 +49,7 @@ description: Jenkins + 云效构建部署触发，通过 curl 直连 Jenkins RES
 
 - 缺少凭证：Jenkins 服务缺 `JENKINS_USER`/`JENKINS_PASS`，云效服务缺 `YX_TOKEN`/`YX_ORG_ID`，**禁止执行**，先提示 `cp scripts/config.example.sh scripts/.config.local.sh` 并填对应凭证
 - 服务条目配了 `jenkinsCred` 但 `.config.local.sh` 缺 `<prefix>_USER`/`<prefix>_PASS`，**禁止执行**，先补独立实例凭证三件套
-- 服务名未在 `service-map.json` 中找到，**禁止执行**，提示用 `list` 查可用服务或 `sync` 更新映射
+- 服务名未在 `service-map.json` 中找到，**先跑 `deploy.sh sync <appName>` 自动收录**（见「未收录服务 SOP」）；sync 收录不到（无发布工作流/非 AppStack 应用）才**禁止执行**，提示用 `list` 查可用服务
 - Jenkins / 云效 API 不可达（网络超时/返回非 2xx），如实说，**不臆造构建结果**
 - 构建失败如实报告，**不臆造成功**
 
@@ -115,7 +115,7 @@ API base: `https://{YX_DOMAIN}/oapi/v1/appstack/organizations/{YX_ORG_ID}`
 | `list` | 列出可用服务（含平台标识） | `deploy.sh list [关键字]` |
 | `jobs` | 查看服务的作业名 | `deploy.sh jobs <appName>` |
 | `console` | 查看构建控制台日志（Jenkins，可传服务名） | `deploy.sh console <appName\|jobName> [buildNum]` |
-| `sync` | 从 devops API 同步服务映射 | `deploy.sh sync` |
+| `sync` | 从云效 AppStack 同步服务映射（全量或单应用，自动补 yxDeploy，**不含生产**） | `deploy.sh sync [appName] [--force]` |
 
 > cwork-deploy **不依赖 MCP 注册**——`deploy.sh` 经 `curl` 直连 Jenkins REST API / 云效 AppStack OpenAPI，与 cwork-log 用 bash 直连阿里云同一性质。
 >
@@ -137,6 +137,34 @@ API base: `https://{YX_DOMAIN}/oapi/v1/appstack/organizations/{YX_ORG_ID}`
 - 环境不明（部署到哪个环境？）→ 问一句
 - 分支不明（用哪个分支构建？）→ 问一句
 - 没有上述歧义 → 直接进阶段 2，**不问**
+
+---
+
+## 未收录服务 SOP（service-map.json 里没有时按此走，禁止弯路）
+
+**标准路径（按顺序做）**：
+
+1. **先 auto-sync 收录**（直接做，不问）：
+   ```bash
+   cd scripts && bash deploy.sh sync <appName>
+   ```
+   自动从 AppStack 拉该应用的发布工作流，解析 test/uat/dev 的 `workflowSn|stageSn` 合并进 service-map.json。**生产（production）环境不收录**——生产部署走人工确认的正式链路。
+2. **收录成功 → 直接部署**：`bash deploy.sh deploy <appName> <env> <branch>`。
+3. **sync 收录不到**（应用无发布工作流 / 返回空）→ 如实说，提示 `list` 查可用服务或确认服务名，不臆造。
+
+**手工探索兜底（仅 sync 不可用时）**：
+
+- **查单应用工作流（一次拿全）**：`source _common.sh && yx_get "/apps/{appName}/releaseWorkflows"`——返回 workflow sn + stages（`labels` 里 `envType` 标环境，`name` 是阶段中文名）
+- ⚠️ **禁止用 `GET /apps:search?name=xxx` 探索单应用**——该接口只支持 keyset 分页（`pagination=keyset&orderBy=id&sort=asc&nextToken=...` 翻页），普通 page 参数会连环报错（缺 pagination → 缺 orderBy → BadFormatForPagination），实战最大弯路
+- **列全部应用**（全量盘点才用）：`yx_get "/apps:search?pagination=keyset&perPage=100&orderBy=id&sort=asc"`，用返回的 `nextToken` 翻页
+
+**环境名映射（已实测验证）**：AppStack `envType` → service-map 键：`test→test`、`prepub→uat`（stage 名即「UAT 阶段」）、`opendev→dev`、`production→prod`（sync 不收录）
+
+**同步纪律**：源仓库（`$CWORK_HOME/skills/deploy/`）的 service-map.json 是**唯一权威**；`bin/cwork.js` 安装时整目录覆盖分发到 agent 副本——在 IDE 副本侧 sync/手工补条目会被下次分发冲掉，务必回写源仓库。
+
+**常见坑**：
+- `source _common.sh` 后函数可直接调（凭证自动加载，无需手动 `load_config`）
+- bash 变量名后紧跟全角字符会被吞进变量名（`$var）` 报 unbound），一律写 `${var}`
 
 ---
 
@@ -183,7 +211,7 @@ bash deploy.sh console omp-shop 2487
 - **Jenkins**（返回 401/403）：① `JENKINS_USER`/`JENKINS_PASS` 是否填对；② Jenkins 地址是否可达；③ 凭证是否过期；④ **POST 403 但 GET 正常 = crumb 缺失/不匹配**——crumb 与 session cookie 绑定，必须同一会话先 GET crumb（存 cookie）再 POST（同时带 crumb header + cookie），`jenkins_post` 已内置此逻辑
 - **云效**（返回 401/403）：① `YX_TOKEN` 是否正确且未过期；② `YX_ORG_ID` 是否正确；③ `YX_DOMAIN` 是否正确
 
-**服务名不在映射中**：① 用 `list <关键字>` 搜可用服务；② 确认服务名拼写；③ 用 `sync` 从 devops API 更新映射；④ 仍找不到则手动编辑 `service-map.json`。
+**服务名不在映射中**：① 先跑 `bash deploy.sh sync <appName>` 自动收录（见「未收录服务 SOP」）；② 收录不到再 `list <关键字>` 搜可用服务、确认服务名拼写；③ 仍找不到则手动编辑 `service-map.json`（记得回写源仓库）。
 
 ---
 
@@ -330,9 +358,9 @@ Jenkins 控制台：
 | `platform` | 全部 | 部署平台：`yunxiao`（默认）/ `jenkins` |
 | `yxDeploy` | 云效 | 各环境工作流标识，格式 `workflowSn|stageSn` |
 | `yxBuild` | 云效 | 构建工作流标识，格式 `workflowSn|stageSn` |
-| `serviceName` | 全部 | 服务中文名（仅展示） |
+| `serviceName` | 全部 | 服务中文名（仅展示）；`sync` 自动收录的条目标记为 `[auto-sync]`，可随手改回真实中文名 |
 
-**映射过期处理**：用 `sync` 命令从 devops API 更新，或手动编辑 `service-map.json`。
+**映射过期处理**：`bash deploy.sh sync` 全量重拉（AppStack 全部应用的 test/uat/dev 映射，默认只补缺失键、`--force` 让 API 值优先覆盖同名键）；`platform=jenkins` 条目跳过不覆盖（保护手工维护的 Jenkins 作业名）。
 
 ---
 
