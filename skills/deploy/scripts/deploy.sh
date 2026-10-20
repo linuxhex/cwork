@@ -9,7 +9,7 @@
 #   deploy.sh list     [关键字]                   # 列出可用服务
 #   deploy.sh jobs     <appName>                 # 查看服务的 Jenkins 作业名
 #   deploy.sh console  <jobName> <buildNum>      # 查看构建控制台日志（Jenkins）
-#   deploy.sh sync                               # 从 devops API 同步服务映射
+#   deploy.sh sync [appName] [--force]           # 同步服务映射（全量或单应用，自动补 yxDeploy）
 #
 # 平台路由:
 #   service-map.json 中 platform=jenkins 的服务走 Jenkins REST API
@@ -1151,42 +1151,144 @@ cmd_console() {
 }
 
 # ── 命令: sync ──
+# deploy.sh sync                # 全量：拉取 AppStack 全部应用 + 发布工作流，合并进 service-map.json
+# deploy.sh sync <appName>      # 单应用：只拉取指定应用并合并
+# deploy.sh sync <appName> --force | sync --force   # 覆盖已收录 yunxiao 条目的 yxDeploy（默认只补缺失 env）
 cmd_sync() {
-  local devopsUrl="${DEVOPS_URL:-http://172.16.149.95:81}"
-  info "从 devops 服务同步服务映射: $devopsUrl"
+  yx_ensure_config
+  local only_app="${1:-}"
+  local force=0
+  [[ "${1:-}" == "--force" ]] && { only_app=""; force=1; }
+  [[ "${2:-}" == "--force" ]] && force=1
 
-  # 尝试从 devops API 获取应用列表
-  local resp
-  resp=$($CURL -s "${devopsUrl}/api/application/list" 2>&1 || echo "")
+  local sync_scope="全量"
+  [[ -n "$only_app" ]] && sync_scope="单应用: ${only_app}"
+  [[ "$force" == 1 ]] && sync_scope="${sync_scope}（force 覆盖模式）"
+  info "从云效 AppStack 同步服务映射（${sync_scope}）..."
+  export YX_TOKEN YX_ORG_ID YX_DOMAIN
 
-  if [[ -z "$resp" ]] || echo "$resp" | grep -q "error\|Error\|无法" 2>/dev/null; then
-    warn "无法从 devops API 获取应用列表（$devopsUrl 可能不可达）"
-    echo ""
-    info "当前使用本地 service-map.json（包含 54 个服务，云效 API 自动同步）"
-    echo "  如需手动更新，编辑: $SCRIPT_DIR/service-map.json"
-    return 0
-  fi
+  python3 - "$SCRIPT_DIR" "$only_app" "$force" <<'PYEOF'
+import json, os, subprocess, sys, urllib.parse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
-  # 尝试解析并更新映射
-  local count
-  count=$(echo "$resp" | python3 -c "
-import json, sys
-try:
-    data = json.load(sys.stdin)
-    apps = data if isinstance(data, list) else data.get('data', data.get('list', []))
-    print(len(apps))
-except:
-    print(0)
-" 2>/dev/null || echo "0")
+script_dir, only_app, force = sys.argv[1], sys.argv[2], sys.argv[3] == "1"
+token, org = os.environ["YX_TOKEN"], os.environ["YX_ORG_ID"]
+domain = os.environ.get("YX_DOMAIN", "openapi-rdc.aliyuncs.com")
+base = f"https://{domain}/oapi/v1/appstack/organizations/{org}"
 
-  if [[ "$count" -gt 0 ]]; then
-    info "从 API 获取到 $count 个应用"
-    # TODO: 根据 API 返回结构更新 service-map.json
-    ok "服务映射已更新"
-  else
-    warn "API 返回数据格式无法解析，保持本地映射不变"
-    info "当前本地映射: $SCRIPT_DIR/service-map.json"
-  fi
+def yx_get(path):
+    r = subprocess.run(["curl", "-s", "--max-time", "20", "-H", f"x-yunxiao-token: {token}",
+                        f"{base}{path}"], capture_output=True, text=True)
+    try:
+        return json.loads(r.stdout)
+    except Exception:
+        return {"_error": (r.stdout or r.stderr)[:200]}
+
+# 1) 拉应用清单（keyset 分页；单应用模式跳过）
+if only_app:
+    apps = [{"name": only_app}]
+else:
+    apps, next_token = [], ""
+    while True:
+        path = "/apps:search?pagination=keyset&perPage=100&orderBy=id&sort=asc"
+        if next_token:
+            path += "&nextToken=" + urllib.parse.quote(next_token)
+        d = yx_get(path)
+        if "_error" in d or d.get("errorCode"):
+            print(f"拉取应用列表失败: {json.dumps(d, ensure_ascii=False)[:300]}", file=sys.stderr)
+            sys.exit(1)
+        batch = d.get("data") or []
+        apps.extend(batch)
+        next_token = d.get("nextToken") or ""
+        if not next_token or not batch:
+            break
+print(f"应用清单: {len(apps)} 个")
+
+# 2) 并发拉取每个应用的发布工作流
+def fetch_wf(name):
+    d = yx_get(f"/apps/{urllib.parse.quote(name)}/releaseWorkflows")
+    if isinstance(d, list):
+        return name, d
+    return name, None  # dict（错误响应）或其他异常结构
+
+ENV_ALIAS = {"prepub": "uat", "opendev": "dev"}  # AppStack envType → service-map env 简写
+
+def parse_deploy(wfs):
+    deploy = {}
+    for wf in sorted(wfs, key=lambda w: int(w.get("order") or 0)):
+        wfsn = wf.get("sn")
+        for st in sorted(wf.get("releaseStages") or [], key=lambda s: int(s.get("order") or 0)):
+            env = next((l.get("value") for l in (st.get("labels") or [])
+                        if l.get("name") == "envType" and l.get("value")), None)
+            if env == "production":
+                continue  # 生产环境不通过 auto-sync 收录（生产部署走人工确认的正式链路）
+            env = ENV_ALIAS.get(env, env)
+            if env and wfsn and st.get("sn") and env not in deploy:
+                deploy[env] = f"{wfsn}|{st['sn']}"
+    return deploy
+
+results, failed = {}, []
+with ThreadPoolExecutor(max_workers=8) as ex:
+    futs = {ex.submit(fetch_wf, a["name"]): a["name"] for a in apps}
+    for fu in as_completed(futs):
+        name, wfs = fu.result()
+        if wfs is None:
+            failed.append(name)
+        else:
+            results[name] = parse_deploy(wfs)
+
+# 3) 合并进 service-map.json
+map_path = os.path.join(script_dir, "service-map.json")
+with open(map_path) as f:
+    svc_map = json.load(f)
+services = svc_map.setdefault("services", [])
+by_name = {s.get("appName"): s for s in services}
+
+added, updated, skipped, no_wf = [], [], [], []
+for name in sorted(results):
+    deploy = results[name]
+    if not deploy:
+        no_wf.append(name)
+        continue
+    s = by_name.get(name)
+    if s is None:
+        services.append({"appName": name, "gitProjectName": name, "platform": "yunxiao",
+                         "yxDeploy": deploy, "serviceName": "[auto-sync]"})
+        added.append(name)
+    elif s.get("platform") == "jenkins":
+        skipped.append(name)  # 保护手工维护的 Jenkins 配置
+    else:
+        if not s.get("platform"):
+            s["platform"] = "yunxiao"
+        old = s.get("yxDeploy") or {}
+        if force:
+            merged = {**old, **deploy}  # API 值优先覆盖同名键，手工配置的其他环境键（如 prod）保留
+            if merged != old:
+                s["yxDeploy"] = merged
+                updated.append(name)
+        else:
+            missing = {k: v for k, v in deploy.items() if k not in old}
+            if missing:
+                s["yxDeploy"] = {**old, **missing}
+                updated.append(name)
+
+with open(map_path, "w") as f:
+    json.dump(svc_map, f, ensure_ascii=False, indent=2)
+    f.write("\n")
+
+# 4) 统计输出
+if added:
+    print(f"新增 {len(added)} 个: {', '.join(added)}")
+if updated:
+    print(f"更新 {len(updated)} 个: {', '.join(updated)}")
+if failed:
+    print(f"拉取失败 {len(failed)} 个（可重跑 sync 重试）: {', '.join(failed)}")
+if no_wf:
+    print(f"无发布工作流（跳过）{len(no_wf)} 个")
+if skipped:
+    print(f"Jenkins 条目（跳过保护）{len(skipped)} 个: {', '.join(skipped)}")
+print(f"service-map.json 共 {len(services)} 个服务条目")
+PYEOF
 }
 
 # ── 主入口 ──
@@ -1202,7 +1304,7 @@ cwork-deploy — Jenkins + 云效 构建部署工具（curl 封装）
   deploy.sh list     [关键字]                   列出可用服务
   deploy.sh jobs     <appName>                 查看服务的 Jenkins 作业名
   deploy.sh console  <jobName> <buildNum>      查看构建控制台日志（Jenkins）
-  deploy.sh sync                               从 devops API 同步服务映射
+  deploy.sh sync [appName] [--force]           同步服务映射（全量或单应用，自动补 yxDeploy）
 
 平台路由:
   service-map.json 中 platform=jenkins 的服务走 Jenkins REST API
@@ -1266,7 +1368,7 @@ main() {
       cmd_console "$1" "$2"
       ;;
     sync)
-      cmd_sync
+      cmd_sync "$@"
       ;;
     ""|-h|--help|help)
       usage

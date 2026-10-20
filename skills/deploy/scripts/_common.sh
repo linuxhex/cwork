@@ -26,6 +26,14 @@ load_config() {
   # 凭证检查延迟到实际调用时（jenkins_ensure_config / yx_ensure_config）
 }
 
+# 自动加载凭证（幂等）：请求封装内部调用，source 本文件后直接用函数不再报"凭证未配置"
+_CWORK_DEPLOY_CONFIG_LOADED=""
+auto_load_config() {
+  [[ -n "$_CWORK_DEPLOY_CONFIG_LOADED" ]] && return 0
+  load_config
+  _CWORK_DEPLOY_CONFIG_LOADED=1
+}
+
 # ============================================================
 # Jenkins REST API 封装（基本认证）
 # ============================================================
@@ -59,6 +67,7 @@ jenkins_auth_args() {
 # ── 带鉴权的 Jenkins GET 请求 ──
 # 用法: jenkins_get "/job/xxx/lastBuild/buildNumber"
 jenkins_get() {
+  auto_load_config
   jenkins_ensure_config
   local path="$1"
   shift
@@ -100,6 +109,7 @@ jenkins_crumb() {
 # 用法: jenkins_post "/job/xxx/buildWithParameters" --data-urlencode "key=value"
 # 自带 crumb + session cookie（解决 POST 403），检查 HTTP 状态码：非 2xx/3xx 输出错误到 stderr 并 return 1
 jenkins_post() {
+  auto_load_config
   jenkins_ensure_config
   local path="$1"
   shift
@@ -161,6 +171,7 @@ yx_base_url() {
 # ── 云效 GET 请求 ──
 # 用法: yx_get "/apps:search?name=order"
 yx_get() {
+  auto_load_config
   yx_ensure_config
   local path="$1"
   shift
@@ -170,6 +181,7 @@ yx_get() {
 # ── 云效 POST 请求 ──
 # 用法: yx_post "/apps/order-server/releaseWorkflows/xxx/releaseStages/yyy:execute" -d '{"params":{"sourceId":"master"}}'
 yx_post() {
+  auto_load_config
   yx_ensure_config
   local path="$1"
   shift
