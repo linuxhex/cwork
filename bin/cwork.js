@@ -397,7 +397,7 @@ ${skillList}
     const refFiles = files.filter(f => f.relPath !== 'SKILL.md' && !f.relPath.startsWith('scripts/'));
     let refIndex = '';
     if (refFiles.length > 0) {
-      refIndex = buildClaudeRefIndex(skill);
+      refIndex = buildClaudeRefIndex(skillName);
     }
 
     // 所有技能都放到 .cwork/refs/<skillName>/ 下按需加载
