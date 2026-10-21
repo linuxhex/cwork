@@ -24,7 +24,7 @@ REQ_KEY=$(echo "$REQ_TITLE" | tr '[:upper:] ' '[:lower:]_')
 [[ -d "$MAIN_DIR" ]] || fail "主工程路径不存在: $MAIN_DIR"
 git -C "$MAIN_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1 || fail "不是 git 仓库: $MAIN_DIR"
 
-[[ "$FEATURE_BRANCH" =~ ^feature_[A-Za-z_]+$ ]] || fail "分支名必须以 feature_ 开头，仅含字母和下划线"
+[[ "$FEATURE_BRANCH" =~ ^(feature|hotfix|bugfix|refactor)/[0-9]{8}_[A-Za-z0-9_-]+$ ]] || fail "分支名格式错误，必须为 {type}/{YYYYMMDD}_{description}，如 feature/20260928_user_export"
 
 # 依赖工程校验
 DEP_DIRS=""

@@ -47,7 +47,7 @@ upstream=$(git rev-parse --abbrev-ref @{upstream} 2>/dev/null || echo "")
 | 脚本 | 防护 |
 |---|---|
 | `skills/init/scripts/init_requirement_workspace.sh` | `ensure_correct_upstream`：三条 checkout 路径后自动纠正/清除 upstream |
-| `skills/init/scripts/init.sh` | 同上（旧版一行命令脚本） |
+| `skills/init/scripts/init.sh` | 同上（快捷一行命令入口，分支名校验与新版 `{type}/{YYYYMMDD}_{description}` 格式一致） |
 | `skills/commit/scripts/commit.sh` | `push_current_branch`：upstream 不一致 fail 阻断 / 无 upstream 用 `push -u` / 显式推 `origin <当前分支>` |
 | `skills/code/scripts/code_query.sh` | pull 显式指定当前分支 |
 
