@@ -12,11 +12,8 @@
 
 ## 未分析
 
-- [2026-10-20] [install] installer PROJECT=cwd 陷阱：从源仓库子目录跑安装会把产物写进子目录（已删误产物）| 待吸收：PROJECT 非仓库根时告警或自动定位 ROOT；`--help` 未短路，任意未识别参数静默触发全量安装
-- [2026-10-16] [test] openDatePicker panel:0 调试输出在非 daterange 面板是误报 | 待修
-- [2026-10-16] [test] 复杂场景（MySQL 造数+后端落库验证）plan.json 表达不了会退化为手写 heredoc | 待分析：复杂场景降级路径
+- [2026-10-16] [test] 复杂场景（MySQL 造数+后端落库验证）plan.json 表达不了会退化为手写 heredoc | 待分析：复杂场景降级路径（web-test.md 已有「复杂场景降级路径」章节，需实战验证是否够用）
 - [2026-10-16] [test] 机制建议：实战会话凡手工 patch 安装副本，收工前必须回写源仓库，否则下次同步覆盖丢失（已发生多起）
-- [2026-10-16] [test] OMP 列表查询 0 条时 .page-total 从 DOM 消失，0 条场景断言统一用 body contains 暂无数据 | 待并入 web-test.md 坑清单
 
 ## 经验沉淀（≤ 20 条，只留可长期借鉴的）
 

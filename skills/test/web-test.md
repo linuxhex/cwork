@@ -388,6 +388,7 @@ echo "✓ ego-browser 可用：$(command -v ego-browser)"
 10. **ego click 遮挡检查被拦 / 静默点在横幅上（OMP top-tip 横幅实战）**：ego 对被遮挡元素会拒绝 click（遮挡检查）；更隐蔽的是**静默落空**——横幅盖住按钮行时 ego 宽松点击实际点在横幅上，查询不发出产生假结果。plan 中直接改用 `dispatchClick`（JS 合成事件通道，绕过遮挡检查，对标准 @click 监听的按钮有效）；`dispatchClick` 无效（自定义组件不监听合成事件）再升 `clickCdp` 真实鼠标坐标，每次升级前先观察一次（铁律：探索套路）。
 11. **ykc 系组件 id 透传在根 div，内部 input 需后代选择器**：Vue 2 非 prop 属性继承——`<ykc-input :id="verificationCode">` 的 id 落在组件根 div（`.ykc-input-box`）上，**内部 `<input>` 没有该 id**。`fill #verificationCode` 会报 Element not found，正确写法是后代选择器 `#verificationCode input`（OMP 验证码输入框实测）。同理适用 ykc-select/ykc-date 等所有 ykc 封装组件。
 12. **断言类步骤用 CSS 选择器，文本匹配走 `assertText` + `expectContains`**：`assertVisible`/`assertText`/`assertCount` 内部用 `document.querySelector`（只读断言，CSS 够用），不支持 `:has-text()` 伪类。另注意：**同名选择器可能匹配到隐藏弹窗**——`.el-dialog__footer button:has-text('确认')` 这类宽选择器会命中页面上隐藏 el-dialog 的按钮（OMP 登录页假点击根因），断言/点击前先 `assertCount` 确认匹配数，弹窗类操作限定容器（如 `.customize-dialog .bnt-right`）。
+13. **列表查询 0 条时分页栏从 DOM 消失**（OMP 实测）：`.page-total`「共 N 条」在结果为空时整条移除，`assertText .page-total` 必失败。0 条场景断言改用空态文案：`assertText body expectContains "暂无数据"`（或实测空态文案），勿断分页栏。
 
 ### 登录场景模板（固化复用，选择器必须实测）
 

@@ -33,14 +33,26 @@ function skip(msg) { console.log(`  - ${msg}`); }
 
 function parseArgs() {
   const args = process.argv.slice(2);
-  const opts = { tool: null, uninstall: false, syncGlobal: false, check: false };
+  const opts = { tool: null, uninstall: false, syncGlobal: false, check: false, help: false };
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--tool') opts.tool = args[++i];
     if (args[i] === '--uninstall') opts.uninstall = true;
     if (args[i] === '--sync-global') opts.syncGlobal = true;
     if (args[i] === '--check') opts.check = true;
+    if (args[i] === '--help' || args[i] === '-h') opts.help = true;
   }
   return opts;
+}
+
+// PROJECT=cwd 陷阱防护：从源仓库子目录跑安装会把产物写进子目录（实战已发生）。
+// 项目级安装（cursor/claude/trae）要求 cwd 是 git 仓库根；不满足时告警退出（ROOT 本身除外——源仓库根是合法目标）。
+function guardProjectDir() {
+  const gitRoot = join(PROJECT, '.git');
+  const isRepoRoot = existsSync(gitRoot) || existsSync(join(gitRoot, 'file'));
+  if (PROJECT !== ROOT && !isRepoRoot) {
+    console.error(`⚠ 拒绝安装：当前目录 ${PROJECT} 不是 git 仓库根（PROJECT=process.cwd()）。\n  从源仓库子目录跑安装会把产物误写进子目录。请 cd 到目标项目根再执行。`);
+    process.exit(1);
+  }
 }
 
 // 公共资源目录名（skills/common/）：跨技能共享的规范/参考文件，不是技能——
@@ -711,13 +723,18 @@ const uninstallers = { qoder: uninstallQoder, cursor: uninstallCursor, claude: u
 
 const opts = parseArgs();
 
-if (opts.check) {
+if (opts.help) {
+  // --help 短路：未识别参数不再静默触发默认全量安装
+  console.log(readFileSync(join(ROOT, 'bin/cwork.js'), 'utf-8').split('*/')[0].replace('#!/usr/bin/env node', '').trim());
+  process.exit(0);
+} else if (opts.check) {
   // 一致性校验是独立命令，执行完直接退出（不走安装流程）
   checkInstall();
 } else if (opts.syncGlobal) {
   // 全局技能同步是独立命令（作用于 ~/.claude/skills/，与项目内安装的 --tool 无关）
   opts.uninstall ? unsyncClaudeGlobal() : syncClaudeGlobal();
 } else if (opts.tool && opts.tool !== 'auto') {
+  guardProjectDir();
   if (!TOOLS.includes(opts.tool)) {
     console.error(`未知工具: ${opts.tool}，支持: ${TOOLS.join(', ')}, auto`);
     process.exit(1);
@@ -725,6 +742,7 @@ if (opts.check) {
   opts.uninstall ? uninstallers[opts.tool]() : installers[opts.tool]();
 } else {
   // auto: install to all
+  guardProjectDir();
   for (const tool of TOOLS) {
     opts.uninstall ? uninstallers[tool]() : installers[tool]();
   }
