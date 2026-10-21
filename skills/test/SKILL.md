@@ -422,7 +422,3 @@ cwork-test 也可以独立使用（不依赖 cwork-implement）：
 
 ---
 
-## 使用记录与闭环
-
-使用本 skill 遇到的不顺手 / 报错 / 结果不准 / 可省步骤，记一笔到 `../USAGE_NOTES.md`「未分析」区（格式 `[YYYY-MM-DD] [test] 现象 | 建议改法`），能当场修的直接修。**每天最多分析一次**，据此优化各 skill——流程见 `../USAGE_NOTES.md` 顶部。
-
