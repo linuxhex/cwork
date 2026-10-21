@@ -356,6 +356,72 @@ cwork-test 也可以独立使用（不依赖 cwork-implement）：
 
 ---
 
+## 并行测试（场景数 ≥ 8 自动触发）
+
+### 触发条件
+
+当 plan.json 的场景数 ≥ 8 时，自动进入并行模式（小程序项目除外）。
+
+### 并行架构
+
+```
+主 Agent
+  ├─ 生成完整 plan.json
+  ├─ split-plan.cjs：拆分为 N 个子 plan（每组含登录场景）
+  ├─ Spawn N 个子 Agent（并行执行）
+  │   ├─ Agent 1: plan-ag1.json → result-ag1.json
+  │   ├─ Agent 2: plan-ag2.json → result-ag2.json
+  │   └─ Agent 3: plan-ag3.json → result-ag3.json
+  └─ merge-results.cjs：合并结果 → result.json → test-report.md
+```
+
+### 资源隔离
+
+- 每个子 Agent 独立 ego-browser 进程（天然隔离）
+- 每个子 Agent 独立 task space（不同 taskSpaceName，天然隔离）
+- 每个子 Agent 独立登录（独立 cookie/session）
+- 结果文件独立命名（result-ag1.json / result-ag2.json / result-ag3.json）
+
+### 分组策略
+
+- 登录场景：提取为公共前置，每组都包含
+- 业务场景：按顺序均分到 N 组（N = min(场景数/3, 3)）
+- 最多 3 个子 Agent（硬限制）
+
+### 子 Agent Prompt 模板
+
+```markdown
+你是 cwork-test 子 agent，负责执行分配给你的测试场景组。
+
+## 输入
+- 子 plan 文件: {planFile}
+- 结果输出: {resultFile}
+
+## 任务
+1. 执行测试: `node web-run.cjs --plan {planFile} --out {resultFile}`
+2. 如果有 aiAssert，读取 ctx 文件判断 pass/fail，合入 {resultFile}
+
+## 约束
+- 独立执行，不与其他 agent 交互
+- 登录场景必须完整执行（URL 断言判成功）
+- 失败场景首败即停，继续下一场景
+```
+
+### 用户接口
+
+```bash
+# 自动并行（场景数 ≥ 8）
+/cwork-test
+
+# 强制并行（指定 agent 数）
+/cwork-test --parallel 3
+
+# 强制串行（调试/小改动）
+/cwork-test --serial
+```
+
+---
+
 ## 使用记录与闭环
 
 使用本 skill 遇到的不顺手 / 报错 / 结果不准 / 可省步骤，记一笔到 `../USAGE_NOTES.md`「未分析」区（格式 `[YYYY-MM-DD] [test] 现象 | 建议改法`），能当场修的直接修。**每天最多分析一次**，据此优化各 skill——流程见 `../USAGE_NOTES.md` 顶部。

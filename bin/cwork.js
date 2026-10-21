@@ -349,7 +349,7 @@ function uninstallCursor() {
 // ── Claude Code installer ───────────────────────────────────────────
 
 function installClaude() {
-  console.log('\n📦 Claude Code (CLAUDE.md + .claude/rules/)');
+  console.log('\n📦 Claude Code (CLAUDE.md + .cwork/refs/)');
 
   const agentsMd = existsSync(join(ROOT, 'AGENTS.md'))
     ? readFileSync(join(ROOT, 'AGENTS.md'), 'utf-8')
@@ -361,12 +361,8 @@ function installClaude() {
   for (const skill of skills) {
     const md = readSkillMd(skill);
     const { meta } = parseFrontmatter(md);
-    // lazy 技能不生成 rules 常驻文件，清单标注按需加载路径（控制上下文占用）
-    if (String(meta.lazy || '').toLowerCase() === 'true') {
-      skillList += `- /cwork-${skill} — ${meta.description || skill}\n  （按需加载：需要时 Read \`.cwork/refs/cwork-${skill}/SKILL.md\` 获取完整指令，不常驻上下文）\n`;
-    } else {
-      skillList += `- /cwork-${skill} — ${meta.description || skill}\n`;
-    }
+    // 所有技能都按需加载（控制上下文占用）
+    skillList += `- /cwork-${skill} — ${meta.description || skill}\n  （按需加载：需要时 Read \`.cwork/refs/cwork-${skill}/SKILL.md\` 获取完整指令，不常驻上下文）\n`;
   }
 
   const content = `<!-- cwork-skills:begin -->
@@ -377,32 +373,14 @@ ${cleaned}
 ${skillList}
 ## 技能文件位置
 
-调用某个技能时，读取 \`.claude/rules/cwork-<name>.md\` 获取完整指令。
+调用某个技能时，读取 \`.cwork/refs/cwork-<name>/SKILL.md\` 获取完整指令。
 <!-- cwork-skills:end -->
 `;
 
   writeFileSync(join(PROJECT, 'CLAUDE.md'), content);
   log('CLAUDE.md 已更新');
 
-  // per-skill rules
-  const target = join(PROJECT, '.claude', 'rules');
-  mkdirSync(target, { recursive: true });
-
-  // remove old cwork rules（主规则文件 + 拆分的参考文件目录）
-  if (existsSync(target)) {
-    for (const f of readdirSync(target)) {
-      if (!f.startsWith('cwork-')) continue;
-      const p = join(target, f);
-      const stat = statSync(p);
-      if (stat.isFile() && f.endsWith('.md')) {
-        rmSync(p);
-      } else if (stat.isDirectory()) {
-        rmSync(p, { recursive: true, force: true });
-      }
-    }
-  }
-
-  // 清理旧版参考文件目录（曾放在 .claude/rules/cwork-<name>/ 下，现迁至 .cwork/refs/）+ 整体重建 refs
+  // 整体重建 .cwork/refs/（所有技能按需加载，不再生成 .claude/rules/ 常驻文件）
   const refsRoot = join(PROJECT, '.cwork', 'refs');
   if (existsSync(refsRoot)) {
     rmSync(refsRoot, { recursive: true, force: true });
@@ -414,38 +392,55 @@ ${skillList}
     const md = readSkillMd(skill);
     const { meta, body } = parseFrontmatter(md);
 
-    // 参考文件复制到 .cwork/refs/<skillName>/ 下（不放 .claude/rules/——rules 下文件会被全量注入上下文，参考文件应按需 Read）
+    // 收集所有文件（含 SKILL.md 和参考文件）
     const files = collectSkillFiles(skill);
     const refFiles = files.filter(f => f.relPath !== 'SKILL.md' && !f.relPath.startsWith('scripts/'));
     let refIndex = '';
     if (refFiles.length > 0) {
-      const refDir = join(PROJECT, '.cwork', 'refs', skillName);
-      rmSync(refDir, { recursive: true, force: true });
-      mkdirSync(refDir, { recursive: true });
-      for (const f of refFiles) {
-        const dest = join(refDir, f.relPath);
-        mkdirSync(dirname(dest), { recursive: true });
-        writeFileSync(dest, readFileSync(f.path, 'utf-8'));
-      }
-      refIndex = buildClaudeRefIndex(skillName);
+      refIndex = buildClaudeRefIndex(skill);
     }
 
-    // lazy 技能（frontmatter 标 lazy: true 的低频独立工具）：不生成 rules 常驻文件（rules 全量注入上下文，
-    // 17 个技能不分工种常驻是上下文超限根因），改放 .cwork/refs/<skillName>/SKILL.md 按需 Read
-    if (String(meta.lazy || '').toLowerCase() === 'true') {
-      const refDir = join(PROJECT, '.cwork', 'refs', skillName);
-      mkdirSync(refDir, { recursive: true });
-      writeFileSync(join(refDir, 'SKILL.md'), `# ${skillName}\n\n${body}${refIndex}\n`);
-      log(`${skillName}.md（lazy → .cwork/refs/${skillName}/SKILL.md 按需加载，不进 rules 常驻）`);
-      continue;
+    // 所有技能都放到 .cwork/refs/<skillName>/ 下按需加载
+    const refDir = join(PROJECT, '.cwork', 'refs', skillName);
+    mkdirSync(refDir, { recursive: true });
+
+    // 写 SKILL.md（主指令文件）
+    writeFileSync(join(refDir, 'SKILL.md'), `# ${skillName}\n\n${body}${refIndex}\n`);
+
+    // 复制参考文件
+    for (const f of refFiles) {
+      const dest = join(refDir, f.relPath);
+      mkdirSync(dirname(dest), { recursive: true });
+      writeFileSync(dest, readFileSync(f.path, 'utf-8'));
     }
 
-    writeFileSync(join(target, `${skillName}.md`), `# ${skillName}\n\n${body}${refIndex}\n`);
-    log(`${skillName}.md`);
+    log(`${skillName}（按需加载 → .cwork/refs/${skillName}/SKILL.md）`);
   }
 
-  // 分发共享规范文件（skills/common/ → <rules>/cwork-common/）
-  installCommonFiles(target);
+  // 分发共享规范文件（skills/common/ → .cwork/refs/cwork-common/，也按需加载）
+  const commonRefsDir = join(PROJECT, '.cwork', 'refs', 'cwork-common');
+  if (existsSync(commonRefsDir)) {
+    rmSync(commonRefsDir, { recursive: true, force: true });
+  }
+  mkdirSync(commonRefsDir, { recursive: true });
+  const commonSrc = join(SKILLS_DIR, COMMON_DIR);
+  if (existsSync(commonSrc)) {
+    (function walkCommon(dir, prefix = '') {
+      for (const entry of readdirSync(dir)) {
+        if (entry.endsWith('.bak') || entry.endsWith('.backup')) continue;
+        const full = join(dir, entry);
+        const stat = statSync(full);
+        if (stat.isDirectory()) {
+          walkCommon(full, prefix + entry + '/');
+        } else {
+          const destFile = join(commonRefsDir, prefix + entry);
+          mkdirSync(dirname(destFile), { recursive: true });
+          writeFileSync(destFile, readFileSync(full, 'utf-8'));
+        }
+      }
+    })(commonSrc);
+    log('cwork-common（共享规范 → .cwork/refs/cwork-common/ 按需加载）');
+  }
 }
 
 function uninstallClaude() {
@@ -484,8 +479,8 @@ function uninstallClaude() {
 // ── 安装一致性校验（--check） ─────────────────────────────────────────
 
 // 校验当前目录（PROJECT）的 Claude 安装是否与源一致，防止直接改产物导致重装静默丢失：
-// ① frontmatter 完整性（name/description）② 主规则产物一致性（内存重建 vs 磁盘 diff）
-// ③ 源文件里引用的 .claude/rules/*、.cwork/refs/* 路径真实存在（防断链）④ common 分发一致性
+// ① frontmatter 完整性（name/description）② 按需产物一致性（.cwork/refs/<skill>/SKILL.md）
+// ③ 源文件里引用的 .cwork/refs/* 路径真实存在（防断链）④ common 分发一致性
 function checkInstall() {
   console.log('🔍 cwork 安装一致性校验（Claude Code）');
   const problems = [];
@@ -500,11 +495,11 @@ function checkInstall() {
     if (!meta.description) problems.push(`skills/${skill}/SKILL.md 缺少 frontmatter description`);
   }
 
-  // ② 主规则产物一致性
+  // ② 按需产物一致性（所有技能都按需加载到 .cwork/refs/）
   for (const skill of skills) {
     const skillName = `cwork-${skill}`;
     const md = readSkillMd(skill);
-    const { meta, body } = parseFrontmatter(md);
+    const { body } = parseFrontmatter(md);
     const files = collectSkillFiles(skill);
     const refFiles = files.filter(f => f.relPath !== 'SKILL.md' && !f.relPath.startsWith('scripts/'));
     let refIndex = '';
@@ -512,26 +507,16 @@ function checkInstall() {
       refIndex = buildClaudeRefIndex(skillName);
     }
     const expected = `# ${skillName}\n\n${body}${refIndex}\n`;
-    // lazy 技能产物在 .cwork/refs/<skillName>/SKILL.md，不在 rules
-    if (String(meta.lazy || '').toLowerCase() === 'true') {
-      const lazyDest = join(PROJECT, '.cwork', 'refs', skillName, 'SKILL.md');
-      if (!existsSync(lazyDest)) {
-        problems.push(`lazy 产物缺失: .cwork/refs/${skillName}/SKILL.md（重装: node bin/cwork.js --tool claude）`);
-      } else if (readFileSync(lazyDest, 'utf-8') !== expected) {
-        problems.push(`lazy 产物与源不一致: .cwork/refs/${skillName}/SKILL.md（重装: node bin/cwork.js --tool claude）`);
-      }
-      continue;
-    }
-    const dest = join(PROJECT, '.claude', 'rules', `${skillName}.md`);
+    const dest = join(PROJECT, '.cwork', 'refs', skillName, 'SKILL.md');
     if (!existsSync(dest)) {
-      problems.push(`产物缺失: .claude/rules/${skillName}.md（未安装或被删除，重装: node bin/cwork.js --tool claude）`);
+      problems.push(`按需产物缺失: .cwork/refs/${skillName}/SKILL.md（重装: node bin/cwork.js --tool claude）`);
     } else if (readFileSync(dest, 'utf-8') !== expected) {
-      problems.push(`产物与源不一致: .claude/rules/${skillName}.md（可能被直接修改，重装会丢失该修改）`);
+      problems.push(`按需产物与源不一致: .cwork/refs/${skillName}/SKILL.md（可能被直接修改，重装会丢失该修改）`);
     }
   }
 
-  // ③ 源文件引用路径存在性（.claude/rules/... 与 .cwork/refs/...）
-  const refPattern = /(\.claude\/rules\/[\w/-]+?\.md|\.cwork\/refs\/[\w/-]+?\.md)/g;
+  // ③ 源文件引用路径存在性（.cwork/refs/...）
+  const refPattern = /(\.cwork\/refs\/[\w/-]+?\.md)/g;
   for (const skill of skills) {
     for (const f of collectSkillFiles(skill)) {
       if (f.relPath.startsWith('scripts/')) continue;
@@ -545,17 +530,17 @@ function checkInstall() {
     }
   }
 
-  // ④ common 分发一致性
+  // ④ common 分发一致性（现在也按需加载到 .cwork/refs/cwork-common/）
   const commonSrc = join(SKILLS_DIR, COMMON_DIR);
   if (existsSync(commonSrc)) {
-    const commonDest = join(PROJECT, '.claude', 'rules', 'cwork-common');
+    const commonDest = join(PROJECT, '.cwork', 'refs', 'cwork-common');
     for (const entry of readdirSync(commonSrc)) {
       if (entry.endsWith('.bak') || entry.endsWith('.backup')) continue;
       const dest = join(commonDest, entry);
       if (!existsSync(dest)) {
-        problems.push(`common 分发缺失: .claude/rules/cwork-common/${entry}`);
+        problems.push(`common 分发缺失: .cwork/refs/cwork-common/${entry}`);
       } else if (readFileSync(dest, 'utf-8') !== readFileSync(join(commonSrc, entry), 'utf-8')) {
-        problems.push(`common 分发不一致: .claude/rules/cwork-common/${entry}`);
+        problems.push(`common 分发不一致: .cwork/refs/cwork-common/${entry}`);
       }
     }
   }
