@@ -335,20 +335,20 @@ echo "✓ ego-browser 可用：$(command -v ego-browser)"
 | `waitForLoad` / `waitForNavigation` | 无 | 等待页面加载/跳转完成（两者等价） |
 | `waitForElement` | `selector`, `timeout?`（秒，默认 10） | **等待元素出现**再采集——根治动态渲染导致的选择器乱跑。超时后标记 BLOCKED 继续后续步骤，不报错 |
 | `waitForUrl` | `contains?`/`notContains?`/`matches?`（至少其一，多条件 AND）, `timeout?`（秒，默认 15） | **轮询等待 URL 满足条件**——登录成功判据的标准写法（`waitForUrl notContains /login`）。超时后标记 BLOCKED 继续后续步骤，不报错 |
-| `click` | `selector`, `fallback?` | 点击元素（ego click，带遮挡检查）。`fallback` 见「选择器自愈」 |
-| `dispatchClick` | `selector`, `index?`, `fallback?` | JS 合成 MouseEvent click（bubbles），绕过遮挡检查；用于被悬浮横幅遮挡、ego click 静默点在横幅上的按钮（如 OMP top-tip 横幅盖住筛选按钮）。对标准 @click 监听的按钮有效 |
-| `clickCdp` | `selector`, `index?`, `fallback?` | CDP 真实鼠标坐标点击（mousePressed/Released 全链）；用于自定义组件勾选框、依赖真实鼠标事件的元素 |
+| `click` | `selector` | 点击元素（ego click，带遮挡检查）。支持 CSS/text=/role/>>nth=N 等原生选择器 |
+| `dispatchClick` | `selector`, `index?`, `matchText?` | JS 合成 MouseEvent click（bubbles），绕过遮挡检查；用于被悬浮横幅遮挡、ego click 静默点在横幅上的按钮（如 OMP top-tip 横幅盖住筛选按钮）。对标准 @click 监听的按钮有效 |
+| `clickCdp` | `selector`, `index?`, `matchText?` | CDP 真实鼠标坐标点击（mousePressed/Released 全链）；用于自定义组件勾选框、依赖真实鼠标事件的元素 |
 | `openDatePicker` | `selector`, `index?` | JS 合成事件打开 el-date-picker 面板（element-ui 专用，见下） |
-| `fill` | `selector`, `value`, `fallback?` | 填充输入框 |
+| `fill` | `selector`, `value` | 填充输入框。支持 CSS/text= 等原生选择器 |
 | `responsive` | `viewport: {width, height}`, `steps: [...]` | 切换视口执行子步骤后恢复（响应式测试） |
 
 **确定性断言**：
 
 | action | 参数 | 说明 |
 |--------|------|------|
-| `assertVisible` | `selector`, `fallback?` | 真实可见性：元素存在 + 宽高 > 0 + 未被 display:none/visibility:hidden 隐藏 |
+| `assertVisible` | `selector` | 真实可见性：元素存在 + 宽高 > 0 + 未被 display:none/visibility:hidden 隐藏 |
 | `assertUrl` | `contains?`/`notContains?`/`matches?`（至少其一，多条件 AND） | **立即断言当前 URL**（不轮询）——页面跳转后核对落点、防止误停留在登录页/错误页 |
-| `assertText` | `selector`, `expectContains` 或 `expect`, `fallback?` | 文本包含 / 全等匹配（trim 后） |
+| `assertText` | `selector`, `expectContains` 或 `expect` | 文本包含 / 全等匹配（trim 后） |
 | `assertCount` | `selector`, `expect` 或 `min`/`max` 至少其一 | 元素数量精确匹配或范围 |
 | `assertStyle` | `selector`, `property`, `expect` 或 `expectPattern` | computed style 精确匹配或正则匹配 |
 | `assertLayout` | `selector`, `expectAlign: "center"` 或 `expectGrid: {columns: N}` | 居中（偏差 ≤ 10px）/ 网格列数 |
@@ -357,27 +357,20 @@ echo "✓ ego-browser 可用：$(command -v ego-browser)"
 | `exportApi` | `urlPattern` 或 `urlPatterns[]`, `filename`, `filter?` | **导出完整 API 响应到文件**（result.json 同目录）。支持单接口或多接口批量导出；`filter: { status: 200 }` 过滤条件。用于 Doris vs ES 数据比对等场景 |
 | `aiAssert` | `prompt`, `capture?: ["screenshot","dom","apiResponses"]` | AI 判断兜底：**单遍契约下仅采集证据**（截图+DOM 写 ctx 文件），步骤标 aiPending 不计入 passed；跑完 AI 读 ctx 判断后合入 result.json。prompt 必须写成可判定判据 |
 
-**选择器自愈（fallback 策略，所有支持 selector 的 action 通用）**：
+**选择器歧义处理（ego-browser 原生选择器方言，所有支持 selector 的 action 通用）**：
 
-主选择器失败时，执行器自动按 fallback 顺序尝试备选定位策略，根治动态 class/id 导致的选择器乱跑：
+执行器直接委托 ego-browser 原生 Page API（`click()`/`fillInput()`/`waitForElement()`），支持以下选择器语法：
 
-```json
-{
-  "action": "click",
-  "selector": ".el-button--primary",
-  "fallback": {
-    "text": "登录",
-    "classContains": "login-btn",
-    "containerAndIndex": { "container": ".login-form", "tag": "button", "index": 0 }
-  }
-}
-```
+| 语法 | 说明 | 示例 |
+|------|------|------|
+| CSS 选择器 | 标准 CSS，`document.querySelector` 子集 | `input[name="wd"]`、`.el-button--primary` |
+| `text="..."` | **精确匹配**文本（带引号，大小写敏感） | `text="百度一下"` |
+| `text=...` | 包含匹配文本（不带引号，归一化空白，忽略大小写） | `text=登录` |
+| `>> nth=N` | 多匹配时取第 N 个（0-based，`-1` 为最后一个） | `text="百度一下" >> nth=0` |
+| `@ref` | snapshot ref（取 snapshot 输出的 ref 编号） | `@21` |
+| `loc=css:` / `loc=role:` / `loc=href:` | 显式定位器前缀 | `loc=role:button[name='提交']` |
 
-| fallback 字段 | 说明 |
-|--------------|------|
-| `text` | 找包含指定文本的可点击元素（BUTTON/A/有 onclick 的元素） |
-| `classContains` | 找 class 包含关键字的元素 |
-| `containerAndIndex` | 在指定容器内找第 N 个元素（`{container, tag, index}`） |
+**多匹配歧义**：ego 原生 API 要求精确一个匹配，多匹配时报错并**自动列出候选列表**（如 `Candidates: 1. button "百度一下" (visible); 2. input "百度一下" (hidden)`）。AI 看到候选后用 `>> nth=N` 或更精确选择器修正即可，**禁止盲试换姿势**。
 
 每个 step 可带 `desc`（人类可读描述，输出与 result.json 使用）。
 
@@ -394,7 +387,7 @@ echo "✓ ego-browser 可用：$(command -v ego-browser)"
 9. **v-show 隐藏元素：DOM 存在 ≠ 可点**：收起状态下筛选控件仍留在 DOM（`querySelectorAll` 找得到、assertCount 也能过）但坐标/宽高全 0，click 无效或被遮挡拦截。判可交互必须查可见性（`assertVisible` 已内置 zero-size 检查；探索时用 js 查 `getBoundingClientRect`），plan 里对筛选控件的步骤必须前置「展开容器」步骤，不用元素存在性断言替代可见性。
 10. **ego click 遮挡检查被拦 / 静默点在横幅上（OMP top-tip 横幅实战）**：ego 对被遮挡元素会拒绝 click（遮挡检查）；更隐蔽的是**静默落空**——横幅盖住按钮行时 ego 宽松点击实际点在横幅上，查询不发出产生假结果。plan 中直接改用 `dispatchClick`（JS 合成事件通道，绕过遮挡检查，对标准 @click 监听的按钮有效）；`dispatchClick` 无效（自定义组件不监听合成事件）再升 `clickCdp` 真实鼠标坐标，每次升级前先观察一次（铁律：探索套路）。
 11. **ykc 系组件 id 透传在根 div，内部 input 需后代选择器**：Vue 2 非 prop 属性继承——`<ykc-input :id="verificationCode">` 的 id 落在组件根 div（`.ykc-input-box`）上，**内部 `<input>` 没有该 id**。`fill #verificationCode` 会报 Element not found，正确写法是后代选择器 `#verificationCode input`（OMP 验证码输入框实测）。同理适用 ykc-select/ykc-date 等所有 ykc 封装组件。
-12. **`:has-text()` 仅操作类通道支持，断言类原生 querySelector 会炸**：执行器 `window.__locateElement` 自定义解析支持 `:has-text`（click/dispatchClick/clickCdp/fill 可用），但 **assertVisible/assertText/assertCount 无 fallback 时走原生 `document.querySelector`，遇到 `:has-text` 直接 SyntaxError**（伪类不是标准 CSS）。断言类步骤的文本匹配用 `assertText` + `expectContains`，不要往 selector 里塞 `:has-text`。另注意：**同名选择器可能匹配到隐藏弹窗**——`.el-dialog__footer button:has-text('确认')` 这类宽选择器会命中页面上隐藏 el-dialog 的按钮（OMP 登录页假点击根因），断言/点击前先 `assertCount` 确认匹配数，弹窗类操作限定容器（如 `.customize-dialog .bnt-right`）。
+12. **断言类步骤用 CSS 选择器，文本匹配走 `assertText` + `expectContains`**：`assertVisible`/`assertText`/`assertCount` 内部用 `document.querySelector`（只读断言，CSS 够用），不支持 `:has-text()` 伪类。另注意：**同名选择器可能匹配到隐藏弹窗**——`.el-dialog__footer button:has-text('确认')` 这类宽选择器会命中页面上隐藏 el-dialog 的按钮（OMP 登录页假点击根因），断言/点击前先 `assertCount` 确认匹配数，弹窗类操作限定容器（如 `.customize-dialog .bnt-right`）。
 
 ### 登录场景模板（固化复用，选择器必须实测）
 

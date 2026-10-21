@@ -83,39 +83,6 @@ function findEgoBrowser() {
   return null;
 }
 
-// 浏览器端元素定位辅助函数（支持 fallback 策略）
-const ELEMENT_LOCATOR_JS = `
-  window.__locateElement = function(selector, fallback) {
-    // 1. 先尝试主选择器
-    let el = document.querySelector(selector);
-    if (el) return el;
-
-    // 2. 失败 → 尝试 fallback 策略
-    if (fallback) {
-      // 文本匹配
-      if (fallback.text) {
-        const all = Array.from(document.querySelectorAll('*'));
-        el = all.find(e => e.textContent.trim() === fallback.text && (e.tagName === 'BUTTON' || e.tagName === 'A' || e.onclick));
-        if (el) return el;
-      }
-      // 属性包含
-      if (fallback.classContains) {
-        el = Array.from(document.querySelectorAll('*')).find(e => e.className && e.className.includes(fallback.classContains));
-        if (el) return el;
-      }
-      // 容器内查找
-      if (fallback.containerAndIndex) {
-        const container = document.querySelector(fallback.containerAndIndex.container);
-        if (container) {
-          const candidates = container.querySelectorAll(fallback.containerAndIndex.tag || 'button');
-          if (candidates[fallback.containerAndIndex.index]) return candidates[fallback.containerAndIndex.index];
-        }
-      }
-    }
-    return null;
-  };
-`;
-
 // 浏览器端 fetch/XHR 拦截器（注入页面，捕获接口响应到 window.__capturedResponses；测试与 --snapshot 共用）
 const INTERCEPTOR_JS = `(() => {
   window.__capturedResponses = [];
@@ -189,7 +156,6 @@ function generateHeredoc(plan, ctxDir, keep = false, resultPath = null) {
   L(`// ── 接口响应拦截 ──`);
   L(`const __capturedResponses = [];`);
   L(`const __interceptorCode = ${JSON.stringify(INTERCEPTOR_JS)};`);
-  L(`const __locatorCode = ${JSON.stringify(ELEMENT_LOCATOR_JS)};`);
   L(``);
 
   // 辅助函数
@@ -257,9 +223,6 @@ function generateHeredoc(plan, ctxDir, keep = false, resultPath = null) {
   // 拦截器必须在任务空间选定后注入：CDP 注册保证 SPA 后续 navigate 后自动重装，js() 立即注入覆盖首屏
   L(`await cdp('Page.addScriptToEvaluateOnNewDocument', { source: __interceptorCode });`);
   L(`await js(__interceptorCode);`);
-  // 注入元素定位辅助函数（支持 fallback 策略）
-  L(`await cdp('Page.addScriptToEvaluateOnNewDocument', { source: __locatorCode });`);
-  L(`await js(__locatorCode);`);
   L(``);
 
   // 全局看门狗（到点先落盘部分结果再退出，超时不再丢已执行场景的证据）
@@ -396,18 +359,13 @@ function generateStepCode(L, step, label, si, i, baseUrl) {
 
     case 'waitForElement': {
       // 等待元素出现再采集——根治动态渲染导致的选择器乱跑
+      // 直接委托 ego-browser 原生 waitForElement()，支持 CSS/text=/role 等原生选择器
       // 超时后标记 BLOCKED 继续后续步骤，不报错（避免一个元素卡死整个场景）
       const timeout = Number(step.timeout || 10) * 1000;
       L(`  {`);
-      L(`    const __timeout = ${timeout};`);
-      L(`    const __start = Date.now();`);
-      L(`    let __found = false;`);
-      L(`    while (Date.now() - __start < __timeout) {`);
-      L(`      const __el = await js(\`(() => { return !!window.__locateElement(${tmplSel(step.selector)}, ${JSON.stringify(step.fallback || null)}); })()\`);`);
-      L(`      if (__el === 'true' || __el === true) { __found = true; break; }`);
-      L(`      await sleep(200);`);
-      L(`    }`);
-      L(`    if (!__found) {`);
+      L(`    try {`);
+      L(`      await waitForElement(${JSON.stringify(step.selector)}, { timeout: ${timeout} });`);
+      L(`    } catch (e) {`);
       L(`      log('  ⚠ waitForElement 超时（${step.timeout || 10}s）: ' + ${JSON.stringify(step.selector)} + ' → 标记 BLOCKED 继续后续步骤');`);
       L(`    }`);
       L(`  }`);
@@ -434,6 +392,20 @@ function generateStepCode(L, step, label, si, i, baseUrl) {
       L(`  }`);
       L(`  await sleep(600);`);
       L(`  await refreshResponses();`);
+      break;
+
+    case 'js':
+      // 在页面上下文执行 JavaScript（CDP Runtime.evaluate），用于调用 Vue 方法等 DOM 点击无法触发的操作
+      // step.code: JavaScript 代码字符串（可访问 window/document/Vue 实例等）
+      // step.desc: 人类可读描述（可选）
+      if (!step.code) {
+        throw new Error('js 动作需要 code 字段：' + JSON.stringify(step.desc || 'js'));
+      }
+      L(`  {`);
+      L(`    const __jsExpr = ${JSON.stringify(step.code)};`);
+      L(`    const __jsEv = await cdp('Runtime.evaluate', { expression: __jsExpr, returnByValue: true });`);
+      L(`    if (__jsEv && __jsEv.exceptionDetails) throw new Error('js 执行异常：' + JSON.stringify(__jsEv.exceptionDetails));`);
+      L(`  }`);
       break;
 
     case 'openDatePicker':
@@ -471,7 +443,16 @@ function generateStepCode(L, step, label, si, i, baseUrl) {
       L(`    if (!__panelOpen) throw new Error('openDatePicker 失败: 面板未打开（已重试 1 次），检查 selector/index 是否指向真实可聚焦输入框，或先用 --snapshot 实测控件结构');`);
       L(`    cliLog('openDatePicker[dbg] 面板已打开并可见');`);
       L(`  }`);
-      L(`  await sleep(400);`);
+      // 面板打开后等待内部组件渲染（从 400ms 增加到 600ms，防竞态）
+      L(`  await sleep(600);`);
+      // 等待日历表格出现（element-ui 异步渲染，需确定性同步）
+      L(`  try { await waitForElement('.el-date-table', { timeout: 2 }); } catch (e) { cliLog('openDatePicker[warn] 日历表格未出现（可能非日期面板）'); }`);
+      // 如果是 has-time 模式，等待时间选择器出现
+      L(`  const __hasTime = await js('document.querySelector(".el-time-spinner") ? "yes" : "no"');`);
+      L(`  if (__hasTime === 'yes') {`);
+      L(`    try { await waitForElement('.el-time-spinner', { timeout: 2 }); } catch (e) {}`);
+      L(`    await sleep(300); // 时间选择器渲染缓冲`);
+      L(`  }`);
       L(`  await refreshResponses();`);
       break;
 
@@ -491,44 +472,26 @@ function generateStepCode(L, step, label, si, i, baseUrl) {
       break;
 
     case 'click':
-      // 支持 fallback 策略：主选择器失败时自动尝试备选定位策略
-      if (step.fallback) {
-        L(`  {`);
-        L(`    const __el = await js(\`(() => { const el = window.__locateElement(${tmplSel(step.selector)}, ${JSON.stringify(step.fallback)}); return el ? 'found' : 'not-found'; })()\`);`);
-        L(`    if (__el === 'not-found') throw new Error('元素未找到: ' + ${JSON.stringify(step.selector)} + '（含 fallback）');`);
-        L(`    await click(${JSON.stringify(step.selector)}, { label: ${JSON.stringify(step.desc || '点击')} });`);
-        L(`  }`);
-      } else {
-        L(`  await click(${JSON.stringify(step.selector)}, { label: ${JSON.stringify(step.desc || '点击')} });`);
-      }
+      // 直接委托 ego-browser 原生 click()，支持 CSS/text=/role/>>nth=N 等原生选择器
+      // 多匹配时 ego 自动列出候选（Candidates: 1. xxx 2. yyy），无需 fallback
+      L(`  await click(${JSON.stringify(step.selector)}, { label: ${JSON.stringify(step.desc || '点击')} });`);
       L(`  await sleep(500);`);
       L(`  await refreshResponses();`);
       break;
 
     case 'fill':
-      // 支持 fallback 策略：主选择器失败时自动尝试备选定位策略
-      if (step.fallback) {
-        L(`  {`);
-        L(`    const __el = await js(\`(() => { const el = window.__locateElement(${tmplSel(step.selector)}, ${JSON.stringify(step.fallback)}); return el ? 'found' : 'not-found'; })()\`);`);
-        L(`    if (__el === 'not-found') throw new Error('元素未找到: ' + ${JSON.stringify(step.selector)} + '（含 fallback）');`);
-        L(`    await fillInput(${JSON.stringify(step.selector)}, ${JSON.stringify(step.value)});`);
-        L(`  }`);
-      } else {
-        L(`  await fillInput(${JSON.stringify(step.selector)}, ${JSON.stringify(step.value)});`);
-      }
+      // 直接委托 ego-browser 原生 fillInput()，支持 CSS/text=/role 等原生选择器
+      // 多匹配时 ego 自动列出候选（Candidates: 1. xxx 2. yyy），无需 fallback
+      L(`  await fillInput(${JSON.stringify(step.selector)}, ${JSON.stringify(step.value)});`);
       L(`  await sleep(200);`);
       L(`  await refreshResponses();`);
       break;
 
     case 'assertVisible':
       // 真实可见性：存在且占位（宽高>0）且未被 display:none/visibility:hidden 隐藏，而非仅判存在
-      // 支持 fallback 策略：主选择器失败时自动尝试备选定位策略
+      // 用 CSS 选择器定位（只读断言，CSS 够用）
       L(`  {`);
-      if (step.fallback) {
-        L(`    const __vis = await js(\`(() => { const el = window.__locateElement(${tmplSel(step.selector)}, ${JSON.stringify(step.fallback)}); if (!el) return 'missing'; const r = el.getBoundingClientRect(); if (r.width <= 0 || r.height <= 0) return 'zero-size'; const s = getComputedStyle(el); if (s.display === 'none' || s.visibility === 'hidden') return 'css-hidden'; return 'visible'; })()\`);`);
-      } else {
-        L(`    const __vis = await js(\`(() => { const el = document.querySelector(${tmplSel(step.selector)}); if (!el) return 'missing'; const r = el.getBoundingClientRect(); if (r.width <= 0 || r.height <= 0) return 'zero-size'; const s = getComputedStyle(el); if (s.display === 'none' || s.visibility === 'hidden') return 'css-hidden'; return 'visible'; })()\`);`);
-      }
+      L(`    const __vis = await js(\`(() => { const el = document.querySelector(${tmplSel(step.selector)}); if (!el) return 'missing'; const r = el.getBoundingClientRect(); if (r.width <= 0 || r.height <= 0) return 'zero-size'; const s = getComputedStyle(el); if (s.display === 'none' || s.visibility === 'hidden') return 'css-hidden'; return 'visible'; })()\`);`);
       L(`    if (__vis !== 'visible') throw new Error(${JSON.stringify(step.desc || '元素不可见')} + ': ' + ${JSON.stringify(step.selector)} + ' (状态: ' + __vis + ')');`);
       L(`  }`);
       break;
@@ -647,14 +610,14 @@ function generateStepCode(L, step, label, si, i, baseUrl) {
         L(`  {`);
         L(`    const __deadline = Date.now() + ${timeoutS} * 1000;`);
         L(`    let __ok = false;`);
-        L(`    let __url = '';`);
+        L(`    let u = '';`);
         L(`    while (Date.now() < __deadline) {`);
         L(`      const __info = await pageInfo();`);
-        L(`      __url = __info.url || '';`);
+        L(`      u = __info.url || '';`);
         L(`      if (${checks}) { __ok = true; break; }`);
         L(`      await wait(0.5);`);
         L(`    }`);
-        L(`    if (!__ok) throw new Error(${JSON.stringify(step.desc || 'URL等待超时')} + ': ${timeoutS}s 内未满足 ' + ${JSON.stringify(failDesc)} + ', 当前 ' + __url);`);
+        L(`    if (!__ok) throw new Error(${JSON.stringify(step.desc || 'URL等待超时')} + ': ${timeoutS}s 内未满足 ' + ${JSON.stringify(failDesc)} + ', 当前 ' + u);`);
         L(`  }`);
       }
       break;
