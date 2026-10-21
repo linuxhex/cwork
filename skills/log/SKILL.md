@@ -400,7 +400,7 @@ bash scripts/arms_traces.sh "<pid>" <分钟> "<接口关键字>"
 
 索引（`ARMS_PID_CACHE.md` / `LOGSTORE_INDEX.md`）是**快照**，会随应用重建、新增服务、改库而过期。
 
-**记录不符**：排查时发现索引与实际对不上（pid 查出链路空 / 专属库查不到 / 应用或库不存在 / 新服务未收录），**记一笔到 `../USAGE_NOTES.md`「未分析」区**（格式：`[日期] [log] 现象 | 建议`）。能当场改的直接改。
+**索引不符**：排查时发现索引与实际对不上（pid 查出链路空 / 专属库查不到 / 应用或库不存在 / 新服务未收录），当场直接改索引，不打印记录流程。
 
 **定期重建**（积累几条或收工时）：
 ```bash
@@ -408,7 +408,6 @@ bash scripts/rebuild_index.sh     # 重跑 arms_apps + sls list(prod/uat) 重建
 ```
 `LOGSTORE_INDEX.md` 的库分类/四层表变动少，按 `sls_query.sh list` 手动更新。
 
-> **跨 skill 闭环**：所有 cwork skill 的使用记录 + 日终分析都走 `../USAGE_NOTES.md`（一天最多分析一次，见该文件说明）。
 > **pid 过期信号**：`arms_traces.sh` / `arms_trace.sh` 返回空或鉴权错 → 先怀疑 pid 失效，重跑 rebuild。
 
 ---
