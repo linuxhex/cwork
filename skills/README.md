@@ -22,7 +22,7 @@
 cwork-init       → 初始化工作区
 cwork-implement  → 需求分析 + 编写计划 + 方案审查 + 执行计划 + 推演收敛 + 编译/构建检查 + 前端设计辅助
 cwork-do         → 自主工作流（目标确认 → 迭代循环[执行→部署→实测→收敛评估] → 收敛提交）
-cwork-test       → 页面自动化测试（基于 page-agent，前端改动时自动触发）
+cwork-test       → 页面自动化测试（Web: ego-browser / 小程序: miniprogram-automator，前端新页面/核心交互时经用户确认触发）
 cwork-commit     → 提交所有工程
 cwork-deploy     → Jenkins + 云效构建部署触发
 cwork-doc        → 生成技术方案文档（两种模式：已有需求文档 / 对话式需求分析）
@@ -30,6 +30,11 @@ cwork-bug        → 快速修复bug（对话式，5阶段：代码分析→问�
 cwork-log        → 日志与链路分析（SLS 日志 + ARMS 链路，查接口流量/上下游/P99/耗时点，排查问题）
 cwork-data       → 数仓数据查询（Doris 只读 SQL，查业务数据/表结构/指标，排查时数据佐证）
 cwork-config     → Nacos 配置只读查询（多环境配置内容/清单/差异，排查时核对配置真值）
+cwork-graf       → Grafana 监控只读查询（K8S/应用/JVM/数据库/业务面板，排查时指标佐证）
+cwork-code       → 代码仓库只读查询 + clone/pull（CodeUp 主平台 + GitLab fallback，codegraph 索引优先）
+cwork-requirement → 云效需求只读查询（需求列表/详情/深度分析）
+cwork-image      → 本地工程/jar 打 Docker 镜像 + push registry + 服务端拉起
+cwork-article    → 微信公众号文章写作（封面图 + 排版 + 写入编辑器）
 ```
 
 ---
@@ -71,14 +76,16 @@ cwork-config     → Nacos 配置只读查询（多环境配置内容/清单/差
 │  ├─ 编写任务代码                                    │
 │  └─ 自检计划完整性                                  │
 │                                                     │
-│  第三步：执行计划（参考 executing-plans）             │
+│  第三步：方案审查（业务/技术/可行性/安全四维推演）      │
 │  ├─ 加载并审查计划                                   │
 │  ├─ 主 agent 处理主工程                              │
 │  ├─ agent-A 处理 user-service                       │
 │  ├─ agent-B 处理 order-service                      │
 │  └─ 每个工程独立记录视角                              │
 │                                                     │
-│  第四步：推演收敛（逻辑推演替代测试）                  │
+│  第四步：执行计划（多 agent 并行）                     │
+│  第五步：推演收敛（逻辑推演替代测试）                  │
+│  第六步：编译/构建检查                                  │
 │  ├─ Round 1: 推演 → 发现问题 → 修复                  │
 │  ├─ Round 2: 推演 → 发现问题 → 修复                  │
 │  └─ Round N: 推演 → 无问题 → 收敛                    │
@@ -90,7 +97,7 @@ cwork-config     → Nacos 配置只读查询（多环境配置内容/清单/差
 ├─────────────────────────────────────────────────────┤
 │  第一步：环境准备                                     │
 │  ├─ 启动开发服务器                                    │
-│  ├─ 注入 page-agent                                  │
+│  ├─ 识别项目类型（Web: ego-browser / 小程序: automator）│
 │  └─ 确认页面可访问                                    │
 │                                                     │
 │  第二步：测试规划                                     │
@@ -99,13 +106,13 @@ cwork-config     → Nacos 配置只读查询（多环境配置内容/清单/差
 │  └─ 用户确认测试场景                                  │
 │                                                     │
 │  第三步：测试执行                                     │
-│  ├─ page-agent 按指令操作页面                          │
+│  ├─ web-run.cjs / mini-run.cjs 执行器跑 plan.json      │
 │  ├─ 逐步验证预期结果                                  │
 │  └─ 失败时自动诊断并重试                              │
 │                                                     │
 │  第四步：结果报告                                     │
 │  ├─ 生成 test-report.md                              │
-│  └─ P0 全通过 → 进入 cwork-commit                    │
+│  └─ P0 全通过 → 询问用户确认后进入 cwork-commit       │
 └─────────────────────────────────────────────────────┘
                          │
                          ▼ 自动
@@ -114,7 +121,7 @@ cwork-config     → Nacos 配置只读查询（多环境配置内容/清单/差
 ├─────────────────────────────────────────────────────┤
 │  ├─ 检查 workflow-state                             │
 │  ├─ 检查分支一致性                                   │
-│  ├─ 提交所有工程（analysis.md + changes.md + plan.md）│
+│  ├─ 提交所有工程（src/ 代码 + 三文档）                │
 │  └─ 更新状态为 done                                  │
 └─────────────────────────────────────────────────────┘
                          │
@@ -136,8 +143,8 @@ cwork-config     → Nacos 配置只读查询（多环境配置内容/清单/差
 问题1: 需求名称是什么？
 回答: 用户导出
 
-问题2: 分支名称是什么？（以 feature_ 开头）
-回答: feature_userExport
+问题2: 分支名称是什么？（格式 {type}/{YYYYMMDD}_{description}，如 feature/20260928_user_export）
+回答: feature/20260928_user_export
 
 问题3: 依赖工程目录名有哪些？
 回答: user-service,order-service
@@ -146,15 +153,15 @@ cwork-config     → Nacos 配置只读查询（多环境配置内容/清单/差
 **执行内容**：
 1. 从当前目录向上查找依赖工程完整路径
 2. 校验所有工程是否为 git 仓库
-3. 强制回退本地改动（reset --hard + clean -fd）
-4. 切换或创建 feature 分支
+3. git stash 备份本地改动（不强制丢弃）
+4. 切换或创建 feature 分支（upstream 防护：只能是 origin/<同名分支>）
 5. 写 workflow-state.json
 
 ---
 
 ### 3.2 cwork-implement
 
-**作用**：需求分析 + 编写计划 + 执行计划 + 推演收敛。
+**作用**：需求分析 + 编写计划 + 方案审查 + 执行计划 + 推演收敛 + 编译/构建检查（六阶段，详述见 `implement/phases.md`）。
 
 #### 第一步：需求分析（对话式）
 
@@ -176,7 +183,7 @@ cwork-config     → Nacos 配置只读查询（多环境配置内容/清单/差
 
 #### 第二步：编写计划（参考 superpowers-zh writing-plans）
 
-**完整参考**：`skills/implement/writing-plans-SKILL.md`
+**完整参考**：`skills/implement/phases.md`（阶段 2 编写计划）
 
 编写全面的实现计划，记录工程师需要知道的一切：
 
@@ -218,9 +225,13 @@ git commit -m "feat: add specific feature"
 - 不能写"待定"、"TODO"、"后续实现"
 - 不能写"添加适当的错误处理"等模糊描述
 
-#### 第三步：执行计划（参考 superpowers-zh executing-plans）
+#### 第三步：方案审查（四维推演）
 
-**完整参考**：`skills/implement/executing-plans-SKILL.md`
+对计划做业务/技术/可行性/安全四维审查，重点覆盖性能与安全并发设计，发现问题回改计划。详述见 `implement/phases.md`（阶段 3）。
+
+#### 第四步：执行计划（多 agent 并行）
+
+**完整参考**：`skills/implement/phases.md`（阶段 4）
 
 **注意**：不需要运行测试验证，测试由后续的逻辑推演替代。
 
@@ -249,7 +260,7 @@ git commit -m "feat: add specific feature"
    - 提交变更
    - 标记为已完成
 
-#### 第四步：推演收敛（逻辑推演替代测试）
+#### 第五步：推演收敛（逻辑推演替代测试，≥2 轮，27 项检查清单）
 
 用逻辑推演替代单元测试，自动发现问题并修复。
 
@@ -297,7 +308,7 @@ while round <= 5:
 1. 检查 workflow-state 是否为 commit
 2. 检查所有工程分支是否一致
 3. 生成 commit message
-4. 提交所有工程（只提交 analysis.md、changes.md、plan.md）
+4. 提交所有工程（`src/` 代码改动 + analysis.md、changes.md、plan.md）
 5. 更新状态为 done
 
 ---
@@ -656,23 +667,22 @@ docs/requirements/*/workflow-state.json
 
 | 项目 | 传统方式 | cwork 方式 |
 |------|---------|-----------|
-| 技能数量 | 9 个阶段 | 3 个阶段 |
-| 需求分析 | 无结构 | 对话式，逐步深入 |
-| 编写计划 | 无 | 参考 writing-plans |
-| 执行计划 | 直接写代码 | 参考 executing-plans |
-| 测试验证 | 运行单元测试 | 逻辑推演替代 |
-| 推演收敛 | 无 | 自动循环发现问题修复 |
-| 文件数量 | 每工程 8+ 文件 | 每工程 3-4 文件 |
-| 提交内容 | 全部文件 | 只提交 analysis.md + changes.md + plan.md |
+| 需求分析 | 无结构 | 对话式，决策树逐层追问 |
+| 编写计划 | 无 | 规范化计划（禁占位符） |
+| 方案审查 | 无 | 业务/技术/可行性/安全四维推演 |
+| 执行计划 | 直接写代码 | 多 agent 并行，每工程独立视角 |
+| 测试验证 | 运行单元测试 | 逻辑推演替代（bug 修复场景除外，须回归测试） |
+| 推演收敛 | 无 | ≥2 轮自动循环 + 27 项检查清单 |
+| 提交内容 | 全部文件 | src/ 代码改动 + analysis.md + changes.md + plan.md |
 | 多工程处理 | 手动切换目录 | 多 agent 并行 |
 
 ---
 
 ## 七、注意事项
 
-1. **init 会强制回退本地改动**：执行前确保本地改动已提交或可丢弃
+1. **init 用 git stash 备份本地改动**：不强制丢弃，但建议执行前先提交或暂存
 
-2. **分支命名严格**：必须 `feature_` 开头，仅字母和下划线
+2. **分支命名严格**：`{type}/{YYYYMMDD}_{description}` 格式（type=feature/hotfix/bugfix/refactor），upstream 只能是 origin/<同名分支>
 
 3. **需求分析必须完成**：未获得用户批准前不会执行实现
 
@@ -682,7 +692,7 @@ docs/requirements/*/workflow-state.json
 
 6. **workflow-state.json 不提交**：加入 .gitignore
 
-7. **不需要编写测试用例**：用逻辑推演替代
+7. **常规实现用逻辑推演替代测试**：bug 修复场景例外，必须编写回归测试并跑通
 
 ---
 
@@ -705,3 +715,8 @@ cp -r cwork/skills/* ~/.qoder/skills/
 - `/cwork-log`
 - `/cwork-data`
 - `/cwork-config`
+- `/cwork-graf`
+- `/cwork-code`
+- `/cwork-requirement`
+- `/cwork-image`
+- `/cwork-article`
