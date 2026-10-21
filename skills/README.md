@@ -624,6 +624,62 @@ bash deploy.sh list [关键字]
 
 **注意**：cwork-do 是自主工作流，串联多个技能完成完整工作流程。收敛后自动调用 cwork-commit 提交（不询问），未收敛停止时不提交。
 
+### 3.11 cwork-graf
+
+**作用**：Grafana 监控数据只读查询，对话式查 K8S 节点/容器/应用/JVM/数据库/业务监控面板，给排查问题/性能分析提供指标佐证。
+
+**能力**：64 个仪表盘按 8 大类检索（K8S 基础设施/应用监控/服务异常/系统运维/财务/营销/平台服务 + 2 个废弃类）、面板数据查询、PromQL 即时查询、节点总览。常用面板 UID 固化（JVM 大盘 `UOJjh1SMz`、Container `DZ8sNXDZk`、DB `Y6gogUmVk`）。
+
+**脚本**：`graf_query.sh`（list / categories / panels / query / instant / search / overview）。
+
+**核心原则**：绝对只读；不臆造数据，查询无结果如实说；可被 cwork-log/bug/do 联动调起（指标佐证）。
+
+---
+
+### 3.12 cwork-code
+
+**作用**：代码仓库只读查询 + clone/pull + codegraph 触发，CodeUp（主平台）+ GitLab（前端 fallback）双平台。
+
+**能力**：查项目列表/详情/分支（API 绝对只读，只封装 GET）、clone/pull 代码到本地工作区，clone/pull 后自动 codegraph 增量同步 + 回写 `.services-map.md`。
+
+**脚本**：`code_query.sh`（list / search / project / branches / clone / pull / sync）。
+
+**核心原则**：clone 禁 `--single-branch`；pull 显式指定当前分支（git-guard）；优先 codegraph 索引查代码，API 只在图谱没有时兜底。
+
+---
+
+### 3.13 cwork-requirement
+
+**作用**：云效需求只读查询，对话式查云效 Projex 项目需求列表/详情/按日期筛选，实现前核对需求范围、关联变更。
+
+**能力**：需求列表/详情/关键字搜索/按计划上线·提测时间筛选；阶段 4 需求深度分析（业务变化点 + 代码定位 ASCII 图，codegraph 自动找受影响代码）。
+
+**脚本**：`yunxiao_query.sh`（list / detail / search / by-date / by-test-date）。
+
+**核心原则**：绝对只读；凭证唯一判据=直接试跑 `yunxiao_query.sh list 3`，禁止预检文件路径下结论。
+
+---
+
+### 3.14 cwork-image
+
+**作用**：本地工程/jar 打包 Docker 镜像 + push registry + 服务端拉起运行，与 cwork-deploy（正式 CI/CD）互补的快速链路。
+
+**能力**：自动探测工程类型（jar/Node/前端等）并生成 Dockerfile、构建镜像、push 内部 registry、服务端拉起（k8s/docker/compose）。
+
+**脚本**：`image.sh`。
+
+**核心原则**：快速验证链路，正式发布走 cwork-deploy；完成后可用 cwork-log 验证启动。
+
+---
+
+### 3.15 cwork-article
+
+**作用**：微信公众号文章写作助手，自动识别文章类型（技术分享/开源项目介绍/产品推广/教程指南）。
+
+**流程**：类型识别 → 信息追问（开源地址/GitHub star/系统地址等）→ 标题生成 → ImageGen 强制封面图（2560x1080）→ 配图（系统真实截图或设计图，禁纯文字）→ 排版（CSS 模板）→ ego-browser 写入公众号编辑器存草稿。
+
+**核心原则**：配图禁纯文字段落截图；发表类按钮禁 JS click（按全文本精确匹配+坐标点击）；写入编辑器后存草稿不直接发表。
+
 ---
 
 ## 四、文件结构
