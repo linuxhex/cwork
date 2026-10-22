@@ -264,6 +264,12 @@ function installCursor() {
 
   // 4) 分发共享规范文件（skills/common/ → .cursor/rules/cwork-common/）
   installCommonFiles(target);
+
+  // 5) 同步 USAGE_NOTES.md 到 ~/.cursor/skills/（同 installClaude/installQoder，漏同步导致全局副本与源仓库分叉）
+  const cursorSkillsDir = join(HOME, '.cursor', 'skills');
+  mkdirSync(cursorSkillsDir, { recursive: true });
+  const usageSrcCursor = join(SKILLS_DIR, 'USAGE_NOTES.md');
+  if (existsSync(usageSrcCursor)) writeFileSync(join(cursorSkillsDir, 'USAGE_NOTES.md'), readFileSync(usageSrcCursor));
 }
 
 function buildCursorMainRule() {

@@ -483,7 +483,7 @@ fi
 ### 执行内容
 
 0. **加载统一代码规范（强制，修复前执行）**
-   - Read `.claude/rules/cwork-common/code-style.md`（cwork 统一代码规范；Qoder 全局安装环境读 `~/.qoder/skills/cwork-common/code-style.md`）
+   - Read `skills/common/code-style.md`（cwork 统一代码规范；Qoder 全局安装环境读 `~/.qoder/skills/cwork-common/code-style.md`）
    - 修复代码必须符合规范：禁用项清单（System.out / printStackTrace / SimpleDateFormat / 空 catch 等）、**跨方法传参禁用 `Map<String,Object>`（必须 DTO）**、命名、魔法数字、方法 ≤50 行、嵌套 ≤3 层
    - **流程保持轻量**：只加载规范约束写代码，不走 cwork-implement 的需求分析/计划/审查流程
 
@@ -553,7 +553,7 @@ codegraph sync "${CODE_WORKSPACE:-/Users/caomunian/Work/code-projects}"
 
 ### 规范自查（强制）
 
-对照统一代码规范（`.claude/rules/cwork-common/code-style.md`，Qoder 环境为 `~/.qoder/skills/cwork-common/code-style.md`）检查本次修复的 diff，命中即修，修完再进回归测试：
+对照统一代码规范（`skills/common/code-style.md`，Qoder 环境为 `~/.qoder/skills/cwork-common/code-style.md`）检查本次修复的 diff，命中即修，修完再进回归测试：
 
 1. diff 是否命中「禁用项清单」任一条（System.out / printStackTrace / SimpleDateFormat / 空 catch / @Transactional 非 public 等）
 2. 跨方法/接口传参是否用了 `Map<String,Object>`（必须 DTO）
