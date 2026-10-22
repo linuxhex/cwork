@@ -661,7 +661,7 @@ List<Order> orders = new ArrayList<>();
 
 #### 统一代码规范（强制，写代码前必读）
 
-写代码前**必须** Read `.claude/rules/cwork-common/code-style.md`（cwork 统一代码规范；Qoder 全局安装环境读 `~/.qoder/skills/cwork-common/code-style.md`），所有新增/修改代码必须符合：
+写代码前**必须** Read `skills/common/code-style.md`（cwork 统一代码规范；Qoder 全局安装环境读 `~/.qoder/skills/cwork-common/code-style.md`），所有新增/修改代码必须符合：
 
 - **基础规范**：阿里 Java 手册、命名、禁魔法数字、方法 ≤50 行、嵌套 ≤3 层、公共方法业务注释
 - **禁用项清单**：System.out / printStackTrace / new SimpleDateFormat / 空 catch / @Transactional 非 public 等，写代码时直接避开
