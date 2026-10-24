@@ -102,7 +102,7 @@ else:
 }
 
 # ── 应用服务级 Jenkins 实例覆盖 ──
-# 独立 Jenkins 实例（如 omp-shop 前端走 172.16.5.252:8078）：service-map.json 条目配 jenkinsCred=JENKINS_OMP，
+# 独立 Jenkins 实例（如 omp-shop 前端走 <JENKINS_OMP_HOST>:8078）：service-map.json 条目配 jenkinsCred=JENKINS_OMP，
 # .config.local.sh 配 JENKINS_OMP_URL / JENKINS_OMP_USER / JENKINS_OMP_PASS（凭证不入 service-map）
 apply_jenkins_override() {
   local svcJson="$1"
@@ -379,7 +379,7 @@ report_jenkins_result() {
   local buildNum="$3"
   local label="$4"
 
-  local consoleUrl="${JENKINS_URL:-http://172.16.98.169:18001}$(jenkins_job_path "$jobName")/${buildNum}/console"
+  local consoleUrl="${JENKINS_URL:-http://<JENKINS_HOST>:18001}$(jenkins_job_path "$jobName")/${buildNum}/console"
 
   case "$status" in
     success)
@@ -1043,7 +1043,7 @@ print(ej.get('$env', ''))
     echo ""
     info "查看构建日志:"
     echo "  deploy.sh console $buildJob $buildNum"
-    echo "  ${JENKINS_URL:-http://172.16.98.169:18001}$(jenkins_job_path "$buildJob")/${buildNum}/console"
+    echo "  ${JENKINS_URL:-http://<JENKINS_HOST>:18001}$(jenkins_job_path "$buildJob")/${buildNum}/console"
     exit 1
   fi
 

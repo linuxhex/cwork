@@ -155,7 +155,7 @@ bash code_query.sh sync
 
 **鉴权失败排查**（返回 401/403）：1. `.config.local.sh` 的 GITLAB_TOKEN 是否正确；2. GITLAB_URL 是否可达（`curl -v` 实测）；3. Token 是否过期或被撤销。
 
-**clone 失败排查**：1. 网络是否通（GitLab 在内网 `172.16.98.176`）；2. Token 是否有 read_repository 权限；3. 目标目录是否已存在（已存在则自动 pull）。
+**clone 失败排查**：1. 网络是否通（GitLab 在内网 `<GITLAB_HOST>`）；2. Token 是否有 read_repository 权限；3. 目标目录是否已存在（已存在则自动 pull）。
 
 ---
 

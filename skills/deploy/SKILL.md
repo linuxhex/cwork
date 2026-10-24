@@ -18,9 +18,9 @@ description: Jenkins + 云效构建部署触发，通过 curl 直连 Jenkins RES
 - **双 job 模式**（后端服务）：buildJob 构建 → executeJob 部署，`deploy` 命令串两段
 - **单 job 模式**（前端类，`singleJob: true`）：一个 job 完成 构建→打包→上传→发布（如 omp-shop：vue build → tar → SSH 上传 nginx 服务器解压），build 即 deploy；`execute` 命令不适用
 
-**服务级独立 Jenkins 实例**：部分服务部署在独立 Jenkins 实例上（如 omp-shop 在 `http://172.16.5.252:8078`）。service-map.json 条目配 `jenkinsCred` 凭证前缀（如 `JENKINS_OMP`），`.config.local.sh` 配 `<prefix>_URL/_USER/_PASS` 三件套，触发时自动切换地址与凭证；文件夹作业路径（如 `测试环境/OMP`）自动转 `/job/测试环境/job/OMP` 的 URL 编码路径。
+**服务级独立 Jenkins 实例**：部分服务部署在独立 Jenkins 实例上（如 omp-shop 在 `http://<JENKINS_OMP_HOST>:8078`）。service-map.json 条目配 `jenkinsCred` 凭证前缀（如 `JENKINS_OMP`），`.config.local.sh` 配 `<prefix>_URL/_USER/_PASS` 三件套，触发时自动切换地址与凭证；文件夹作业路径（如 `测试环境/OMP`）自动转 `/job/测试环境/job/OMP` 的 URL 编码路径。
 
-**不走 devops 中间服务**（`http://172.16.149.95:81`），而是直接封装 devops-server 内部的构建部署调用，去掉中间层。
+**不走 devops 中间服务**（`http://<DEVOPS_HOST>:81`），而是直接封装 devops-server 内部的构建部署调用，去掉中间层。
 
 **主动做为主，决策点才对话**：自己能定的（服务定位、环境默认值、分支默认值、平台识别、发请求）直接做；只有需要用户拍板的地方（服务选择、环境确认、分支确认）才简短对话一次。
 
@@ -238,7 +238,7 @@ bash deploy.sh console omp-shop 2487
 镜像版本：09-02-15:30:00----feature/20260901_add_export
 
 Jenkins 控制台：
-  http://172.16.98.169:18001/job/order-server_k8s-test/456/console
+  http://<JENKINS_HOST>:18001/job/order-server_k8s-test/456/console
 
 结论：
 - 构建成功，部署成功
@@ -278,10 +278,10 @@ Jenkins 控制台：
 - 首次：`cp scripts/config.example.sh scripts/.config.local.sh`，按需填入凭证
 - **Jenkins 凭证**（走 Jenkins 的服务需要）：
   - `JENKINS_USER` / `JENKINS_PASS` — 来源：devops 工程 `application.properties` 的 `jenkins.user` / `jenkins.pass`
-  - `JENKINS_URL` — 默认 `http://172.16.98.169:18001`
+  - `JENKINS_URL` — 默认 `http://<JENKINS_HOST>:18001`
 - **独立 Jenkins 实例凭证**（service-map.json 条目配了 `jenkinsCred` 的服务需要）：
   - `<prefix>_URL` / `<prefix>_USER` / `<prefix>_PASS`，前缀与条目 `jenkinsCred` 值一致
-  - 示例：omp-shop 配 `JENKINS_OMP_URL=http://172.16.5.252:8078` + `JENKINS_OMP_USER` / `JENKINS_OMP_PASS`
+  - 示例：omp-shop 配 `JENKINS_OMP_URL=http://<JENKINS_OMP_HOST>:8078` + `JENKINS_OMP_USER` / `JENKINS_OMP_PASS`
 - **云效凭证**（走云效的服务需要）：
   - `YX_TOKEN` — 云效个人访问令牌（云效 > 个人设置 > 个人访问令牌，需 AppStack 读写权限）
   - `YX_ORG_ID` — 云效组织 ID

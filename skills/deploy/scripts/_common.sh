@@ -71,7 +71,7 @@ jenkins_get() {
   jenkins_ensure_config
   local path="$1"
   shift
-  local url="${JENKINS_URL:-http://172.16.98.169:18001}"
+  local url="${JENKINS_URL:-http://<JENKINS_HOST>:18001}"
   url="${url%/}"
 
   $CURL -s -u "${JENKINS_USER}:${JENKINS_PASS}" "${url}${path}" "$@"
@@ -82,7 +82,7 @@ jenkins_get() {
 # 单带 crumb 仍 403，必须同一会话先 GET crumbIssuer 存 cookie，POST 时同时带 crumb + cookie。
 # 输出三行: crumbRequestField / crumb / cookie文件路径；失败 return 1（部分实例关闭 CSRF 时调用方可降级）
 jenkins_crumb() {
-  local url="${JENKINS_URL:-http://172.16.98.169:18001}"
+  local url="${JENKINS_URL:-http://<JENKINS_HOST>:18001}"
   url="${url%/}"
   local cookie_file
   cookie_file=$(mktemp "${TMPDIR:-/tmp}/jenkins-crumb-cookie.XXXXXX")
@@ -113,7 +113,7 @@ jenkins_post() {
   jenkins_ensure_config
   local path="$1"
   shift
-  local url="${JENKINS_URL:-http://172.16.98.169:18001}"
+  local url="${JENKINS_URL:-http://<JENKINS_HOST>:18001}"
   url="${url%/}"
 
   local crumb_field="" crumb_val="" crumb_cookie=""
