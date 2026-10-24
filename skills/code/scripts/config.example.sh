@@ -16,8 +16,8 @@
 : "${CODEUP_TOKEN:=<your-codeup-token>}"
 
 # ---- GitLab 配置（前端项目，fallback 平台）----
-# GitLab 地址（不带尾部斜杠，如 http://172.16.98.176）
-: "${GITLAB_URL:=http://172.16.98.176}"
+# GitLab 地址（不带尾部斜杠，如 http://<GITLAB_HOST>）
+: "${GITLAB_URL:=http://<GITLAB_HOST>}"
 # GitLab Private Token（在 GitLab 用户设置 > Access Tokens 生成）
 : "${GITLAB_TOKEN:=<your-gitlab-private-token>}"
 # 默认搜索的 namespace 列表（逗号分隔，前端项目通常在这些 namespace）

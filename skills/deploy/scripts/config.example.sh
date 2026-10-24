@@ -9,7 +9,7 @@
 : "${DEPLOY_DEFAULT_PLATFORM:=yunxiao}"
 
 # ---- Jenkins 地址 ----
-: "${JENKINS_URL:=http://172.16.98.169:18001}"
+: "${JENKINS_URL:=http://<JENKINS_HOST>:18001}"
 
 # ---- Jenkins 基本认证（user:pass） ----
 : "${JENKINS_USER:=<your-username>}"
@@ -18,12 +18,12 @@
 # ---- 独立 Jenkins 实例（可选，服务级覆盖） ----
 # service-map.json 中条目配 jenkinsCred=JENKINS_OMP 时，读取以下变量覆盖默认实例
 # 变量前缀与 jenkinsCred 值一致（如 JENKINS_PRODWEB_* 对应 jenkinsCred=JENKINS_PRODWEB）
-: "${JENKINS_OMP_URL:=http://172.16.5.252:8078}"
+: "${JENKINS_OMP_URL:=http://<JENKINS_OMP_HOST>:8078}"
 : "${JENKINS_OMP_USER:=<your-username>}"
 : "${JENKINS_OMP_PASS:=<your-password>}"
 
 # ---- devops 中间服务地址（仅用于 sync 命令更新服务映射） ----
-: "${DEVOPS_URL:=http://172.16.149.95:81}"
+: "${DEVOPS_URL:=http://<DEVOPS_HOST>:81}"
 
 # ---- 云效 AppStack OpenAPI ----
 # API base: https://{YX_DOMAIN}/oapi/v1/appstack/organizations/{YX_ORG_ID}
