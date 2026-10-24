@@ -118,7 +118,11 @@ apply_jenkins_override() {
     fail "服务条目配置了 jenkinsCred=$cred，但 .config.local.sh 缺少 ${cred}_USER / ${cred}_PASS"
     exit 1
   fi
-  [[ -n "$url" ]] && JENKINS_URL="$url"
+  if [[ -z "$url" || "$url" == *'<'* ]]; then
+    fail "服务条目配置了 jenkinsCred=$cred，但 .config.local.sh 缺少 ${cred}_URL（占位符未替换）"
+    exit 1
+  fi
+  JENKINS_URL="$url"
   JENKINS_USER="$user"
   JENKINS_PASS="$pass"
   info "使用独立 Jenkins 实例: ${JENKINS_URL%/}（凭证 ${cred}_USER）" >&2
@@ -379,7 +383,7 @@ report_jenkins_result() {
   local buildNum="$3"
   local label="$4"
 
-  local consoleUrl="${JENKINS_URL:-http://<JENKINS_HOST>:18001}$(jenkins_job_path "$jobName")/${buildNum}/console"
+  local consoleUrl="${JENKINS_URL:-}$(jenkins_job_path "$jobName")/${buildNum}/console"
 
   case "$status" in
     success)
@@ -1043,7 +1047,7 @@ print(ej.get('$env', ''))
     echo ""
     info "查看构建日志:"
     echo "  deploy.sh console $buildJob $buildNum"
-    echo "  ${JENKINS_URL:-http://<JENKINS_HOST>:18001}$(jenkins_job_path "$buildJob")/${buildNum}/console"
+    echo "  ${JENKINS_URL:-}$(jenkins_job_path "$buildJob")/${buildNum}/console"
     exit 1
   fi
 

@@ -38,12 +38,17 @@ auto_load_config() {
 # Jenkins REST API 封装（基本认证）
 # ============================================================
 
-# ── 确保 Jenkins 凭证就绪 ──
+# ── 确保 Jenkins 地址与凭证就绪（含占位符检测：脱敏默认值视为未配置） ──
 jenkins_ensure_config() {
   if [[ -z "${JENKINS_USER:-}" || -z "${JENKINS_PASS:-}" ]]; then
     echo "错误: Jenkins 凭证未配置" >&2
     echo "  cp $SCRIPT_DIR/config.example.sh $SCRIPT_DIR/.config.local.sh" >&2
     echo "  然后编辑 .config.local.sh 填入 JENKINS_USER / JENKINS_PASS" >&2
+    exit 1
+  fi
+  if [[ -z "${JENKINS_URL:-}" || "${JENKINS_URL}" == *'<'* ]]; then
+    echo "错误: Jenkins 地址未配置" >&2
+    echo "  编辑 $SCRIPT_DIR/.config.local.sh 填入 JENKINS_URL（如 http://你的Jenkins地址:18001）" >&2
     exit 1
   fi
 }
@@ -71,7 +76,7 @@ jenkins_get() {
   jenkins_ensure_config
   local path="$1"
   shift
-  local url="${JENKINS_URL:-http://<JENKINS_HOST>:18001}"
+  local url="${JENKINS_URL:-}"
   url="${url%/}"
 
   $CURL -s -u "${JENKINS_USER}:${JENKINS_PASS}" "${url}${path}" "$@"
@@ -82,7 +87,7 @@ jenkins_get() {
 # 单带 crumb 仍 403，必须同一会话先 GET crumbIssuer 存 cookie，POST 时同时带 crumb + cookie。
 # 输出三行: crumbRequestField / crumb / cookie文件路径；失败 return 1（部分实例关闭 CSRF 时调用方可降级）
 jenkins_crumb() {
-  local url="${JENKINS_URL:-http://<JENKINS_HOST>:18001}"
+  local url="${JENKINS_URL:-}"
   url="${url%/}"
   local cookie_file
   cookie_file=$(mktemp "${TMPDIR:-/tmp}/jenkins-crumb-cookie.XXXXXX")
@@ -113,7 +118,7 @@ jenkins_post() {
   jenkins_ensure_config
   local path="$1"
   shift
-  local url="${JENKINS_URL:-http://<JENKINS_HOST>:18001}"
+  local url="${JENKINS_URL:-}"
   url="${url%/}"
 
   local crumb_field="" crumb_val="" crumb_cookie=""
