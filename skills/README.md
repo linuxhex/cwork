@@ -34,7 +34,9 @@ cwork-graf       → Grafana 监控只读查询（K8S/应用/JVM/数据库/业�
 cwork-code       → 代码仓库只读查询 + clone/pull（CodeUp 主平台 + GitLab fallback，codegraph 索引优先）
 cwork-requirement → 云效需求只读查询（需求列表/详情/深度分析）
 cwork-image      → 本地工程/jar 打 Docker 镜像 + push registry + 服务端拉起
-cwork-article    → 微信公众号文章写作（封面图 + 排版 + 写入编辑器）
+cwork-article    → 微信公众号文章写作（封面图 + 排版 + 写入编辑器，按类型调用人格 skill）
+cwork-tech-writer → 科技技术分享高手人格（技术布道者口吻，由 article 调用）
+cwork-wuxia-writer → 金庸式武侠写作人格（章回体半文半白，由 article 调用）
 ```
 
 ---
