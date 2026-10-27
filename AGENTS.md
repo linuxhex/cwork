@@ -18,6 +18,8 @@
 - cwork-writing-plans（由 implement 内部调用）
 - cwork-executing-plans（由 implement 内部调用）
 - cwork-loop-refined（由 implement 内部调用）
+- cwork-tech-writer（由 article 内部调用：科技技术分享高手人格，技术布道者口吻）
+- cwork-wuxia-writer（由 article 内部调用：金庸式武侠写作人格，章回体半文半白）
 - cwork-common（共享规范文件目录，implement/bug 写代码时强制引用其中的 code-style.md 统一代码规范；**所有技能拉分支/推送时强制引用其中的 git-guard.md**：upstream 只能是 origin/<同名分支>、禁止裸 git push/pull、建分支后必须纠正并验证 upstream）
 
 ## 深度追问与自问自答机制说明

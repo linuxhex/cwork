@@ -18,6 +18,8 @@
 - cwork-writing-plans（由 implement 内部调用）
 - cwork-executing-plans（由 implement 内部调用）
 - cwork-loop-refined（由 implement 内部调用）
+- cwork-tech-writer（由 article 内部调用：科技技术分享高手人格，技术布道者口吻）
+- cwork-wuxia-writer（由 article 内部调用：金庸式武侠写作人格，章回体半文半白）
 - cwork-common（共享规范文件目录，implement/bug 写代码时强制引用其中的 code-style.md 统一代码规范；**所有技能拉分支/推送时强制引用其中的 git-guard.md**：upstream 只能是 origin/<同名分支>、禁止裸 git push/pull、建分支后必须纠正并验证 upstream）
 
 ## 深度追问与自问自答机制说明
@@ -41,7 +43,7 @@ cwork 内置了决策树式追问机制，分两种模式：
 
 ## 技能清单
 
-- /cwork-article — 微信公众号文章写作助手。自动识别文章类型，补充必要信息（开源地址/GitHub star/系统地址等），生成吸引人的标题，提供精美排版（含 CSS 样式模板），用 ImageGen 强制生成封面图，为文章生成配图（系统真实截图 或 设计图）并嵌入正文，直接写入公众号编辑器。适用于：技术分享、开源项目介绍、产品推广、教程指南。
+- /cwork-article — 微信公众号文章写作助手。自动识别文章类型，补充必要信息（开源地址/GitHub star/系统地址等），生成吸引人的标题，提供精美排版（含 CSS 样式模板），用 ImageGen 强制生成封面图，为文章生成配图（系统真实截图 或 设计图）并嵌入正文，直接写入公众号编辑器。适用于：技术分享、开源项目介绍、产品推广、教程指南、行业观察、故事/小说（武侠）。内容创作按文章类型自动调用人格 skill（cwork-tech-writer 技术布道者 / cwork-wuxia-writer 金庸式武侠）。
   （按需加载：需要时 Read `.cwork/refs/cwork-article/SKILL.md` 获取完整指令，不常驻上下文）
 - /cwork-bug — 快速修复 bug。问题明确时直接修复，问题不明确时先沟通定位（可调用 cwork-log 查日志），然后修复 + 验证 + 提交。适用于：修复线上 bug、修复测试问题、修复代码缺陷。
   （按需加载：需要时 Read `.cwork/refs/cwork-bug/SKILL.md` 获取完整指令，不常驻上下文）
@@ -71,8 +73,12 @@ cwork 内置了决策树式追问机制，分两种模式：
   （按需加载：需要时 Read `.cwork/refs/cwork-log/SKILL.md` 获取完整指令，不常驻上下文）
 - /cwork-requirement — 云效需求只读查询，对话式查云效 Projex 项目需求列表/详情/按日期筛选，实现前核对需求范围、关联变更
   （按需加载：需要时 Read `.cwork/refs/cwork-requirement/SKILL.md` 获取完整指令，不常驻上下文）
+- /cwork-tech-writer — 科技技术分享高手人格。承接 cwork-article 流程层，用资深技术布道者的思维框架、语言风格、写作套路创作技术分享/开源项目/产品推广/教程/行业观察类内容。适用于：技术原理、架构设计、最佳实践、开源介绍、产品解读。
+  （按需加载：需要时 Read `.cwork/refs/cwork-tech-writer/SKILL.md` 获取完整指令，不常驻上下文）
 - /cwork-test — 页面自动化测试，自动识别 Web/小程序项目，分别走 ego-browser 或 miniprogram-automator 链路
   （按需加载：需要时 Read `.cwork/refs/cwork-test/SKILL.md` 获取完整指令，不常驻上下文）
+- /cwork-wuxia-writer — 金庸式武侠写作人格。承接 cwork-article 流程层，用承金庸一脉的思维框架、语言风格、写作套路创作章回体、半文半白、侠义精神的武侠故事/小说。适用于：武侠小说、江湖短篇、章回体叙事。
+  （按需加载：需要时 Read `.cwork/refs/cwork-wuxia-writer/SKILL.md` 获取完整指令，不常驻上下文）
 
 ## 技能文件位置
 
