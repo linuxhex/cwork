@@ -23,7 +23,7 @@ const SKILLS_DIR = join(ROOT, 'skills');
 const HOME = homedir();
 const PROJECT = process.cwd();
 
-const TOOLS = ['cursor', 'qoder', 'claude', 'trae'];
+const TOOLS = ['cursor', 'qoder', 'claude']; // trae 已卸载，不再默认安装；仍保留 installTrae 供显式 --tool trae
 
 // ── helpers ──────────────────────────────────────────────────────────
 
@@ -741,8 +741,9 @@ if (opts.help) {
   opts.uninstall ? unsyncClaudeGlobal() : syncClaudeGlobal();
 } else if (opts.tool && opts.tool !== 'auto') {
   guardProjectDir();
-  if (!TOOLS.includes(opts.tool)) {
-    console.error(`未知工具: ${opts.tool}，支持: ${TOOLS.join(', ')}, auto`);
+  // auto 默认列表不含 trae；显式 --tool trae 仍可装（installers 里保留）
+  if (!TOOLS.includes(opts.tool) && !(opts.tool in installers)) {
+    console.error(`未知工具: ${opts.tool}，支持: ${TOOLS.join(', ')}, trae(显式), auto`);
     process.exit(1);
   }
   opts.uninstall ? uninstallers[opts.tool]() : installers[opts.tool]();

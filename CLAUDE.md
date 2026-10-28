@@ -43,7 +43,7 @@ cwork 内置了决策树式追问机制，分两种模式：
 
 ## 技能清单
 
-- /cwork-article — 微信公众号文章写作助手。自动识别文章类型，补充必要信息（开源地址/GitHub star/系统地址等），生成吸引人的标题，提供公众号安全 inline 片段集排版（只写微信能渲染的样式，禁用 flex/渐变/class），用 ImageGen 强制生成封面图，为文章生成真实配图（系统截图 或 设计图，禁止占位符）并嵌入正文，直接写入公众号编辑器。适用于：技术分享、开源项目介绍、产品推广、教程指南、行业观察、故事/小说（武侠）。内容创作按文章类型自动调用人格 skill（cwork-tech-writer 技术布道者 / cwork-wuxia-writer 金庸式武侠）。
+- /cwork-article — 微信公众号文章写作助手。自动识别文章类型，补充必要信息，生成标题，默认简洁技术风主题库排版（theme-tech-minimal + platform-redlines，科技蓝、关键词下划线、STEP/NOTE），ImageGen 封面与真实配图，查草稿箱复用后直接写入编辑器。技术类口吻对标美团技术/阿里技术实战风。适用于技术分享/开源/产品/教程/行业观察/武侠故事。
   （按需加载：需要时 Read `.cwork/refs/cwork-article/SKILL.md` 获取完整指令，不常驻上下文）
 - /cwork-bug — 快速修复 bug。问题明确时直接修复，问题不明确时先沟通定位（可调用 cwork-log 查日志），然后修复 + 验证 + 提交。适用于：修复线上 bug、修复测试问题、修复代码缺陷。
   （按需加载：需要时 Read `.cwork/refs/cwork-bug/SKILL.md` 获取完整指令，不常驻上下文）

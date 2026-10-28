@@ -1,7 +1,7 @@
 ---
 name: cwork-article
 lazy: true
-description: 微信公众号文章写作助手。自动识别文章类型，补充必要信息（开源地址/GitHub star/系统地址等），生成吸引人的标题，提供公众号安全 inline 片段集排版（只写微信能渲染的样式，禁用 flex/渐变/class），用 ImageGen 强制生成封面图，为文章生成真实配图（系统截图 或 设计图，禁止占位符）并嵌入正文，直接写入公众号编辑器。适用于：技术分享、开源项目介绍、产品推广、教程指南、行业观察、故事/小说（武侠）。内容创作按文章类型自动调用人格 skill（cwork-tech-writer 技术布道者 / cwork-wuxia-writer 金庸式武侠）。
+description: 微信公众号文章写作助手。自动识别文章类型，补充必要信息，生成标题，默认简洁技术风主题库排版（theme-tech-minimal + platform-redlines，科技蓝、关键词下划线、STEP/NOTE），ImageGen 封面与真实配图，查草稿箱复用后直接写入编辑器。技术类口吻对标美团技术/阿里技术实战风。适用于技术分享/开源/产品/教程/行业观察/武侠故事。
 ---
 
 # cwork-article
@@ -17,7 +17,7 @@ description: 微信公众号文章写作助手。自动识别文章类型，补�
 1. **文章类型识别** — 自动识别技术分享/开源项目/产品推广/教程指南
 2. **必要信息补充** — 根据文章类型自动补充缺失信息（开源地址、GitHub star、安装命令、系统地址等）
 3. **标题生成** — 生成 3-5 个吸引人的标题供选择（30 字内，数字/悬念触发）
-4. **精美排版** — 公众号安全排版（inline 片段集：主题色左边框、纯色卡片、引用块、对比表格、分隔线、emoji），只写微信能渲染的样式
+4. **精美排版** — 默认简洁技术风主题库（`theme-tech-minimal`）+ 平台红线；HTML 从组件库装配，只写微信能渲染的样式
 5. **写作技巧** — 开头 3 秒抓注意力、每 300 字设钩子、结尾引导互动
 6. **封面图生成（强制）** — 必须用 ImageGen 工具实际生成封面图（2560x1080），禁止只用文字建议
 7. **文中配图生成（强制）** — 有可访问系统则截取真实页面截图；无系统则生成设计图，禁止纯文字无图文章
@@ -56,7 +56,7 @@ description: 微信公众号文章写作助手。自动识别文章类型，补�
 
 **硬边界（防排版被人格挤掉）**：
 - 人格 skill **不替代**排版：禁止只按人格写纯 Markdown / 纯文本 / 章回散文然后交付。
-- 人格产出的结构（小标题、金句、章回）必须**套进**下方安全 inline 片段集，变成带 inline style 的 HTML（纯色卡片、引用块、对比表格、分隔线、主题色左边框），禁用 flex/渐变/class。
+- 人格产出的结构（小标题、金句、章回）必须**套进** `theme-tech-minimal` 组件库，变成带 inline style + `<span leaf>` 的 HTML（引言卡、编号章节、NOTE、STEP、对比 table），禁用 class/渐变文字底。
 - 排版、封面图、配图、写入编辑器的优先级与人格口吻**同等硬约束**，不可二选一。
 
 > 注意：行业观察类文章若用户偏观点评论，仍走 `cwork-tech-writer`（评论视角）；若偏故事化叙事，可走 `cwork-wuxia-writer`。以内容基调为准，必要时问用户一句。
@@ -410,11 +410,17 @@ Mood: insightful, forward-looking, authoritative.
 
 ## 阶段 6：内容撰写与排版
 
-**双重硬约束（缺一不可，不可二选一）**：
-1. **口吻**：进入撰写前，已按「阶段 0：人格选择」加载 `cwork-tech-writer` 或 `cwork-wuxia-writer`。正文按该人格的「思维框架 + 语言风格 + 写作套路」组织——技术类布道者口吻（痛点开场、类比具象、讲边界），故事类金庸式武侠口吻（章回体、半文半白、侠义为核）。
-2. **排版产出物**：最终**直接写进公众号编辑器的正文**，**必须是 HTML + inline CSS**（不是 Markdown、不是纯文本、不落地成本地 `.html` 文件）。必须套用下方「排版规范」：主题色左边框 h2、纯色信息卡片、浅黄提示框、双栏对比（table 嵌套）、分隔线、emoji 列表——每篇至少使用 3 种视觉元素。公众号编辑器**剥 class、剥 flex、剥渐变、剥伪类**，**所有样式写成 inline `style="..."`**，只写上方「安全 inline 片段集」里的属性，禁用清单里的写法一律不用。
+**风格默认（技术类）**：简洁技术风 + 实战导向（对标美团技术团队 / 阿里技术）——克制灰阶、左竖条层级、场景→做法→数据→边界。
 
-**禁止**：按人格写完 Markdown 再「建议用户自己排版」；禁止只交章回/散文而无色块卡片；禁止用 class 名代替 inline style；禁止在正文里留 `【配图 x：xxx.png】` 这类文字占位符（配图一律在编辑器内上传）；禁止生成本地 `.html` 半成品文件。
+**三重硬约束（缺一不可）**：
+1. **口吻**：进入撰写前，已按「阶段 0」加载 `cwork-tech-writer` 或 `cwork-wuxia-writer`。技术类严格按 tech-writer 的「思维框架 + 实战硬约束」落笔。
+2. **排版产出物**：最终**直接写进公众号编辑器**的 **HTML + inline CSS**（不是 Markdown、不落地成本地 `.html` 入库）。**撰写前必须 Read**：
+   - `skills/article/references/platform-redlines.md`（平台红线）
+   - `skills/article/references/theme-tech-minimal.md`（默认主题组件库；武侠类仍套本库骨架，口吻用 wuxia-writer）
+   HTML **从主题库取组件装配**，不要凭记忆手写花哨样式；按库内「文章类型 → 组件配方」选组合。
+3. **文字节点**：关键文案用 `<span leaf="">...</span>` 包裹（防粘贴丢样式）。每篇至少 3 种视觉元素（引言卡 / 看点 / 编号章节 / 代码块 / 对比 table / NOTE / STEP 等）。
+
+**禁止**：交 Markdown 让用户自己排；只交散文无组件；用 class；正文留配图占位符；生成本地半成品 html 入库；复述外标题当引言金句；到处加粗（锚点层全文 ≤5 处）。
 
 ### 写作技巧
 
@@ -545,93 +551,27 @@ Mood: insightful, forward-looking, authoritative.
 [结尾图：二维码或关注引导]
 ```
 
-### 排版规范（公众号安全 inline 片段集）
+### 排版规范（主题组件库优先）
 
-> **核心认知**：最终产物是**直接写进公众号编辑器的正文**，不落地成 html 文件（不在本地生成 `.html` 再塞进去）。微信编辑器吃 `innerHTML`、但**剥 class、剥 flex、剥渐变、剥伪类**。所以不给"CSS 模板"，只给一份**微信确实渲染的最小 inline 片段集** + 一份**禁用清单**——模型只产出微信能渲染的东西，排版不会再塌。
+> **核心认知**：最终产物是**直接写进公众号编辑器的 `<section>` 正文片段**。不给大段 CSS 模板，给**可复用组件库**——HTML 从库取，气质才稳。
 
-#### 必用：安全 inline 片段集（照抄，只改文字）
+**撰写前强制 Read（按顺序）**：
+1. `skills/article/references/platform-redlines.md` — 平台红线 / `<span leaf>` / 自检清单
+2. `skills/article/references/theme-tech-minimal.md` — **默认主题：简洁技术风**（科技蓝 #1677FF），含设计变量、组件 HTML、文章类型→配方、装配骨架
 
-```html
-<!-- 小标题：主题色左边框 -->
-<h2 style="font-size:18px;font-weight:bold;color:#333;border-left:4px solid #07C160;padding-left:12px;margin:24px 0 16px;">章节标题</h2>
+**默认主题**：技术分享 / 开源 / 教程 / 产品 / 行业观察 → `theme-tech-minimal`。用户明确要求其它风格时再换；武侠口吻仍套本库骨架。
 
-<!-- 正文段落 -->
-<p style="line-height:1.75;color:#555;margin:12px 0;">正文内容，关键信息用 <strong>加粗</strong> 或 <strong style="color:#07C160;">主题色</strong> 强调。</p>
+**装配规则**：
+- 按主题库「文章类型 → 组件配方」选组合，再按「装配顺序」拼 section
+- 每段正文主动加 1–3 个关键词下划线（主题库组件 5）
+- 双栏对比用 table；导读三列可用 table（主题库已给）
+- 代码块用主题库深色块（每行一个 `<p style="margin:0">`），禁用 `white-space:pre`
+- 信息卡用纯色 `#1677FF`，禁用渐变
+- 锚点强调全文 ≤5 处；橙点睛 `#FA8C16` 全篇 ≤3 处
 
-<!-- 引用 / 金句：灰底绿左条 -->
-<div style="background:#f5f5f5;border-left:4px solid #07C160;padding:15px 20px;margin:20px 0;color:#666;">引用内容或核心观点</div>
+**与旧「安全片段集」的关系**：旧片段集的禁令已并入 `platform-redlines.md`；具体 HTML **以 theme-tech-minimal 为准**，不要再手写摸鱼绿 `#07C160` 当默认（技术文默认科技蓝）。
 
-<!-- 信息卡片：纯色背景（禁用渐变） -->
-<div style="background:#07C160;color:#fff;padding:16px 20px;border-radius:8px;margin:20px 0;">卡片标题 / 关键信息</div>
-
-<!-- 提示框：浅黄底 -->
-<div style="background:#fff3cd;color:#856404;padding:15px 20px;border-radius:4px;margin:20px 0;">提示内容</div>
-
-<!-- 分隔线 -->
-<hr style="border:none;border-top:1px solid #eee;margin:30px 0;">
-
-<!-- 表格：绿色表头，手动交替行背景（禁用 nth-child） -->
-<table style="width:100%;border-collapse:collapse;margin:20px 0;">
-  <tr><th style="background:#07C160;color:#fff;padding:12px;border:1px solid #ddd;">列1</th><th style="background:#07C160;color:#fff;padding:12px;border:1px solid #ddd;">列2</th></tr>
-  <tr><td style="padding:12px;border:1px solid #ddd;">内容</td><td style="padding:12px;border:1px solid #ddd;">内容</td></tr>
-  <tr style="background:#f9f9f9;"><td style="padding:12px;border:1px solid #ddd;">内容</td><td style="padding:12px;border:1px solid #ddd;">内容</td></tr>
-</table>
-
-<!-- 双栏对比：用 table 嵌套实现分栏（禁用 flex） -->
-<table style="width:100%;border-collapse:collapse;margin:20px 0;">
-  <tr>
-    <td style="width:50%;padding:20px;border-radius:8px;background:#ffebee;vertical-align:top;">
-      <p style="margin:0 0 8px;"><strong>😅 左侧</strong></p>
-      <p style="margin:6px 0;color:#666;line-height:1.7;">要点一<br>要点二</p>
-    </td>
-    <td style="width:50%;padding:20px;border-radius:8px;background:#e8f5e9;vertical-align:top;">
-      <p style="margin:0 0 8px;"><strong>😎 右侧</strong></p>
-      <p style="margin:6px 0;color:#666;line-height:1.7;">要点一<br>要点二</p>
-    </td>
-  </tr>
-</table>
-
-<!-- 代码块：深色底 -->
-<pre style="background:#2d2d2d;color:#f8f8f2;padding:20px;border-radius:8px;overflow-x:auto;margin:20px 0;font-size:14px;">代码内容</pre>
-```
-
-#### 主题色方案
-
-| 主题名 | 主色 | 适用场景 |
-|--------|------|----------|
-| 摸鱼绿 | #07C160 | 技术分享、开源项目（默认） |
-| 科技蓝 | #1890FF | 技术分享、行业观察 |
-| 活力橙 | #FA8C16 | 产品推广、教程指南 |
-| 优雅紫 | #722ED1 | 行业观察、深度分析 |
-
-#### 禁用清单（写了就塌，必须规避）
-
-| 禁用写法 | 原因 |
-|----------|------|
-| `display:flex` / `grid` | 公众号编辑器剥掉，分栏塌成竖排 |
-| `linear-gradient(...)` | 不支持渐变背景，退化成白底 |
-| `box-shadow` | 多数客户端不渲染 |
-| `opacity` | 部分客户端不渲染 |
-| `.class` / `<style>` 块 | 编辑器剥 class，只认 inline `style` |
-| `:nth-child` / `:hover` 等伪类 | 不渲染；斑马纹用手动交替 `<tr style="background">` |
-| `position` / 绝对定位 | 不支持，排版错乱 |
-
-#### 视觉元素规范（每篇至少 3 种）
-
-| 元素 | 写法 | 使用场景 |
-|------|------|----------|
-| emoji 图标 | 💬 ⚡ 🐛 📝 🚀 🤖 | 列表项、功能说明、小标题前缀 |
-| 分隔线 | `<hr style="border:none;border-top:1px solid #eee;margin:30px 0;">` | 章节分隔 |
-| 纯色色块 | `background:#07C160` 等纯色 + 圆角 | 重点信息、信息卡片 |
-| 引用块 | 灰底绿左条 `div` | 引用、金句、关键观点 |
-| 表格 | 绿色表头 + 手动交替行背景 | 功能对比、数据罗列 |
-| 双栏对比 | `<table>` 嵌套分栏（非 flex） | 传统 vs 新方案 |
-
-#### 人格内容 → 安全 inline 片段（强制）
-
-人格决定「说什么」，安全片段决定「长什么样」。**全部 inline `style=`，无 class，不用 flex/渐变**。套用上方片段集即可，武侠章回也一样：回目进 `<h2 style="border-left:...">`，景物进灰底引用块，侠义金句进纯色卡片——**不是**纯散文。
-
-> 注意：最终内容**直接写进公众号编辑器**，不生成本地 `.html` 文件。若需要本地预览，仅临时存一份纯片段 HTML，**绝不**在产物里留下 `【配图 x：xxx.png】` 这类文字占位符。
+**人格内容 → 主题组件（强制）**：人格决定「说什么」，主题库决定「长什么样」。技术布道者的痛点/原理/边界，必须落成引言卡、编号章节、NOTE、STEP、对比 table——不是纯 Markdown。
 
 ---
 
@@ -801,9 +741,9 @@ await page.evaluate(() => {
   if (contentArea) {
     contentArea.innerHTML = `
       <section style="margin-bottom: 30px;">
-        <h2 style="color: #333; border-left: 4px solid #07C160; padding-left: 12px; margin: 20px 0;">章节标题</h2>
-        <p style="line-height: 1.75; color: #555;">正文内容</p>
-        <div style="background: #07C160; color: #fff; padding: 16px 20px; border-radius: 8px; margin: 20px 0;">
+        <h2 style="color:#1F1F1F;border-left:4px solid #1677FF;padding-left:12px;margin:20px 0;">章节标题</h2>
+        <p style="line-height:1.8;color:#434343;">正文内容</p>
+        <div style="background:#1677FF;color:#fff;padding:16px 20px;border-radius:8px;margin:20px 0;">
           <p style="margin: 8px 0;">📦 重点信息</p>
         </div>
       </section>
@@ -933,7 +873,7 @@ AI：[自动生成文章，含精美排版 CSS]
 - **不问必要信息就写**：开源项目必须有 GitHub 地址
 - **不问系统地址就写**：涉及系统时必须追问系统地址
 - **不生成标题就写**：必须提供 3-5 个候选标题
-- **不排版就直接写**：必须按照排版规范（安全 inline 片段集）
+- **不排版就直接写**：必须按 `theme-tech-minimal` + `platform-redlines` 装配
 - **人格口吻挤掉排版**：加载 tech-writer/wuxia-writer 后只交 Markdown/纯散文/章回文本，无色块/卡片/分隔线/inline CSS —— 等同于「不排版就直接写」
 - **用 class 代替 inline style**：公众号编辑器不吃 `.info-card` 这类 class，必须写成 `style="..."`
 - **写微信不渲染的样式**：禁用 `flex`/`grid`、`linear-gradient`、`box-shadow`、`opacity`、`:nth-child`/`:hover` 伪类、`position` 绝对定位——这些进了编辑器就塌
@@ -957,7 +897,7 @@ AI：[自动生成文章，含精美排版 CSS]
 - 封面图已用 ImageGen 实际生成（2560x1080，无文字，主题明确）
 - 文中配图已生成（系统真实截图 或 设计图，数量达到该类型最少要求）
 - 内容已按照模板撰写（含开头技巧、正文钩子、结尾引导）
-- 排版已优化（安全 inline 片段集、主题色、视觉元素）——最终正文是 **HTML + inline CSS**，每篇至少 3 种视觉元素（色块/卡片/分隔线/emoji/引用块等），不是 Markdown/纯文本，且只用微信可渲染的样式（无 flex/渐变/class/伪类）
+- 排版已优化——最终正文是 **theme-tech-minimal 装配的 HTML + inline CSS**（含 `<span leaf>`），每篇至少 3 种组件，遵守 platform-redlines；技术类内容满足「场景→做法→数据→边界」
 - 人格口吻与排版同时满足（口吻≠交付格式）
 - 正文**直接写进公众号编辑器**，无本地 `.html` 半成品文件
 - 封面图已上传到公众号编辑器封面图位置
