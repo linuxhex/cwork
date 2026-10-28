@@ -1,20 +1,23 @@
 ---
 name: cwork-article
 lazy: true
-description: 微信公众号文章写作助手。自动识别文章类型，补充必要信息（开源地址/GitHub star/系统地址等），生成吸引人的标题，提供精美排版（含 CSS 样式模板），用 ImageGen 强制生成封面图，为文章生成配图（系统真实截图 或 设计图）并嵌入正文，直接写入公众号编辑器。适用于：技术分享、开源项目介绍、产品推广、教程指南、行业观察、故事/小说（武侠）。内容创作按文章类型自动调用人格 skill（cwork-tech-writer 技术布道者 / cwork-wuxia-writer 金庸式武侠）。
+description: 微信公众号文章写作助手。自动识别文章类型，补充必要信息（开源地址/GitHub star/系统地址等），生成吸引人的标题，提供公众号安全 inline 片段集排版（只写微信能渲染的样式，禁用 flex/渐变/class），用 ImageGen 强制生成封面图，为文章生成真实配图（系统截图 或 设计图，禁止占位符）并嵌入正文，直接写入公众号编辑器。适用于：技术分享、开源项目介绍、产品推广、教程指南、行业观察、故事/小说（武侠）。内容创作按文章类型自动调用人格 skill（cwork-tech-writer 技术布道者 / cwork-wuxia-writer 金庸式武侠）。
 ---
+
+# cwork-article
+
 
 # 微信公众号文章写作助手
 
 ## 概述
 
-`cwork-article` 是专门用于撰写微信公众号文章的 skill，能够自动识别文章类型，补充必要信息，生成吸引人的标题，提供精美排版（含 CSS 样式模板），**为文章生成配图（系统真实截图 或 设计图）并嵌入正文**，并直接写入公众号编辑器。
+`cwork-article` 是专门用于撰写微信公众号文章的 skill，能够自动识别文章类型，补充必要信息，生成吸引人的标题，提供公众号安全排版（inline 片段集），**为文章生成配图（系统真实截图 或 设计图）并上传嵌入正文**，并直接写入公众号编辑器。
 
 **核心能力**：
 1. **文章类型识别** — 自动识别技术分享/开源项目/产品推广/教程指南
 2. **必要信息补充** — 根据文章类型自动补充缺失信息（开源地址、GitHub star、安装命令、系统地址等）
 3. **标题生成** — 生成 3-5 个吸引人的标题供选择（30 字内，数字/悬念触发）
-4. **精美排版** — 公众号友好的排版格式（含 CSS 样式模板、主题色方案、视觉元素）
+4. **精美排版** — 公众号安全排版（inline 片段集：主题色左边框、纯色卡片、引用块、对比表格、分隔线、emoji），只写微信能渲染的样式
 5. **写作技巧** — 开头 3 秒抓注意力、每 300 字设钩子、结尾引导互动
 6. **封面图生成（强制）** — 必须用 ImageGen 工具实际生成封面图（2560x1080），禁止只用文字建议
 7. **文中配图生成（强制）** — 有可访问系统则截取真实页面截图；无系统则生成设计图，禁止纯文字无图文章
@@ -22,7 +25,7 @@ description: 微信公众号文章写作助手。自动识别文章类型，补�
 
 **工作流程**：
 ```
-文章类型识别 → 必要信息追问（含系统地址） → 标题生成 → 封面图生成（ImageGen 强制） → 文中配图生成（系统截图 或 设计图） → 内容撰写（含排版+嵌入配图） → 写入编辑器 → 保存草稿
+文章类型识别 → 必要信息追问（含系统地址） → 标题生成 → 封面图生成（ImageGen 强制） → 文中配图生成（系统截图 或 设计图） → 配图校验点 → 内容撰写（含排版） → 配图嵌入（编辑器内上传） → 写入编辑器 → 保存草稿
 ```
 
 ## 语言约束（强制）
@@ -49,7 +52,7 @@ description: 微信公众号文章写作助手。自动识别文章类型，补�
 
 **硬边界（防排版被人格挤掉）**：
 - 人格 skill **不替代**排版：禁止只按人格写纯 Markdown / 纯文本 / 章回散文然后交付。
-- 人格产出的结构（小标题、金句、章回）必须**套进**下方 CSS 模板，变成带 inline style 的 HTML（色块、卡片、分隔线、主题色左边框）。
+- 人格产出的结构（小标题、金句、章回）必须**套进**下方安全 inline 片段集，变成带 inline style 的 HTML（纯色卡片、引用块、对比表格、分隔线、主题色左边框），禁用 flex/渐变/class。
 - 排版、封面图、配图、写入编辑器的优先级与人格口吻**同等硬约束**，不可二选一。
 
 > 注意：行业观察类文章若用户偏观点评论，仍走 `cwork-tech-writer`（评论视角）；若偏故事化叙事，可走 `cwork-wuxia-writer`。以内容基调为准，必要时问用户一句。
@@ -381,15 +384,27 @@ Mood: insightful, forward-looking, authoritative.
 | 教程指南 | 4 张 | 5-6 张 |
 | 行业观察 | 3 张 | 4-5 张 |
 
+### 配图生成校验点（不可跳过）
+
+**封面图和文中配图必须真实生成，禁止用文字占位符糊弄。完成判定：**
+
+- 封面图：必须**实际调用 ImageGen 工具**并回传文件路径（`/tmp/wechat-article-covers/{主题}-cover.png`），在阶段 8 步骤 4 真正上传到编辑器封面位置。**只写"建议生成封面图"或"封面图见 xxx.png"不算完成。**
+- 文中配图：
+  - 路径 A（系统截图）：必须**实际用 ego-browser 截到图**并保存到 `/tmp/wechat-article-screenshots/`，数量达到该类型最少要求。
+  - 路径 B（设计图）：必须**实际生成图片文件**，不能是 `[此处插入图片]` 或 `【配图 x：xxx.png】` 这类文字。
+- **正文里一律不留图片占位文字**——配图在编辑器内通过「插入图片」上传，HTML 正文只放文字 + 安全 inline 片段。
+
+凡是配图缺失、未生成、或仅以占位文字出现 → 视为本阶段失败，不得进入阶段 6/8。
+
 ---
 
 ## 阶段 6：内容撰写与排版
 
 **双重硬约束（缺一不可，不可二选一）**：
 1. **口吻**：进入撰写前，已按「阶段 0：人格选择」加载 `cwork-tech-writer` 或 `cwork-wuxia-writer`。正文按该人格的「思维框架 + 语言风格 + 写作套路」组织——技术类布道者口吻（痛点开场、类比具象、讲边界），故事类金庸式武侠口吻（章回体、半文半白、侠义为核）。
-2. **排版产出物**：最终写入编辑器的正文**必须是 HTML + inline CSS**（不是 Markdown、不是纯文本）。必须套用下方「排版规范」：主题色左边框 h2、信息卡片、提示框、对比色块、分隔线、emoji 列表——每篇至少使用 3 种视觉元素。公众号编辑器不吃 class，**所有样式写成 `style="..."`**。
+2. **排版产出物**：最终**直接写进公众号编辑器的正文**，**必须是 HTML + inline CSS**（不是 Markdown、不是纯文本、不落地成本地 `.html` 文件）。必须套用下方「排版规范」：主题色左边框 h2、纯色信息卡片、浅黄提示框、双栏对比（table 嵌套）、分隔线、emoji 列表——每篇至少使用 3 种视觉元素。公众号编辑器**剥 class、剥 flex、剥渐变、剥伪类**，**所有样式写成 inline `style="..."`**，只写上方「安全 inline 片段集」里的属性，禁用清单里的写法一律不用。
 
-**禁止**：按人格写完 Markdown 再「建议用户自己排版」；禁止只交章回/散文而无色块卡片；禁止用 class 名代替 inline style。
+**禁止**：按人格写完 Markdown 再「建议用户自己排版」；禁止只交章回/散文而无色块卡片；禁止用 class 名代替 inline style；禁止在正文里留 `【配图 x：xxx.png】` 这类文字占位符（配图一律在编辑器内上传）；禁止生成本地 `.html` 半成品文件。
 
 ### 写作技巧
 
@@ -520,98 +535,54 @@ Mood: insightful, forward-looking, authoritative.
 [结尾图：二维码或关注引导]
 ```
 
-### 排版规范（CSS 样式模板）
+### 排版规范（公众号安全 inline 片段集）
 
-#### 基础样式
-```css
-/* 全局样式 */
-font-size: 16px;
-line-height: 1.75;
-color: #333333;
-letter-spacing: 0.5px;
-padding: 0 16px;
+> **核心认知**：最终产物是**直接写进公众号编辑器的正文**，不落地成 html 文件（不在本地生成 `.html` 再塞进去）。微信编辑器吃 `innerHTML`、但**剥 class、剥 flex、剥渐变、剥伪类**。所以不给"CSS 模板"，只给一份**微信确实渲染的最小 inline 片段集** + 一份**禁用清单**——模型只产出微信能渲染的东西，排版不会再塌。
 
-/* 标题样式 */
-h1 { font-size: 22px; font-weight: bold; color: #333; margin: 20px 0; }
-h2 { font-size: 18px; font-weight: bold; color: #333; border-left: 4px solid #07C160; padding-left: 12px; margin: 20px 0; }
-h3 { font-size: 16px; font-weight: bold; color: #555; margin: 15px 0; }
+#### 必用：安全 inline 片段集（照抄，只改文字）
 
-/* 段落样式 */
-p { line-height: 1.75; color: #555; margin: 12px 0; }
+```html
+<!-- 小标题：主题色左边框 -->
+<h2 style="font-size:18px;font-weight:bold;color:#333;border-left:4px solid #07C160;padding-left:12px;margin:24px 0 16px;">章节标题</h2>
 
-/* 引用块样式 */
-blockquote {
-  background: #f5f5f5;
-  border-left: 4px solid #07C160;
-  padding: 15px 20px;
-  margin: 20px 0;
-  color: #666;
-}
+<!-- 正文段落 -->
+<p style="line-height:1.75;color:#555;margin:12px 0;">正文内容，关键信息用 <strong>加粗</strong> 或 <strong style="color:#07C160;">主题色</strong> 强调。</p>
 
-/* 代码块样式 */
-pre {
-  background: #2d2d2d;
-  color: #f8f8f2;
-  padding: 20px;
-  border-radius: 8px;
-  overflow-x: auto;
-  margin: 20px 0;
-}
+<!-- 引用 / 金句：灰底绿左条 -->
+<div style="background:#f5f5f5;border-left:4px solid #07C160;padding:15px 20px;margin:20px 0;color:#666;">引用内容或核心观点</div>
 
-/* 表格样式 */
-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 20px 0;
-}
-th {
-  background: #07C160;
-  color: white;
-  padding: 12px;
-  text-align: left;
-  border: 1px solid #ddd;
-}
-td {
-  padding: 12px;
-  border: 1px solid #ddd;
-}
-tr:nth-child(even) { background: #f9f9f9; }
+<!-- 信息卡片：纯色背景（禁用渐变） -->
+<div style="background:#07C160;color:#fff;padding:16px 20px;border-radius:8px;margin:20px 0;">卡片标题 / 关键信息</div>
 
-/* 信息卡片样式 */
-.info-card {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  padding: 20px;
-  border-radius: 8px;
-  margin: 20px 0;
-  color: white;
-}
+<!-- 提示框：浅黄底 -->
+<div style="background:#fff3cd;color:#856404;padding:15px 20px;border-radius:4px;margin:20px 0;">提示内容</div>
 
-/* 提示框样式 */
-.tip-box {
-  background: #fff3cd;
-  padding: 12px;
-  border-radius: 4px;
-  color: #856404;
-  margin: 20px 0;
-}
+<!-- 分隔线 -->
+<hr style="border:none;border-top:1px solid #eee;margin:30px 0;">
 
-/* 对比布局样式 */
-.comparison {
-  display: flex;
-  gap: 20px;
-  margin: 20px 0;
-}
-.comparison-item {
-  flex: 1;
-  padding: 20px;
-  border-radius: 8px;
-}
-.comparison-before {
-  background: #ffebee;
-}
-.comparison-after {
-  background: #e8f5e9;
-}
+<!-- 表格：绿色表头，手动交替行背景（禁用 nth-child） -->
+<table style="width:100%;border-collapse:collapse;margin:20px 0;">
+  <tr><th style="background:#07C160;color:#fff;padding:12px;border:1px solid #ddd;">列1</th><th style="background:#07C160;color:#fff;padding:12px;border:1px solid #ddd;">列2</th></tr>
+  <tr><td style="padding:12px;border:1px solid #ddd;">内容</td><td style="padding:12px;border:1px solid #ddd;">内容</td></tr>
+  <tr style="background:#f9f9f9;"><td style="padding:12px;border:1px solid #ddd;">内容</td><td style="padding:12px;border:1px solid #ddd;">内容</td></tr>
+</table>
+
+<!-- 双栏对比：用 table 嵌套实现分栏（禁用 flex） -->
+<table style="width:100%;border-collapse:collapse;margin:20px 0;">
+  <tr>
+    <td style="width:50%;padding:20px;border-radius:8px;background:#ffebee;vertical-align:top;">
+      <p style="margin:0 0 8px;"><strong>😅 左侧</strong></p>
+      <p style="margin:6px 0;color:#666;line-height:1.7;">要点一<br>要点二</p>
+    </td>
+    <td style="width:50%;padding:20px;border-radius:8px;background:#e8f5e9;vertical-align:top;">
+      <p style="margin:0 0 8px;"><strong>😎 右侧</strong></p>
+      <p style="margin:6px 0;color:#666;line-height:1.7;">要点一<br>要点二</p>
+    </td>
+  </tr>
+</table>
+
+<!-- 代码块：深色底 -->
+<pre style="background:#2d2d2d;color:#f8f8f2;padding:20px;border-radius:8px;overflow-x:auto;margin:20px 0;font-size:14px;">代码内容</pre>
 ```
 
 #### 主题色方案
@@ -623,72 +594,50 @@ tr:nth-child(even) { background: #f9f9f9; }
 | 活力橙 | #FA8C16 | 产品推广、教程指南 |
 | 优雅紫 | #722ED1 | 行业观察、深度分析 |
 
-#### 视觉元素规范
+#### 禁用清单（写了就塌，必须规避）
 
-| 元素 | 样式 | 使用场景 |
+| 禁用写法 | 原因 |
+|----------|------|
+| `display:flex` / `grid` | 公众号编辑器剥掉，分栏塌成竖排 |
+| `linear-gradient(...)` | 不支持渐变背景，退化成白底 |
+| `box-shadow` | 多数客户端不渲染 |
+| `opacity` | 部分客户端不渲染 |
+| `.class` / `<style>` 块 | 编辑器剥 class，只认 inline `style` |
+| `:nth-child` / `:hover` 等伪类 | 不渲染；斑马纹用手动交替 `<tr style="background">` |
+| `position` / 绝对定位 | 不支持，排版错乱 |
+
+#### 视觉元素规范（每篇至少 3 种）
+
+| 元素 | 写法 | 使用场景 |
 |------|------|----------|
-| emoji 图标 | 💬 ⚡  🐛 📝 🚀  🤖 | 列表项、功能说明 |
-| 分隔线 | `<hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">` | 章节分隔 |
-| 背景色块 | 渐变或纯色背景 + 圆角 | 重点信息、引用块 |
-| 卡片布局 | flex 布局 + 阴影 + 圆角 | 对比展示、功能卡片 |
-| 金句标注 | 居中 + 加粗 + 颜色 | 核心观点、总结句 |
+| emoji 图标 | 💬 ⚡ 🐛 📝 🚀 🤖 | 列表项、功能说明、小标题前缀 |
+| 分隔线 | `<hr style="border:none;border-top:1px solid #eee;margin:30px 0;">` | 章节分隔 |
+| 纯色色块 | `background:#07C160` 等纯色 + 圆角 | 重点信息、信息卡片 |
+| 引用块 | 灰底绿左条 `div` | 引用、金句、关键观点 |
+| 表格 | 绿色表头 + 手动交替行背景 | 功能对比、数据罗列 |
+| 双栏对比 | `<table>` 嵌套分栏（非 flex） | 传统 vs 新方案 |
 
-#### 人格内容 → HTML 套版（强制示例）
+#### 人格内容 → 安全 inline 片段（强制）
 
-人格决定「说什么」，套版决定「长什么样」。下面是**必须遵守**的产出形态（注意全部 `style=`，无 class）：
+人格决定「说什么」，安全片段决定「长什么样」。**全部 inline `style=`，无 class，不用 flex/渐变**。套用上方片段集即可，武侠章回也一样：回目进 `<h2 style="border-left:...">`，景物进灰底引用块，侠义金句进纯色卡片——**不是**纯散文。
 
-```html
-<section style="margin-bottom: 30px;">
-  <h2 style="font-size: 18px; font-weight: bold; color: #333; border-left: 4px solid #07C160; padding-left: 12px; margin: 20px 0;">章节标题（或武侠回目）</h2>
-  <p style="line-height: 1.75; color: #555; margin: 12px 0;">正文段落……</p>
-  <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; border-radius: 8px; margin: 20px 0; color: white;">
-    <p style="margin: 8px 0;">📦 信息卡片 / 金句 / 回目提要</p>
-  </div>
-  <blockquote style="background: #f5f5f5; border-left: 4px solid #07C160; padding: 15px 20px; margin: 20px 0; color: #666;">
-    引用 / 景物留白 / 关键观点
-  </blockquote>
-  <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
-</section>
-```
-
-武侠章回也一样：回目进 `<h2 style="border-left:...">`，景物进 `blockquote`，侠义金句进渐变色块——**不是**纯散文。
+> 注意：最终内容**直接写进公众号编辑器**，不生成本地 `.html` 文件。若需要本地预览，仅临时存一份纯片段 HTML，**绝不**在产物里留下 `【配图 x：xxx.png】` 这类文字占位符。
 
 ---
 
 ## 阶段 7：配图嵌入（强制）
 
-**将阶段 4 的封面图和阶段 5 的文中配图上传到公众号编辑器并嵌入文章对应位置。**
-
-### 配图上传流程
-
-```
-公众号编辑器图片上传机制：
-- 编辑器有"插入图片"按钮，点击后弹出文件选择框
-- 选择本地图片文件后，编辑器自动上传到微信服务器
-- 上传完成后，图片以 <img> 标签形式插入到正文
-- 图片 URL 由微信服务器生成
-
-上传步骤：
-1. 打开公众号编辑器
-2. 输入标题
-3. 输入正文（文字部分，不含图片）
-4. 逐张上传配图：
-   a. 定位到需要插入配图的位置
-   b. 点击编辑器的"插入图片"按钮
-   c. 选择本地配图文件上传
-   d. 等待上传完成，确认图片已插入
-   e. 调整图片大小和位置（如需要）
-5. 保存草稿
-```
+**将阶段 4 的封面图和阶段 5 的文中配图，通过编辑器「插入图片」按钮从本地上传并嵌入对应位置。**
 
 ### 配图嵌入位置
 
 ```
-根据阶段 4 的封面图和阶段 5 的文中配图，将它们嵌入到文章对应位置：
+配图一律通过编辑器「插入图片」按钮从本地上传（微信服务器生成 <img> URL），
+不在正文 HTML 里写 <img src="本地路径">，更不留 【配图 x：xxx.png】 文字占位符。
 
 | 配图 | 嵌入位置 |
 |------|----------|
-| 封面图（ImageGen 生成） | 公众号编辑器封面图位置（非正文内） |
+| 封面图（ImageGen 生成） | 编辑器封面图位置（非正文内），阶段 8 步骤 4 处理 |
 | 系统首页/概念图 | 产品介绍段落后 |
 | 核心功能页/功能示意图 | 功能介绍段落中 |
 | 数据看板/数据可视化 | 数据/效果段落中 |
@@ -763,22 +712,6 @@ tr:nth-child(even) { background: #f9f9f9; }
    - 确认草稿列表中封面图正常展示
 ```
 
-### 截图上传说明
-
-```
-公众号编辑器图片上传机制：
-- 编辑器有"插入图片"按钮，点击后弹出文件选择框
-- 选择本地图片文件后，编辑器自动上传到微信服务器
-- 上传完成后，图片以 <img> 标签形式插入到正文
-- 图片 URL 由微信服务器生成，格式如：
-  https://mmbiz.qpic.cn/mmbiz_xxx/xxx.png
-
-上传策略：
-- 如果截图数量 ≤ 3 张：逐张手动上传，控制插入位置
-- 如果截图数量 > 3 张：先批量上传，再调整位置
-- 上传后检查图片是否清晰、位置是否正确
-```
-
 ### 写入代码示例
 
 ```javascript
@@ -847,7 +780,7 @@ await page.evaluate(() => {
       <section style="margin-bottom: 30px;">
         <h2 style="color: #333; border-left: 4px solid #07C160; padding-left: 12px; margin: 20px 0;">章节标题</h2>
         <p style="line-height: 1.75; color: #555;">正文内容</p>
-        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; border-radius: 8px; margin: 20px 0; color: white;">
+        <div style="background: #07C160; color: #fff; padding: 16px 20px; border-radius: 8px; margin: 20px 0;">
           <p style="margin: 8px 0;">📦 重点信息</p>
         </div>
       </section>
@@ -977,13 +910,15 @@ AI：[自动生成文章，含精美排版 CSS]
 - **不问必要信息就写**：开源项目必须有 GitHub 地址
 - **不问系统地址就写**：涉及系统时必须追问系统地址
 - **不生成标题就写**：必须提供 3-5 个候选标题
-- **不排版就直接写**：必须按照排版规范（含 CSS 样式）
+- **不排版就直接写**：必须按照排版规范（安全 inline 片段集）
 - **人格口吻挤掉排版**：加载 tech-writer/wuxia-writer 后只交 Markdown/纯散文/章回文本，无色块/卡片/分隔线/inline CSS —— 等同于「不排版就直接写」
 - **用 class 代替 inline style**：公众号编辑器不吃 `.info-card` 这类 class，必须写成 `style="..."`
+- **写微信不渲染的样式**：禁用 `flex`/`grid`、`linear-gradient`、`box-shadow`、`opacity`、`:nth-child`/`:hover` 伪类、`position` 绝对定位——这些进了编辑器就塌
 - **不生成封面图就写**：必须用 ImageGen 实际生成封面图（2560x1080），禁止只用文字描述或建议
 - **文章无配图**：每篇文章必须配图（系统截图 或 设计图），禁止纯文字无图文章
 - **配图数量不足**：必须达到该文章类型的最少配图数要求
-- **用占位图代替真实配图**：禁止用"[此处插入图片]"占位，必须生成真实配图
+- **用占位图代替真实配图**：禁止用"[此处插入图片]"、`【配图 x：xxx.png】` 占位，必须生成真实配图并在编辑器内上传
+- **生成本地 html 半成品**：最终内容直接写进公众号编辑器，不生成本地 `.html` 文件（本地预览仅临时、不入库）
 - **不上传封面图到编辑器**：封面图生成了但没有上传到编辑器的封面图位置，草稿里没有封面图，等于白做
 - **不确认就写入**：必须用户确认后才写入编辑器
 - **不用视觉元素**：必须使用 emoji、色块、分隔线等视觉元素（每篇至少 3 种）
@@ -999,19 +934,23 @@ AI：[自动生成文章，含精美排版 CSS]
 - 封面图已用 ImageGen 实际生成（2560x1080，无文字，主题明确）
 - 文中配图已生成（系统真实截图 或 设计图，数量达到该类型最少要求）
 - 内容已按照模板撰写（含开头技巧、正文钩子、结尾引导）
-- 排版已优化（含 CSS 样式、主题色、视觉元素）——最终正文是 **HTML + inline CSS**，每篇至少 3 种视觉元素（色块/卡片/分隔线/emoji/引用块等），不是 Markdown/纯文本
+- 排版已优化（安全 inline 片段集、主题色、视觉元素）——最终正文是 **HTML + inline CSS**，每篇至少 3 种视觉元素（色块/卡片/分隔线/emoji/引用块等），不是 Markdown/纯文本，且只用微信可渲染的样式（无 flex/渐变/class/伪类）
 - 人格口吻与排版同时满足（口吻≠交付格式）
+- 正文**直接写进公众号编辑器**，无本地 `.html` 半成品文件
 - 封面图已上传到公众号编辑器封面图位置
-- 文中配图已嵌入文章对应位置（非占位标记）
+- 文中配图已在编辑器内上传并嵌入对应位置（非占位标记、非本地路径）
 - 文章已写入公众号编辑器
 - 文章已保存为草稿
 
 **失败停止**：
 - 必要信息缺失（如开源项目没有 GitHub 地址）
 - 封面图未生成（未调用 ImageGen 或生成失败）
-- 文章无配图或配图数量不足
+- 文章无配图或配图数量不足，或配图仅以占位文字出现
+- 正文使用了微信不渲染的样式（flex/渐变/class/伪类）
+- 生成本地 `.html` 半成品文件而非直接写编辑器
 - 用户未确认标题
 - 写入编辑器失败
 
 ---
+
 
