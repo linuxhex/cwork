@@ -316,7 +316,7 @@ function buildCursorSkillRule(skillDir, skillName) {
 
   // 参考文件复制到 .cursor/rules/<skillName>/ 下，主规则不内联（避免超 40k 字符限制）
   const files = collectSkillFiles(skillDir);
-  const refFiles = files.filter(f => f.relPath !== 'SKILL.md' && !f.relPath.startsWith('scripts/'));
+  const refFiles = files.filter(f => f.relPath !== 'SKILL.md' && !isSensitive(f.relPath));
   let refIndex = '';
   if (refFiles.length > 0) {
     const refDir = join(PROJECT, '.cursor', 'rules', skillName);
@@ -412,7 +412,7 @@ ${skillList}
 
     // 收集所有文件（含 SKILL.md 和参考文件）
     const files = collectSkillFiles(skill);
-    const refFiles = files.filter(f => f.relPath !== 'SKILL.md' && !f.relPath.startsWith('scripts/'));
+    const refFiles = files.filter(f => f.relPath !== 'SKILL.md' && !isSensitive(f.relPath));
     let refIndex = '';
     if (refFiles.length > 0) {
       refIndex = buildClaudeRefIndex(skillName);
@@ -519,7 +519,7 @@ function checkInstall() {
     const md = readSkillMd(skill);
     const { body } = parseFrontmatter(md);
     const files = collectSkillFiles(skill);
-    const refFiles = files.filter(f => f.relPath !== 'SKILL.md' && !f.relPath.startsWith('scripts/'));
+    const refFiles = files.filter(f => f.relPath !== 'SKILL.md' && !isSensitive(f.relPath));
     let refIndex = '';
     if (refFiles.length > 0) {
       refIndex = buildClaudeRefIndex(skillName);
@@ -537,7 +537,7 @@ function checkInstall() {
   const refPattern = /(\.cwork\/refs\/[\w/-]+?\.md)/g;
   for (const skill of skills) {
     for (const f of collectSkillFiles(skill)) {
-      if (f.relPath.startsWith('scripts/')) continue;
+      if (isSensitive(f.relPath)) continue;
       const content = readFileSync(f.path, 'utf-8');
       for (const m of content.matchAll(refPattern)) {
         const refPath = m[1];
@@ -688,7 +688,7 @@ ${cleaned}
 
     // 参考文件复制到 .trae/rules/<skillName>/ 下，主规则不内联（避免超 40k 字符限制）
     const files = collectSkillFiles(skill);
-    const refFiles = files.filter(f => f.relPath !== 'SKILL.md' && !f.relPath.startsWith('scripts/'));
+    const refFiles = files.filter(f => f.relPath !== 'SKILL.md' && !isSensitive(f.relPath));
     let refIndex = '';
     if (refFiles.length > 0) {
       const refDir = join(target, skillName);
