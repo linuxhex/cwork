@@ -1,7 +1,7 @@
 ---
 name: cwork-article
 lazy: true
-description: 微信公众号文章写作助手。自动识别文章类型，补充必要信息，生成标题，默认简洁技术风主题库排版（theme-tech-minimal + platform-redlines，科技蓝、关键词下划线、STEP/NOTE），ImageGen 封面与真实配图，查草稿箱复用后直接写入编辑器。技术类口吻对标美团技术/阿里技术实战风。适用于技术分享/开源/产品/教程/行业观察/武侠故事。
+description: 微信公众号文章写作助手。自动识别文章类型，补充必要信息，生成标题，默认简洁技术风主题库排版（theme-tech-minimal + platform-redlines，科技蓝、关键词下划线、STEP/NOTE），Python 脚本/Unsplash 封面与真实配图（ImageGen 不可用时），查草稿箱复用后直接写入编辑器。技术类口吻对标美团技术/阿里技术实战风。适用于技术分享/开源/产品/教程/行业观察/武侠故事。
 ---
 
 # cwork-article
@@ -19,7 +19,7 @@ description: 微信公众号文章写作助手。自动识别文章类型，补�
 3. **标题生成** — 生成 3-5 个吸引人的标题供选择（30 字内，数字/悬念触发）
 4. **精美排版** — 默认简洁技术风主题库（`theme-tech-minimal`）+ 平台红线；HTML 从组件库装配，只写微信能渲染的样式
 5. **写作技巧** — 开头 3 秒抓注意力、每 300 字设钩子、结尾引导互动
-6. **封面图生成（强制）** — 必须用 ImageGen 工具实际生成封面图（2560x1080），禁止只用文字建议
+6. **封面图生成（强制）** — 用 Python 脚本或 Unsplash 实际生成封面图（2560x1080），禁止只用文字建议
 7. **文中配图生成（强制）** — 有可访问系统则截取真实页面截图；无系统则生成设计图，禁止纯文字无图文章
 8. **直接写入编辑器** — 通过 ego-browser 直接写入公众号编辑器并保存草稿
 
@@ -223,84 +223,30 @@ description: 微信公众号文章写作助手。自动识别文章类型，补�
 
 > **并行执行**：本阶段与阶段 3（标题生成）、阶段 5（文中配图生成）可**同时启动**，无需等待。
 
-**每篇文章必须有封面图，必须用 ImageGen 工具实际生成，禁止只用文字描述或建议。**
+**每篇文章必须有封面图。ImageGen 不可用时，用 Python 脚本或 Unsplash 生成/下载。**
 
-### 封面图规格
-
-| 属性 | 值 |
-|------|-----|
-| 尺寸 | 2560x1080（21:9，最接近公众号封面 2.35:1） |
-| 格式 | PNG |
-| 保存路径 | /tmp/wechat-article-covers/{文章主题}-cover.png |
-| 风格 | 科技感、简洁、专业，与文章主题色一致 |
-
-### 封面图 prompt 模板（按文章类型）
-
-**开源项目介绍**：
-```
-A clean, modern tech illustration for an open-source project article cover.
-Central element: [项目名称] logo or abstract representation of [核心功能].
-Background: gradient from [主题色] to dark, with subtle grid/code pattern.
-Style: flat design, minimal, professional, no text.
-Mood: innovative, trustworthy, developer-friendly.
-```
-
-**技术分享**：
-```
-A sleek tech article cover illustration about [核心技术点].
-Central element: abstract visualization of [技术概念], e.g. interconnected nodes, data flow, architecture diagram.
-Background: dark gradient with [主题色] accent glow.
-Style: futuristic, clean lines, geometric shapes, no text.
-Mood: cutting-edge, authoritative, insightful.
-```
-
-**产品推广**：
-```
-A vibrant product article cover illustration for [产品名称].
-Central element: abstract representation of [产品核心价值], e.g. dashboard, workflow, happy users.
-Background: gradient with [主题色] as primary, warm and inviting.
-Style: modern, approachable, professional, no text.
-Mood: energetic, solution-oriented, trustworthy.
-```
-
-**教程指南**：
-```
-A clear, friendly tutorial article cover about [教程主题].
-Central element: step-by-step visual metaphor, e.g. numbered blocks, roadmap, building blocks.
-Background: light gradient with [主题色] accents.
-Style: clean, educational, approachable, no text.
-Mood: helpful, structured, encouraging.
-```
-
-**行业观察**：
-```
-A thought-provoking industry analysis cover about [主题].
-Central element: abstract data visualization, trend arrows, connected entities.
-Background: sophisticated dark gradient with [主题色] highlights.
-Style: editorial, analytical, premium, no text.
-Mood: insightful, forward-looking, authoritative.
-```
-
-### 封面图生成流程
+### 封面图生成方式（三选一）
 
 ```
-1. 根据文章类型选择对应的 prompt 模板
-2. 填入文章具体信息（项目名、技术点、产品名等）
-3. 调用 ImageGen 工具生成封面图：
-   - name: "{文章主题}-cover"
-   - prompt: 按模板填充的完整 prompt
-   - size: "2560x1080"
-4. 确认生成成功，记录文件路径
-5. 封面图文件路径后续写入编辑器时使用
+方式 1（默认）：Python 脚本生成简洁技术风封面
+  → python3 skills/article/scripts/gen_illustration.py cover "文章主题" -o /tmp/wechat-article-covers/{主题}-cover.png
+  → 2560x1080，科技蓝竖条 + 几何装饰 + 标题文字
+
+方式 2：Unsplash 下载（适合需要真实照片的场景）
+  → python3 skills/article/scripts/gen_illustration.py fetch "关键词" -o /tmp/wechat-article-covers/{主题}-cover.png
+  → 1600x900，自动从 Unsplash 下载可商用图片
+
+方式 3：ImageGen（如可用）
+  → 调用 ImageGen 工具，prompt 按下方模板
 ```
 
 ### 封面图质量要求
 
-- **无文字**：封面图不包含任何文字（标题由公众号编辑器单独设置）
+- **无文字**：封面图不包含标题文字（标题由公众号编辑器单独设置）——方式 1 生成的带文字仅用于预览，上传前需确认
 - **主题明确**：一眼能看出文章主题方向
-- **配色协调**：与文章主题色方案一致
+- **配色协调**：与文章主题色方案一致（默认科技蓝 #1677FF）
 - **专业感**：适合技术类公众号的审美
-- **清晰度高**：2560x1080 保证在各种设备上清晰
+- **清晰度高**：至少 1600x900，保证在各种设备上清晰
 
 ---
 
@@ -309,6 +255,22 @@ Mood: insightful, forward-looking, authoritative.
 > **并行执行**：本阶段与阶段 3（标题生成）、阶段 4（封面图生成）可**同时启动**，无需等待。
 
 **每篇文章必须配图，禁止纯文字无图文章。**
+
+### 插图生成工具（统一入口）
+
+> ImageGen 不可用时，全部走本地工具，不依赖任何外部付费绘图服务。
+
+```
+脚本：skills/article/scripts/gen_illustration.py（全部本地 Python，零外部依赖服务）
+
+封面：  python3 skills/article/scripts/gen_illustration.py cover "文章主题" -o /tmp/wechat-article-covers/{主题}-cover.png
+对比：  python3 skills/article/scripts/gen_illustration.py comparison "改前" "改后" -o /tmp/wechat-article-screenshots/compare.png
+数据：  python3 skills/article/scripts/gen_illustration.py data --data '{"排查时间":120,"优化后":10}' --type bar -o /tmp/wechat-article-screenshots/data.png
+找图：  python3 skills/article/scripts/gen_illustration.py fetch "微服务架构" -o /tmp/wechat-article-screenshots/photo.png
+流程：  python3 skills/article/scripts/gen_illustration.py flow '["用户请求","网关","服务A|服务B","DB"]' -o /tmp/wechat-article-screenshots/flow.png
+```
+
+依赖：`pip3 install Pillow matplotlib`（本机已装）。**不依赖 ImageGen、不依赖 mermaid/浏览器渲染。**
 
 ### 配图来源（二选一）
 
@@ -341,7 +303,7 @@ Mood: insightful, forward-looking, authoritative.
 5. 质量要求：数据真实、页面完整、无干扰元素、分辨率清晰
 ```
 
-### 路径 B：设计图生成
+### 路径 B：设计图生成（无可访问系统时）
 
 ```
 触发条件：
@@ -349,23 +311,27 @@ Mood: insightful, forward-looking, authoritative.
 - 或用户明确不需要系统截图
 
 必须生成的设计图（至少 3 张）：
-1. 封面图（900x500px）— 主题相关概念图
-2. 架构图/流程图（800x600px）— 展示核心原理或工作流程
-3. 对比图（800x600px）— 传统方式 vs 新方案的对比
-4. 功能示意图（800x600px）— 展示核心功能界面概念
-5. 数据可视化图（800x600px）— 用图表展示数据/效果
+1. 封面图（2560x1080）— Python 脚本或 Unsplash（gen_illustration.py cover / fetch）
+2. 架构图/流程图（1600x900）— Python 脚本 gen_illustration.py flow
+3. 对比图（1600x900）— Python 脚本 gen_illustration.py comparison
+4. 数据可视化图（1200x800）— Python 脚本 gen_illustration.py data
+5. 功能示意图（1600x900）— Python 脚本或 Unsplash
 
-设计图生成方式：
-- AI 绘图：Midjourney、DALL-E、Stable Diffusion
-- 工具设计：draw.io、Excalidraw、Figma
-- 代码生成：Python matplotlib、Mermaid
-- 模板修改：Canva、稿定设计
+设计图生成方式（按优先级，全部本地可跑，不依赖 ImageGen）：
+1. **Python 脚本 gen_illustration.py**（默认）：
+   - 封面：python3 skills/article/scripts/gen_illustration.py cover "主题" -o output.png
+   - 对比：python3 skills/article/scripts/gen_illustration.py comparison "左标题" "右标题" -o output.png
+   - 数据：python3 skills/article/scripts/gen_illustration.py data --data '{"a":10,"b":20}' --type bar -o output.png
+   - 找图：python3 skills/article/scripts/gen_illustration.py fetch "关键词" -o output.png  （Unsplash 可商用）
+2. **matplotlib 复杂图表**：写 Python 脚本 plt.savefig()（架构/时序/拓扑等自定义图）
+3. **matplotlib 直接调用**（复杂图表）：写 Python 脚本 plt.savefig()
+4. **真实照片**：需要人物/场景时用 gen_illustration.py fetch 走 Unsplash
 
 设计图质量要求：
-- 风格统一（同一篇文章的配图风格一致）
+- 风格统一（同一篇文章的配图风格一致，默认科技蓝 #1677FF）
 - 信息清晰（文字可读、逻辑清楚）
 - 配色协调（与文章主题色方案一致）
-- 分辨率足够（至少 2x，文字清晰）
+- 分辨率足够（至少 1600x900，文字清晰）
 ```
 
 ### 配图与文章的对应关系
@@ -398,10 +364,10 @@ Mood: insightful, forward-looking, authoritative.
 
 **封面图和文中配图必须真实生成，禁止用文字占位符糊弄。完成判定：**
 
-- 封面图：必须**实际调用 ImageGen 工具**并回传文件路径（`/tmp/wechat-article-covers/{主题}-cover.png`），在阶段 8 步骤 4 真正上传到编辑器封面位置。**只写"建议生成封面图"或"封面图见 xxx.png"不算完成。**
+- 封面图：必须**实际生成图片文件**并回传路径（`/tmp/wechat-article-covers/{主题}-cover.png`），在阶段 8 步骤 4 真正上传到编辑器封面位置。生成方式：Python 脚本 `gen_illustration.py cover` / Unsplash `fetch` /（如可用）ImageGen。**只写"建议生成封面图"或"封面图见 xxx.png"不算完成。**
 - 文中配图：
   - 路径 A（系统截图）：必须**实际用 ego-browser 截到图**并保存到 `/tmp/wechat-article-screenshots/`，数量达到该类型最少要求。
-  - 路径 B（设计图）：必须**实际生成图片文件**，不能是 `[此处插入图片]` 或 `【配图 x：xxx.png】` 这类文字。
+  - 路径 B（设计图）：必须**实际生成图片文件**（Python 脚本 / matplotlib / Unsplash 下载），不能是 `[此处插入图片]` 或 `【配图 x：xxx.png】` 这类文字。
 - **正文里一律不留图片占位文字**——配图在编辑器内通过「插入图片」上传，HTML 正文只放文字 + 安全 inline 片段。
 
 凡是配图缺失、未生成、或仅以占位文字出现 → 视为本阶段失败，不得进入阶段 6/8。
@@ -587,7 +553,7 @@ Mood: insightful, forward-looking, authoritative.
 
 | 配图 | 嵌入位置 |
 |------|----------|
-| 封面图（ImageGen 生成） | 编辑器封面图位置（非正文内），阶段 8 步骤 4 处理 |
+| 封面图（Python 脚本 / Unsplash 生成） | 编辑器封面图位置（非正文内），阶段 8 步骤 4 处理 |
 | 系统首页/概念图 | 产品介绍段落后 |
 | 核心功能页/功能示意图 | 功能介绍段落中 |
 | 数据看板/数据可视化 | 数据/效果段落中 |
@@ -877,7 +843,7 @@ AI：[自动生成文章，含精美排版 CSS]
 - **人格口吻挤掉排版**：加载 tech-writer/wuxia-writer 后只交 Markdown/纯散文/章回文本，无色块/卡片/分隔线/inline CSS —— 等同于「不排版就直接写」
 - **用 class 代替 inline style**：公众号编辑器不吃 `.info-card` 这类 class，必须写成 `style="..."`
 - **写微信不渲染的样式**：禁用 `flex`/`grid`、`linear-gradient`、`box-shadow`、`opacity`、`:nth-child`/`:hover` 伪类、`position` 绝对定位——这些进了编辑器就塌
-- **不生成封面图就写**：必须用 ImageGen 实际生成封面图（2560x1080），禁止只用文字描述或建议
+- **不生成封面图就写**：必须用 Python 脚本 / Unsplash 实际生成封面图（2560x1080），禁止只用文字描述或建议
 - **文章无配图**：每篇文章必须配图（系统截图 或 设计图），禁止纯文字无图文章
 - **配图数量不足**：必须达到该文章类型的最少配图数要求
 - **用占位图代替真实配图**：禁止用"[此处插入图片]"、`【配图 x：xxx.png】` 占位，必须生成真实配图并在编辑器内上传
@@ -894,7 +860,7 @@ AI：[自动生成文章，含精美排版 CSS]
 - 文章类型已识别
 - 必要信息已收集（开源地址、GitHub star、系统地址等）
 - 标题已生成并确认（3-5 个候选）
-- 封面图已用 ImageGen 实际生成（2560x1080，无文字，主题明确）
+- 封面图已用 Python 脚本 / Unsplash 实际生成（2560x1080，无文字，主题明确）
 - 文中配图已生成（系统真实截图 或 设计图，数量达到该类型最少要求）
 - 内容已按照模板撰写（含开头技巧、正文钩子、结尾引导）
 - 排版已优化——最终正文是 **theme-tech-minimal 装配的 HTML + inline CSS**（含 `<span leaf>`），每篇至少 3 种组件，遵守 platform-redlines；技术类内容满足「场景→做法→数据→边界」
@@ -907,7 +873,7 @@ AI：[自动生成文章，含精美排版 CSS]
 
 **失败停止**：
 - 必要信息缺失（如开源项目没有 GitHub 地址）
-- 封面图未生成（未调用 ImageGen 或生成失败）
+- 封面图未生成（未实际生成图片文件或生成失败）
 - 文章无配图或配图数量不足，或配图仅以占位文字出现
 - 正文使用了微信不渲染的样式（flex/渐变/class/伪类）
 - 生成本地 `.html` 半成品文件而非直接写编辑器
