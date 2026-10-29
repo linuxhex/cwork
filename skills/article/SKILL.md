@@ -1,7 +1,7 @@
 ---
 name: cwork-article
 lazy: true
-description: 微信公众号文章写作助手。自动识别文章类型，补充必要信息，生成标题，默认简洁技术风主题库排版（theme-tech-minimal + platform-redlines，科技蓝、关键词下划线、STEP/NOTE），Python 脚本/Unsplash 封面与真实配图（ImageGen 不可用时），查草稿箱复用后直接写入编辑器。技术类口吻对标美团技术/阿里技术实战风。适用于技术分享/开源/产品/教程/行业观察/武侠故事。
+description: 微信公众号文章写作助手。自动识别文章类型，补充必要信息，生成标题，默认简洁技术风主题库排版（theme-tech-minimal + platform-redlines，科技蓝、关键词下划线、STEP/NOTE），Python 脚本/Unsplash 生成封面与真实配图，查草稿箱复用后直接写入编辑器。技术类口吻对标美团技术/阿里技术实战风。适用于技术分享/开源/产品/教程/行业观察/武侠故事。
 ---
 
 # cwork-article
@@ -223,9 +223,9 @@ description: 微信公众号文章写作助手。自动识别文章类型，补�
 
 > **并行执行**：本阶段与阶段 3（标题生成）、阶段 5（文中配图生成）可**同时启动**，无需等待。
 
-**每篇文章必须有封面图。ImageGen 不可用时，用 Python 脚本或 Unsplash 生成/下载。**
+**每篇文章必须有封面图，用 Python 脚本或 Unsplash 生成/下载，禁止只用文字建议。**
 
-### 封面图生成方式（三选一）
+### 封面图生成方式（二选一）
 
 ```
 方式 1（默认）：Python 脚本生成简洁技术风封面
@@ -235,9 +235,6 @@ description: 微信公众号文章写作助手。自动识别文章类型，补�
 方式 2：Unsplash 下载（适合需要真实照片的场景）
   → python3 skills/article/scripts/gen_illustration.py fetch "关键词" -o /tmp/wechat-article-covers/{主题}-cover.png
   → 1600x900，自动从 Unsplash 下载可商用图片
-
-方式 3：ImageGen（如可用）
-  → 调用 ImageGen 工具，prompt 按下方模板
 ```
 
 ### 封面图质量要求
@@ -258,7 +255,7 @@ description: 微信公众号文章写作助手。自动识别文章类型，补�
 
 ### 插图生成工具（统一入口）
 
-> ImageGen 不可用时，全部走本地工具，不依赖任何外部付费绘图服务。
+> 全部走本地工具 + Unsplash 找图，不依赖 ImageGen 或任何外部付费绘图服务。
 
 ```
 脚本：skills/article/scripts/gen_illustration.py（全部本地 Python，零外部依赖服务）
@@ -279,8 +276,8 @@ description: 微信公众号文章写作助手。自动识别文章类型，补�
   → 用 ego-browser 访问系统，截取真实页面
 
 路径 B：设计图生成（无可访问系统时）
-  → 用 AI 绘图工具生成架构图、流程图、对比图、示意图
-  → 或用 draw.io / Excalidraw / Figma 设计
+  → 用 gen_illustration.py 生成架构图、流程图、对比图、示意图、数据图
+  → 需要真实照片时用 fetch 走 Unsplash
 ```
 
 ### 路径 A：系统真实截图
@@ -364,7 +361,7 @@ description: 微信公众号文章写作助手。自动识别文章类型，补�
 
 **封面图和文中配图必须真实生成，禁止用文字占位符糊弄。完成判定：**
 
-- 封面图：必须**实际生成图片文件**并回传路径（`/tmp/wechat-article-covers/{主题}-cover.png`），在阶段 8 步骤 4 真正上传到编辑器封面位置。生成方式：Python 脚本 `gen_illustration.py cover` / Unsplash `fetch` /（如可用）ImageGen。**只写"建议生成封面图"或"封面图见 xxx.png"不算完成。**
+- 封面图：必须**实际生成图片文件**并回传路径（`/tmp/wechat-article-covers/{主题}-cover.png`），在阶段 8 步骤 4 真正上传到编辑器封面位置。生成方式：Python 脚本 `gen_illustration.py cover` / Unsplash `fetch`。**只写"建议生成封面图"或"封面图见 xxx.png"不算完成。**
 - 文中配图：
   - 路径 A（系统截图）：必须**实际用 ego-browser 截到图**并保存到 `/tmp/wechat-article-screenshots/`，数量达到该类型最少要求。
   - 路径 B（设计图）：必须**实际生成图片文件**（Python 脚本 / matplotlib / Unsplash 下载），不能是 `[此处插入图片]` 或 `【配图 x：xxx.png】` 这类文字。
