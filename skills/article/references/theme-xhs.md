@@ -59,8 +59,42 @@
 - 数据图/对比图宽高比建议 4:3 或 1:1（竖版信息流更协调）
 
 ## 发布红线
-1. 发布入口：小红书创作者中心 `https://creator.xiaohongshu.com/publish/publish?source=official`（上传图片 → 填标题 → 填正文 → 发布/存草稿）
-2. 正文是 **textarea/input 纯文本**，不是 contenteditable——用键盘输入或 value 设置，**不要尝试 innerHTML**
-3. 发布前自检：标题字数（≤20）、正文字数（≤1000）、图片已全部上传、标签 3-8 个
-4. 优先「存草稿」让用户确认后再发布，除非用户明确说直接发
-5. 无敏感词自检能力——政治/医疗/金融诱导类措辞主动规避
+
+> 以下流程基于 ego-browser 实测（2026-10-30），操作前先确认浏览器已登录小红书（发布页若 302 到 `/login` 需先扫码登录，登录态存在浏览器 profile 不随会话丢失）。
+
+### 发布入口
+`https://creator.xiaohongshu.com/publish/publish?source=official`
+- 页面**默认停在「上传视频」tab**，必须切到「上传图文」才能发图文笔记
+
+### ego-browser 实操步骤（实测可用）
+```
+1. 导航：page.goto(发布页URL, {timeout:30000})，waitForTimeout 6000 等登录态生效
+2. 切图文：页面默认是视频 tab。用 JS 直接点击绕过 span 拦截：
+     page.evaluate(() => {
+       const s = [...document.querySelectorAll('span')].find(e=>e.textContent.trim()==='上传图文'
+                 && e.getBoundingClientRect().width>0);
+       (s.closest('[role="tab"]') || s).click();
+     });
+   ⚠️ 不要用 page.click('@3')(被 span 拦截 pointer events)、不要 text="上传图文"(匹配 3 个重复元素 timeout)
+3. 上传图：图文模式下出现 input[type=file][accept=".jpg,.jpeg,.png,.webp"][multiple=true]
+     page.setInputFiles('input[type="file"]', [封面, 对比图, 数据图...])  // 一次传多张
+4. 填标题/正文：⚠️ 不是 textarea！是 contenteditable div（placeholder 提示"填写标题""输入正文"）
+     - 定位：page.evaluate 找 [contenteditable="true"] 中 placeholder 含"标题"/"正文"的
+     - 填入：page.keyboard 或 evaluate 给 innerText 赋值后再 dispatch input 事件
+       （小红书编辑器监听 input，直接改 innerText 不触发需手动 dispatchEvent）
+5. 存草稿/发布：按钮文案"存草稿"。同样用 evaluate 找 button[文本含"草稿"] 点
+   ⚠️ 优先存草稿让用户确认，除非用户明确说直接发
+```
+
+### 关键坑（实测踩过）
+- **默认视频 tab**：不切换永远只有视频上传，没有图片入口
+- **切 tab 点击失败**：原生 click 被覆盖 span 拦截、`text=` 多元素歧义——只能用 JS `.click()`
+- **标题/正文是 contenteditable 非 textarea**：`page.fill` 对 contenteditable 无效，必须 evaluate 改 `innerText` + dispatch `input` 事件
+- **浏览器会话生命周期**：每个 ego 脚本是新进程，跨进程前一轮的 Page 标签可能失效（`page label not found`）——同一完整操作尽量在一个脚本内一次性完成，末尾再 `task.finish({keep:"all"})`
+
+### 发布前自检
+- 标题字数 ≤20（含 emoji），标题必带 1-2 emoji
+- 正文字数 ≤1000（含 emoji 和标签）
+- 图片已全部上传（首图=封面），数量 3-18 张
+- #话题标签 3-8 个，放正文末尾
+- 无敏感词自检能力——政治/医疗/金融诱导类措辞主动规避
