@@ -36,3 +36,6 @@
 - [article] keyboard.paste 走 macOS 原生 cmd+v，浏览器非 OS 前台时静默失败，脚本前先 osascript 置前台；发表类按钮禁 JS click，按全文本精确匹配+坐标点击
 - [通用] bash 变量名后紧跟全角字符被吞进变量名，一律 `${var}`；成功返回 list 的 API 对它调 .get 会崩
 - [通用] 分发链四端（claude/qoder/cursor/trae）+ 全局副本各走各的命令，漏一端就分叉；改完源立即 commit 防工作区被外部恢复
+- [article] 免费按关键词找真实配图的图源已全死（source.unsplash 废弃/loremflickr 死），fetch 只剩 picsum 随机图；技术文正解=gen_illustration 自绘示意图为主
+- [article] Pillow 画 ✗/✓ 在 PingFang 下是豆腐块，用 ×/√；cover 布局尺寸勿写死横版值，竖版（小红书 1242x1660）会溢出，字号/色块按画布自适应
+- [article] 小红书正文不支持 HTML/CSS，是纯文本 textarea，禁 innerHTML；标题≤20 字、正文≤1000 字、封面 3:4 大字
