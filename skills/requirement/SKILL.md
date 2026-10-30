@@ -249,7 +249,7 @@ bash yunxiao_query.sh by-test-date 2026-08-05
    ```
 3. codegraph 无结果时降级到 cwork-code：
    ```bash
-   cd $HOME/Study/cwork/skills/code/scripts
+   cd $CWORK_HOME/skills/code/scripts
    bash code_query.sh search <关键字>
    ```
 4. 定位到具体文件后，读取关键代码片段，理解实现逻辑

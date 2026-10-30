@@ -61,7 +61,7 @@ git push origin "$branch"
 ## 服务工程路径（按需）
 
 多服务提交时，各服务工程路径**以 `workflow-state.json` 的 `main_dir`/`deps` 为准**（init 已写入）。
-若 workflow-state 缺失某服务路径（独立模式补提依赖工程、或路径失效），按需 Read `$HOME/Study/cwork/.services-map.md` 兜底定位（含路径+领域+下游依赖，本机隐藏不入库）。不需要则不读。
+若 workflow-state 缺失某服务路径（独立模式补提依赖工程、或路径失效），按需先 Bash `printf "%s/.services-map.md\n" "$CWORK_HOME"` 展开绝对路径后再 Read 兜底定位（含路径+领域+下游依赖，本机隐藏不入库）。不需要则不读。
 
 ## 独立执行模式（不依赖 workflow-state）
 
