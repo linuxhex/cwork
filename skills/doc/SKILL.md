@@ -457,7 +457,6 @@ codegraph impact <改动符号>             # 改动影响范围评估的实证�
 | 跨服务调用，强调时序/消息往返 | **时序图**（首选） | mermaid `sequenceDiagram` |
 | 跨服务调用，强调各服务职责边界 | **泳道图** | mermaid `flowchart LR` + `subgraph` 每服务一泳道 |
 | 单服务内业务分支/状态流转 | **流程图** | mermaid `flowchart TD` |
-| 平台不渲染 mermaid（纯文本评审） | ASCII 兜底 | 见模板「ASCII 兜底」节 |
 
 **① 时序图（mermaid `sequenceDiagram`，跨服务调用首选）**：从 Feign/Dubbo/HTTP/MQ 调用链生成。硬规则：`autonumber` 必加（评审时按序号讨论）；`participant` 顺序 = 调用方在上、被调方居中、DB/MQ 等数据层在下；同步调用 `->>` 实线、异步/MQ `--)` 虚线；`activate/deactivate` 圈生命周期；**分支/降级/重试用 `alt`/`opt`/`loop`/`critical` 块表达，不许拉平成直线**；关键前提/副作用用 `Note over`：
 
@@ -490,7 +489,7 @@ sequenceDiagram
 
 要点：每个 `alt` 的分支条件写在块头（`保分查询成功` / `失败/超时(500ms)`）；异步消息必须用虚线；`Note over` 只写关键约束不写废话。
 
-**② 泳道图（mermaid `flowchart LR` + `subgraph`，强调服务职责边界时用）**：每个服务一个 `subgraph`（即一条纵向泳道），节点放对应泳道内，跨泳道边即跨服务调用，**边上必须带 `|调用内容(方式)|` 标注**：
+**② 泳道图（mermaid `flowchart LR` + `subgraph`，强调服务职责边界时用）**：每个服务一个 `subgraph`（即一条纵向泳道），节点放对应泳道内，跨泳道边即跨服务调用，**边上必须带 `|"调用内容(方式)"|` 标注**：
 
 ```mermaid
 flowchart LR
@@ -510,11 +509,11 @@ flowchart LR
         Q[[RocketMQ]]
     end
     A -->|GET /insurance/price| B
-    B -->|保分查询(直连RPC)| D
+    B -->|"保分查询(直连RPC)"| D
     D --- E
     B -->|查券| F
     A -->|POST /order| C
-    C -.->|订单消息(异步)| Q
+    C -.->|"订单消息(异步)"| Q
 ```
 
 要点：泳道从左到右按调用方向排（入口→网关/聚合→下游→数据层）；数据库 `[( )]`、MQ `[[ ]]`、异步 `-.->`；一个节点只属于一个泳道（跨泳道节点说明服务职责没拆清，先梳理再画）。
@@ -534,7 +533,7 @@ flowchart TD
     J -->|失败/超时| K[标记任务失败<br/>通知用户重试]
 ```
 
-**ASCII 兜底（仅当平台不渲染 mermaid 时用）**：画**带框线箭头的真图**（服务框横排 + 生命线 + 消息箭头，禁止 `[节点]--标签-->[节点]` 文字线式）；每框等宽、全角按 2 格计宽、箭头贴框边、画完自查对齐；分支条件写在箭头上方，降级/异步用 `┄` 虚线。样例与对齐规则见 `tech-design-template.md`「ASCII 兜底」节。
+**图一律 mermaid 真图**：禁止 ASCII 字符画（CJK 错位难维护）和 `[节点]--标签-->[节点]` 文字线式；CodeUp/语雀/钉钉文档等评审平台均可直接渲染 mermaid。
 
 **生成方式**：
 1. 从 Controller 类入口开始，追踪方法调用链
