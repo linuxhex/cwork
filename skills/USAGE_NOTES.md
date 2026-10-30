@@ -38,5 +38,5 @@
 - [通用] 分发链四端（claude/qoder/cursor/trae）+ 全局副本各走各的命令，漏一端就分叉；改完源立即 commit 防工作区被外部恢复
 - [article] 免费按关键词找真实配图的图源已全死（source.unsplash 废弃/loremflickr 死），fetch 只剩 picsum 随机图；技术文正解=gen_illustration 自绘示意图为主
 - [article] Pillow 画 ✗/✓ 在 PingFang 下是豆腐块，用 ×/√；cover 布局尺寸勿写死横版值，竖版（小红书 1242x1660）会溢出，字号/色块按画布自适应
-- [article] 小红书：标题是普通 input（page.fill）、正文是 tiptap（click+insertText）；「暂存离开」仅浏览器本地不同步 App，要 App 可见必须点「发布」；发布按钮在 <xhs-publish-btn> shadow closed，只能坐标点（左暂存566,706／右发布793,706）；切tab/上传/填写/点击必须同一 ego 脚本完成
+- [article] 小红书：标题是普通 input（page.fill）、正文是 tiptap（click+insertText）；「暂存离开」仅浏览器本地不同步 App，要 App 可见必须点「发布」；发布按钮优先 snapshot 找 button[ref]+text"发布"再  点（坐标793,706仅兜底）；成功看 URL publish/success 或「发布成功」；切tab/上传/填写/点击必须同一 ego 脚本完成
 - [article] 小红书默认停在「上传视频」tab，须 JS click「上传图文」；上传图后底部按钮才出现；# 触发话题下拉需 Escape；ref 跨脚本过期，每轮先 snapshot

@@ -606,7 +606,7 @@ description: 公众号/小红书文章写作助手。先确认发布平台（默
 
 ## 阶段 8：写入编辑器
 
-> **小红书平台**（不影响下方公众号路线）：强制 Read `references/theme-xhs.md`「发布红线」。目标 `https://creator.xiaohongshu.com/publish/publish?source=official`。流程：切「上传图文」→ 上传图 → 标题（普通 input）→ 正文（tiptap：click + insertText，# 后 Escape）→ **右侧预览自检** → 默认坐标点「发布」(793,706)；仅用户明确要求才点「暂存离开」(566,706)。按钮在 `<xhs-publish-btn>` shadow DOM，**不能**用 button 文案查找。**硬约束**：切 tab/上传/填写/自检/发布必须在**同一个 ego 脚本**内完成。步骤 0：顶部「草稿箱(N)」查同主题草稿。以下为公众号路线：
+> **小红书平台**（不影响下方公众号路线）：强制 Read `references/theme-xhs.md`「发布红线」。目标 `https://creator.xiaohongshu.com/publish/publish?source=official`。流程：切「上传图文」→ 上传图 → 标题（普通 input）→ 正文（tiptap：click + insertText，# 后 Escape）→ **右侧预览自检** → 默认发布（snapshot 找 `button[ref]`+`text "发布"` 点；坐标 793,706 仅兜底）；仅用户明确要求才暂存离开。成功判定：URL 含 `publish/success` 或出现「发布成功」。**硬约束**：切 tab/上传/填写/自检/发布必须在**同一个 ego 脚本**内完成。步骤 0：顶部「草稿箱(N)」查同主题草稿。以下为公众号路线：
 
 ### 写入流程
 

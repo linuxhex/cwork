@@ -67,10 +67,11 @@
 | 「发布」 | 小红书账号云端 | ✅ 同步到 App | ✅ |
 
 **硬规则（默认直接发布）**：
-1. **默认走「发布」**：内容写完 → 右侧笔记预览自检一遍（标题/正文/图/标签）→ 无误后点「发布」（坐标 793,706），同步到账号/App/公域。
-2. **仅当用户明确说「先存草稿 / 别发 / 暂存」时**才点「暂存离开」（566,706），并口头告知「App 看不到，只在电脑浏览器草稿箱」。
+1. **默认走「发布」**：内容写完 → 右侧笔记预览自检一遍（标题/正文/图/标签）→ 无误后点「发布」，同步到账号/App/公域。
+2. **仅当用户明确说「先存草稿 / 别发 / 暂存」时**才点「暂存离开」，并口头告知「App 看不到，只在电脑浏览器草稿箱」。
 3. 禁止默认暂存再声称完成；禁止跳过自检直接发。
-4. 草稿箱提示文案实测为：「草稿存储于当前使用的浏览器本地，在清除浏览器数据时会被删除」。
+4. **发布成功判定**：URL 含 `publish/success`，或页面出现「发布成功」——二者之一即可结案；不要只看按钮有没有点到。
+5. 草稿箱提示文案实测为：「草稿存储于当前使用的浏览器本地，在清除浏览器数据时会被删除」。
 
 ### 发布入口
 `https://creator.xiaohongshu.com/publish/publish?source=official`
@@ -128,11 +129,25 @@ if ((await page.url()).includes("/login")) {
     await page.keyboard.press("Escape");
   }
 
-  // 6) 自检右侧预览后发布（默认）：按钮在 <xhs-publish-btn>（shadow closed），只能坐标点
-  //    区域约 x=339~1019, y=661~751；左1/3=暂存离开(566,706)，右1/3=发布(793,706)
-  //    默认发布；仅用户明确说「先存草稿」才点暂存离开
-  await page.mouse.click(793, 706, { label: "发布" });
-  await page.waitForTimeout(3000);
+  // 6) 自检右侧预览后发布（默认）
+  //    优先：本轮 snapshot 找 button[ref] 且下一行 text "发布"（排除「发布笔记」「定时发布」）
+  //    兜底：<xhs-publish-btn> 区域右 1/3 坐标点击（约 793,706）；暂存离开用左 1/3（约 566,706）
+  const snap2 = await page.snapshot({ scope: "full_page" });
+  const ls = snap2.split("\n");
+  let publishRef = null, draftRef = null;
+  for (let i = 0; i < ls.length - 1; i++) {
+    const m = ls[i].match(/button \[ref=(\d+)/);
+    if (!m) continue;
+    if (/text "发布"/.test(ls[i + 1])) publishRef = m[1];
+    if (/text "暂存离开"/.test(ls[i + 1])) draftRef = m[1];
+  }
+  if (publishRef) await page.click("@" + publishRef, { label: "发布" });
+  else await page.mouse.click(793, 706, { label: "发布兜底坐标" });
+  await page.waitForTimeout(4000);
+  // 7) 成功判定
+  const ok = (await page.url()).includes("publish/success")
+    || /发布成功/.test(await page.evaluate(() => document.body.innerText));
+  console.log("发布结果:", ok);
   await page.screenshot({ path: "/tmp/xhs-article/result.png" });
   await task.finish({ keep: ["p1"] });
 }
@@ -146,7 +161,7 @@ if ((await page.url()).includes("/login")) {
 | 图片上传 | `input[type=file][accept*=jpg][multiple]` | `setInputFiles`（一次多张） |
 | 标题 | `input[placeholder="填写标题会有更多赞哦"]` | `page.fill` |
 | 正文 | tiptap `contenteditable` / snapshot `textfield` | click 聚焦 + `keyboard.insertText` |
-| 暂存离开 / 发布 | `<xhs-publish-btn>` shadow closed | **坐标点击**，不要找 button 文案 |
+| 暂存离开 / 发布 | snapshot 里 `button [ref=N]` + 下一行 `text "发布"`/`"暂存离开"`；宿主是 `<xhs-publish-btn>` | **优先 `@ref` 点击**；ref 拿不到再用坐标（发布约 793,706 / 暂存约 566,706） |
 | 草稿箱入口 | 顶部「草稿箱(N)」 | 暂存后会自动弹出；也可从此入口回看 |
 
 ### 关键坑（三轮实测）
@@ -155,7 +170,7 @@ if ((await page.url()).includes("/login")) {
 - **标题是普通 input**：`page.fill` 可用；旧文档误写 contenteditable
 - **正文是 tiptap**：click + `insertText`，无需 dispatch input
 - **# 触发话题下拉**：输完按 Escape，否则遮住底部按钮
-- **存草稿/发布在 shadow DOM**：`<xhs-publish-btn>` closed，ref/CSS/JS `querySelector('button')` 都找不到——**只能坐标点**
+- **发布按钮**：宿主 `<xhs-publish-btn>` 的 light DOM/`querySelector('button')` 常为空，但 **ego snapshot 能扫到** `button [ref]` + `text "发布"`——优先 `@ref` 点；点不到再用坐标兜底。成功看 URL `publish/success` 或文案「发布成功」
 - **上传后按钮才出现**：没上传图时底部没有「暂存离开/发布」
 - **ref 跨脚本过期**：每轮脚本内先 snapshot 取新 ref
 - **ego 会话**：同一写入动作一个脚本做完；跨进程用 `claimTaskSpace` + `tabs()`，managed 用 `task.page(label)`，untracked 才 `adopt`
