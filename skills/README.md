@@ -1,780 +1,140 @@
 # cwork 技能体系
 
-多工程微服务开发工作流，基于 superpowers-zh 的 writing-plans 和 executing-plans，用逻辑推演替代单元测试。
+多工程微服务开发工作流：对话式需求分析 → 计划与审查 → 推演收敛；排查优先用日志/数据/配置/监控证据。常规实现以逻辑推演为主，**bug 修复强制回归测试**。
 
 ---
 
-## 一、概述
+## 一、技能一览
 
-### 核心原则
+### 主流程
 
-| 原则 | 说明 |
+| 技能 | 作用 |
 |------|------|
-| 需求分析对话式 | 逐步提问，获得批准后才执行 |
-| 编写计划规范化 | 参考 superpowers-zh writing-plans |
-| 执行计划严格化 | 参考 superpowers-zh executing-plans |
-| 推演收敛自动化 | 逻辑推演替代测试，自动发现问题修复 |
-| 多工程并行化 | 每个依赖工程开独立 agent |
-
-### 技能结构
-
-```
-cwork-init       → 初始化工作区
-cwork-implement  → 需求分析 + 编写计划 + 方案审查 + 执行计划 + 推演收敛 + 编译/构建检查 + 前端设计辅助
-cwork-do         → 自主工作流（目标确认 → 迭代循环[执行→部署→实测→收敛评估] → 收敛提交）
-cwork-test       → 页面自动化测试（Web: ego-browser / 小程序: miniprogram-automator，前端新页面/核心交互时经用户确认触发）
-cwork-commit     → 提交所有工程
-cwork-deploy     → Jenkins + 云效构建部署触发
-cwork-doc        → 生成技术方案文档（两种模式：已有需求文档 / 对话式需求分析）
-cwork-bug        → 快速修复bug（对话式，5阶段：代码分析→问题咨询→问题定位→修复代码→推演验证）
-cwork-log        → 日志与链路分析（SLS 日志 + ARMS 链路，查接口流量/上下游/P99/耗时点，排查问题）
-cwork-data       → 数仓数据查询（Doris 只读 SQL，查业务数据/表结构/指标，排查时数据佐证）
-cwork-config     → Nacos 配置只读查询（多环境配置内容/清单/差异，排查时核对配置真值）
-cwork-graf       → Grafana 监控只读查询（K8S/应用/JVM/数据库/业务面板，排查时指标佐证）
-cwork-code       → 代码仓库只读查询 + clone/pull（CodeUp 主平台 + GitLab fallback，codegraph 索引优先）
-cwork-requirement → 云效需求只读查询（需求列表/详情/深度分析）
-cwork-image      → 本地工程/jar 打 Docker 镜像 + push registry + 服务端拉起
-cwork-article    → 微信公众号文章写作（封面图 + 排版 + 写入编辑器，按类型调用人格 skill）
-cwork-tech-writer → 科技技术分享高手人格（技术布道者口吻，由 article 调用）
-cwork-wuxia-writer → 金庸式武侠写作人格（章回体半文半白，由 article 调用）
-```
-
----
-
-## 二、完整流程
-
-```
-┌─────────────────────────────────────────────────────┐
-│  /cwork-init                                        │
-├─────────────────────────────────────────────────────┤
-│  问题1: 需求名称是什么？                              │
-│  → 用户回答                                         │
-│  问题2: 分支名称是什么？                             │
-│  → 用户回答                                         │
-│  问题3: 依赖工程目录名有哪些？                        │
-│  → 用户回答                                         │
-│                                                     │
-│  执行：                                             │
-│  ├─ 查找工程完整路径                                 │
-│  ├─ 校验所有工程                                    │
-│  ├─ 切换分支                                        │
-│  └─ 写 workflow-state.json                          │
-└─────────────────────────────────────────────────────┘
-                         │
-                         ▼ 自动
-┌─────────────────────────────────────────────────────┐
-│  /cwork-implement                                   │
-├─────────────────────────────────────────────────────┤
-│  第一步：需求分析（对话式，逐步提问）                  │
-│  ├─ 探索项目上下文                                   │
-│  ├─ 提出澄清问题（每次一个）                          │
-│  ├─ 提出 2-3 种方案                                  │
-│  ├─ 展示设计，获得批准                               │
-│  └─ 记录分析结果                                    │
-│                                                     │
-│  第二步：编写计划（参考 writing-plans）               │
-│  ├─ 列出文件结构                                    │
-│  ├─ 拆分小步骤任务                                  │
-│  ├─ 编写任务代码                                    │
-│  └─ 自检计划完整性                                  │
-│                                                     │
-│  第三步：方案审查（业务/技术/可行性/安全四维推演）      │
-│  ├─ 加载并审查计划                                   │
-│  ├─ 主 agent 处理主工程                              │
-│  ├─ agent-A 处理 user-service                       │
-│  ├─ agent-B 处理 order-service                      │
-│  └─ 每个工程独立记录视角                              │
-│                                                     │
-│  第四步：执行计划（多 agent 并行）                     │
-│  第五步：推演收敛（逻辑推演替代测试）                  │
-│  第六步：编译/构建检查                                  │
-│  ├─ Round 1: 推演 → 发现问题 → 修复                  │
-│  ├─ Round 2: 推演 → 发现问题 → 修复                  │
-│  └─ Round N: 推演 → 无问题 → 收敛                    │
-└─────────────────────────────────────────────────────┘
-                         │
-                         ▼ 自动（有前端改动时）
-┌─────────────────────────────────────────────────────┐
-│  /cwork-test                                        │
-├─────────────────────────────────────────────────────┤
-│  第一步：环境准备                                     │
-│  ├─ 启动开发服务器                                    │
-│  ├─ 识别项目类型（Web: ego-browser / 小程序: automator）│
-│  └─ 确认页面可访问                                    │
-│                                                     │
-│  第二步：测试规划                                     │
-│  ├─ 从需求文档提取测试场景                             │
-│  ├─ 生成自然语言测试步骤                               │
-│  └─ 用户确认测试场景                                  │
-│                                                     │
-│  第三步：测试执行                                     │
-│  ├─ web-run.cjs / mini-run.cjs 执行器跑 plan.json      │
-│  ├─ 逐步验证预期结果                                  │
-│  └─ 失败时自动诊断并重试                              │
-│                                                     │
-│  第四步：结果报告                                     │
-│  ├─ 生成 test-report.md                              │
-│  └─ P0 全通过 → 询问用户确认后进入 cwork-commit       │
-└─────────────────────────────────────────────────────┘
-                         │
-                         ▼ 自动
-┌─────────────────────────────────────────────────────┐
-│  /cwork-commit                                      │
-├─────────────────────────────────────────────────────┤
-│  ├─ 检查 workflow-state                             │
-│  ├─ 检查分支一致性                                   │
-│  ├─ 提交所有工程（src/ 代码 + 三文档）                │
-│  └─ 更新状态为 done                                  │
-└─────────────────────────────────────────────────────┘
-                         │
-                         ▼
-                      完成
-```
-
----
-
-## 三、技能详解
-
-### 3.1 cwork-init
-
-**作用**：初始化工作区，切换分支，建立文档目录。
-
-**对话流程**：
-
-```
-问题1: 需求名称是什么？
-回答: 用户导出
-
-问题2: 分支名称是什么？（格式 {type}/{YYYYMMDD}_{description}，如 feature/20260928_user_export）
-回答: feature/20260928_user_export
-
-问题3: 依赖工程目录名有哪些？
-回答: user-service,order-service
-```
-
-**执行内容**：
-1. 从当前目录向上查找依赖工程完整路径
-2. 校验所有工程是否为 git 仓库
-3. git stash 备份本地改动（不强制丢弃）
-4. 切换或创建 feature 分支（upstream 防护：只能是 origin/<同名分支>）
-5. 写 workflow-state.json
-
----
-
-### 3.2 cwork-implement
-
-**作用**：需求分析 + 编写计划 + 方案审查 + 执行计划 + 推演收敛 + 编译/构建检查（六阶段，详述见 `implement/phases.md`）。
-
-#### 第一步：需求分析（对话式）
-
-**检查清单**：
-
-1. 探索项目上下文 — 检查文件、文档、最近的 commit
-2. 提供视觉伴侣（如果涉及视觉问题）
-3. 提出澄清问题 — 每次一个
-4. 提出 2-3 种方案 — 附带权衡分析
-5. 展示设计 — 分节展示，获得批准
-6. 记录分析结果
-
-**核心原则**：
-
-- **每次一个问题** — 不要同时抛出多个问题
-- **优先选择题** — 比开放式问题更容易回答
-- **探索替代方案** — 始终提出 2-3 种方案
-- **增量验证** — 展示设计，获得批准后再继续
-
-#### 第二步：编写计划（参考 superpowers-zh writing-plans）
-
-**完整参考**：`skills/implement/phases.md`（阶段 2 编写计划）
-
-编写全面的实现计划，记录工程师需要知道的一切：
-
-**注意**：不需要编写测试用例，测试由后续的逻辑推演替代。
-
-**文件结构**：
-
-```markdown
-**文件：**
-- 创建：`src/controller/ExportController.java`
-- 修改：`src/service/UserService.java:45-67`
-```
-
-**任务结构**：
-
-```markdown
-### 任务 N：[组件名称]
-
-**文件：**
-- 创建：`exact/path/to/file.py`
-- 修改：`exact/path/to/existing.py:123-145`
-
-- [ ] **步骤 1：实现代码**
-
-```python
-def function(input):
-    return expected
-```
-
-- [ ] **步骤 2：Commit**
-
-```bash
-git add src/path/file.py
-git commit -m "feat: add specific feature"
-```
-```
-
-**禁止占位符**：
-- 不能写"待定"、"TODO"、"后续实现"
-- 不能写"添加适当的错误处理"等模糊描述
-
-#### 第三步：方案审查（四维推演）
-
-对计划做业务/技术/可行性/安全四维审查，重点覆盖性能与安全并发设计，发现问题回改计划。详述见 `implement/phases.md`（阶段 3）。
-
-#### 第四步：执行计划（多 agent 并行）
-
-**完整参考**：`skills/implement/phases.md`（阶段 4）
-
-**注意**：不需要运行测试验证，测试由后续的逻辑推演替代。
-
-**流程**：
-
-1. **加载并审查计划**
-   - 读取计划文件
-   - 批判性审查——识别问题或疑虑
-   - 有疑虑则向用户提出
-
-2. **执行任务（多 agent 并行）**
-
-```
-主工程：主 agent 直接处理
-
-依赖工程：每个依赖工程开一个独立 agent
-- agent-A 处理 user-service
-- agent-B 处理 order-service
-- 并行执行，互不干扰
-```
-
-3. **每个任务的节奏**
-   - 标记为进行中
-   - 理解目标
-   - 执行实现（严格按照计划步骤）
-   - 提交变更
-   - 标记为已完成
-
-#### 第五步：推演收敛（逻辑推演替代测试，≥2 轮，27 项检查清单）
-
-用逻辑推演替代单元测试，自动发现问题并修复。
-
-**推演循环**：
-
-```
-round = 1
-while round <= 5:
-    推演检查：
-    - 主路径闭环？
-    - 异常处理完整？
-    - 契约一致？（跨工程）
-    - 边界条件覆盖？
-    - 并发防重？
-    - 数据一致性？
-    
-    if 发现问题:
-        记录问题到 changes.md
-        修复问题
-        round += 1
-    elif 上轮也无问题:
-        break  # 收敛
-    else:
-        round += 1
-```
-
-**推演覆盖面**：
-
-| 检查项 | 说明 |
-|--------|------|
-| 主路径闭环 | 正常流程是否完整执行 |
-| 异常处理 | 超时、失败、重试是否处理 |
-| 契约一致 | 跨工程接口字段是否匹配 |
-| 边界条件 | 空数据、大数据量、特殊字符等 |
-| 并发防重 | 重复请求是否防重 |
-| 数据一致性 | 跨工程数据是否一致 |
-
----
-
-### 3.3 cwork-commit
-
-**作用**：自动提交所有工程。
-
-**执行内容**：
-1. 检查 workflow-state 是否为 commit
-2. 检查所有工程分支是否一致
-3. 生成 commit message
-4. 提交所有工程（`src/` 代码改动 + analysis.md、changes.md、plan.md）
-5. 更新状态为 done
-
----
-
-### 3.4 cwork-doc
-
-**作用**：根据代码改动生成技术方案文档（两种模式）。
-
-**模式一：已有需求文档**
-- 适用场景：已完成需求分析，有 analysis.md、plan.md、changes.md
-- 执行内容：读取需求文档 + 分析代码改动 → 生成技术方案文档
-- 特点：不改动代码，只生成文档
-
-**模式二：对话式需求分析**
-- 适用场景：没有需求文档，需要从代码出发分析需求
-- 执行内容：对话式聊需求（参考 cwork-implement）→ 生成技术方案文档
-- 特点：不改动代码，只生成文档
-
-**核心原则**：
-- 自动提取接口定义、数据模型
-- 按标准格式生成技术方案
-- **不改动代码，只生成文档**
-
-**技术方案文档结构**：需求说明 → 详细设计（功能设计 + 交互接口 + 数据模型）→ 改动影响范围评估 → 稳定性设计（灰度降级 + 监控告警 + 防资损）→ 其他 checkList
-
-**使用示例**：
-```bash
-/cwork-doc
-
-请选择模式：
-1. 已有需求文档 - 基于已有的 analysis.md、plan.md、changes.md 生成技术方案
-2. 对话式需求分析 - 从代码出发，对话式分析需求并生成技术方案
-
-请输入 1 或 2：
-```
-
----
-
-### 3.5 cwork-bug
-
-**作用**：快速修复 bug，流程简短高效。
-
-**执行流程**（5 阶段，对话式逐阶段推进）：
-1. 代码分析：分析当前代码，理解上下文
-2. 问题咨询：对话式了解问题现状和期望结果
-3. 问题定位：定位 bug 根因，提出修复方案
-4. 修复代码：修复 bug，同步编写注释
-5. 推演验证：逻辑推演验证修复正确性 + 编译检查
-
-**核心原则**：
-- 流程简短，快速定位修复
-- 对话式，逐步深入
-- 实际代码优先（注释和文档是次要的）
-- 修复时同步编写注释（从业务角度说明）
-
-**使用示例**：
-```bash
-/cwork-bug
-```
-
-**交互示例**：
-```
-问题现象是什么？
-> 用户登录时报空指针异常
-
-期望结果是什么？
-> 登录成功，返回用户信息和token
-
-问题发生的场景/条件？
-> 只有新用户第一次登录时出现
-```
-
----
-
-### 3.6 cwork-log
-
-**作用**：日志与链路分析，对话式查 SLS 日志 + ARMS 链路，排查线上问题。
-
-**能力**：
-- 查接口流量/性能（有没有流量、QPS、平均耗时、错误率，来自 ARMS 指标接口）
-- 还原调用链路（上下游服务、耗时点，来自 ARMS GetTrace 的 span 树）
-- 查/搜 SLS 日志（关键字排查）
-- 从当前工程代码出发，提取接口/类名/关键字搜日志，综合链路排查问题
-
-**数据源**：阿里云 SLS（日志）+ ARMS（链路/指标），脚本内置 HMAC 签名，直接 curl 调用。密钥配置在 `scripts/.config.local.sh`（本工程内，已 gitignore，复制自 `config.example.sh`），可用 `ALIBABA_CLOUD_ACCESS_KEY_ID/SECRET` 环境变量覆盖。
-
-**脚本**（`skills/log/scripts/`）：
-- `sls_query.sh` — SLS list/logs/count
-- `arms_apps.sh` — 列 ARMS 应用拿 pid
-- `arms_traces.sh` — 接口性能（appstat.incall 精确 + trace 聚合 P99）
-- `arms_trace.sh` — 单条链路 span 树
-
-**logstore 映射**（固化，不每次 `list` 再挑）：
-- `all` — 绝大多数业务日志，**默认查这里**
-- `device-*` — 运营桩；`device-ykcoms` — 运维桩
-- `ctp-*` — 车队日志
-
-**代码工作区 + 服务地图**（主动读代码的前提；**服务地图为本地隐藏配置，不入库，按需加载**）：
-- 代码根目录 `$CODE_WORKSPACE`；最近需求工程从 `.services-map.md` 读取
-- 服务地图 `$CWORK_HOME/.services-map.md`（服务→路径→领域边界→下游依赖），定位服务目录的第一手依据（cwork 各技能按需共用；读代码确认的真实依赖可回写，见文件头部「自更新机制」）
-
-**使用示例**（主动排查：读代码+搜日志+分析，决策点才对话）：
-```bash
-/cwork-log 查 order-prod 最近15分钟 /xxx 接口耗时
-
-阶段 1：探查代码 + 锁定目标（读 .services-map.md/工程代码提取线索；服务歧义/方向不明才问一句）
-阶段 2：查询与分析（arms_apps.sh 拿 pid 唯一命中直接用 → arms_traces.sh/arms_trace.sh/sls_query.sh）
-  → 指出耗时点/异常点（带 span/日志证据）
-阶段 3：结论输出（汇总上下游、P99、耗时点、根因建议）
-```
-自己能定的（环境/时间/日志库默认、代码线索、定位工程、发查询）直接做；只在服务歧义、排查方向等决策点简短问一句。
-
-**核心原则**：
-- 主动排查为主：能从代码/服务地图推断的直接查；只在决策点（服务歧义、排查方向）简短对话
-- 默认 `all` 日志库，桩/车队按映射选，不每次 `list`
-- pid 唯一命中直接用，多命中默认第 1 个
-- 接口性能用指标精确值，耗时点用链路 span 树，根因带日志/链路证据
-- 不臆造数据，查询无结果就如实说
-
-**注意**：cwork-log 是独立工具（和 bug/doc 同级），不进 init→implement→commit 自动衔接链。随安装发布需在 `bin/cwork.js` 的白名单加 `'log'`。
-
----
-
-### 3.7 cwork-data
-
-**作用**：数仓数据查询，对话式查 Doris 数仓跑只读 SQL，查业务数据/表结构/指标/数据量，排查问题时用数据佐证根因。
-
-**能力**：
-- 查业务数据（订单状态/金额/库存/数据量，DWD 宽表优先）
-- 查表结构/分区键/索引（DESC / SHOW CREATE TABLE）
-- 查数据量（count，不拉明细）
-- 大结果集异步导出 OSS
-- 自带 SQL 前置校验：分区过滤 / 关键词反引号 / 只读 / 日期≤3月 / ODS·JDBC 替代表建议
-
-**数据源**：内部 query-server 服务（Doris 数仓），`mcp_client.py` 经 HTTP JSON-RPC 直连（**不依赖 Claude MCP 注册**），凭证 `scripts/mcp-client/.mcp_config.json`（本工程内，已 gitignore）。
-
-**脚本**（`skills/data/scripts/mcp-client/`）：
-- `mcp_client.py` — 统一入口（setup-check / query / count / show-create / export-async / export-status）
-- `precheck_sql.py` — SQL 前置校验
-
-**使用示例**：
-```bash
-/cwork-data 查订单 OMJF-xxx 的结算金额（internal.dwd.dwd_order_settle_model）
-阶段1：选表 + 确认分区键（show-create）
-阶段2：mcp_client.py query 跑 SQL（自带 precheck）
-阶段3：数据 ↔ 问题对应，下结论
-```
-
-**核心原则**：
-- 强制只读（SELECT/SHOW/DESC/EXPLAIN），永不写库
-- 必须命中真实分区键，日期范围≤3个月，关键词字段加反引号
-- 默认展示前 10 行；大结果集先 count 分级，>1000 走异步导出
-- 不臆造数据，查询无结果如实说
-
-**注意**：cwork-data 是独立工具（和 log/bug/doc/config 同级），不进主流程衔接链。可被 cwork-log/bug 联动调起（查数据佐证）。需在 `bin/cwork.js` 白名单加 `'data'`。
-
----
-
-### 3.8 cwork-config
-
-**作用**：Nacos 配置只读查询，对话式查多环境(dev/test/uat/prod)的 Nacos 配置内容/清单/差异，排查问题时核对某服务某环境的配置真值。
-
-**能力**：
-- 取配置内容（按 dataId + group）
-- 列命名空间下配置清单
-- 模糊搜（匹配 dataId / group）
-- 多环境配置对比（diff）
-
-**数据源**：阿里云 MSE Nacos，`nacos_query.sh` 经 Nacos OpenAPI + Spas AK/SK 签名（HmacSHA1，python3 算 + curl 发）直连。凭证 `scripts/.config.local.sh`（本工程内，已 gitignore，从 devops 工程 `NacosConfig.java` 拷贝）。
-
-**脚本**（`skills/config/scripts/`）：
-- `nacos_query.sh` — 主脚本（get / list / search / diff）
-- `_common.sh` — Spas 签名 + 只读 `nacos_call` 封装
-- `config.example.sh` → `.config.local.sh` — 多环境凭证模板（NONPROD / PROD 两组）
-
-**多环境映射**：`dev/opendev/test/uat` → 非生产集群；`prod` → 生产集群（独立凭证）。env 用简写，脚本内部映射 namespace。
-
-**使用示例**：
-```bash
-/cwork-config 查 order-service 在 test 环境的配置
-阶段1：定 env + dataId（不知先 search）
-阶段2：nacos_query.sh get / list / diff（纯 GET）
-阶段3：配置真值 ↔ 现象对应，下结论
-```
-
-**核心原则**：
-- ⚠️ **绝对只读（仅 GET），永不写**——代码结构上不存在写路径；即使用户要求写也拒绝（写走 devops 工程受控路径）
-- prod 只查不改
-- env 用简写（dev/test/uat/prod/opendev）
-- 不臆造配置，查不到如实说
-
-**注意**：cwork-config 是独立工具（和 log/bug/doc/data 同级），不进主流程衔接链。可被 cwork-log 联动调起（核对配置真值）。需在 `bin/cwork.js` 白名单加 `'config'`。
-
----
-
-### 3.9 cwork-deploy
-
-**作用**：Jenkins + 云效构建部署触发，通过 curl 直连 Jenkins REST API 或云效 AppStack OpenAPI，触发服务构建和部署。
-
-**双平台支持**：
-- **云效（yunxiao）**（默认）：大部分服务走云效 AppStack OpenAPI
-- **Jenkins**：`platform=jenkins` 明确标记的服务走 Jenkins REST API（如 device-hubble-server）
-- **平台路由**：`service-map.json` 中 `platform` 字段决定走哪个平台
-
-**脚本调用**：
-```bash
-cd scripts
-# 完整部署（构建 + 等待 + 部署，自动路由平台）
-bash deploy.sh deploy <appName> <env> <branch>
-# 仅触发构建
-bash deploy.sh build <appName> <branch>
-# 仅触发部署（需先构建）
-bash deploy.sh execute <appName> <env> <branch>
-# 列出可用服务
-bash deploy.sh list [关键字]
-```
-
-**使用示例**：
-```bash
-/cwork-deploy 部署 order-server 到 test 环境
-
-阶段 1：定位目标（服务名 + 环境 + 分支 + 平台）
-阶段 2：触发构建部署（自动路由 Jenkins 或云效）
-阶段 3：结果输出（构建号 + 部署状态 + 控制台链接）
-```
-
-**核心原则**：
-- 自己能定的直接做（服务定位、环境/分支默认值、平台识别）
-- 决策点才问（服务歧义、环境确认）
-- 直接走 API，不走 devops 中间服务
-- 不臆造结果，API 返回错误如实说
-
-**注意**：cwork-deploy 是独立工具（和 log/bug/doc 同级），不进主流程衔接链。可被 cwork-do 调起。需在 `bin/cwork.js` 白名单加 `'deploy'`。
-
----
-
-### 3.10 cwork-do
-
-**作用**：目标驱动的自主工作流。先固化目标验收标准，再迭代循环「执行 → 部署 → 实测验证 → 收敛评估」不断逼近目标，**测试结果 + 理论评估双证据收敛后才提交**。
-
-**编排的技能**：
-1. **cwork-implement / cwork-bug** — 执行（实现需求/修复 bug，产出理论评估：推演结论）
-2. **cwork-deploy** — 部署服务（当前分支）
-3. **cwork-test** — 实测验证（前端改动：页面自动化测试）
-4. **cwork-log** — 实测验证（启动/接口日志）+ 失败排查取证
-5. **cwork-data** — 实测佐证（必要时核对业务数据）
-6. **cwork-commit** — 收敛后统一提交
-
-**执行流程**（4 阶段 + 迭代循环，目标驱动收敛式）：
-
-```
-阶段 1：目标确认（深度追问）
-├─ 工作类型？（新需求/修复 bug）
-├─ 工作内容？（需求 ID/问题现象）
-├─ 部署环境？（test/uat/prod）
-├─ 涉及服务？
-├─ 目标验收标准（固化收敛锚点，用户确认）
-└─ 最终确认
-
-阶段 2：迭代循环（×N 轮，直到收敛或停止）
-├─ 执行 → cwork-implement / cwork-bug（产出改动+理论评估）
-├─ 部署验证 → cwork-deploy + cwork-log 启动验证
-├─ 实测验证 → cwork-test / cwork-log / cwork-data（分层）
-└─ 收敛评估 → 双证据对照验收标准
-    ├─ 收敛 → 阶段 3
-    └─ 未收敛 → 差距分析 → 下一轮修正
-
-阶段 3：收敛收口（cwork-commit 提交）
-阶段 4：结果输出（目标达成度 + 迭代演进）
-
-⚠️ 停止条件：收敛是唯一正常出口；10 轮保底 + 发散检测提前停止
-```
-
-**使用示例**：
-```bash
-/cwork-do
-```
-
-**交互示例**：
-```
-工作类型？
-> 1. 实现新需求
-
-需求内容？
-> 需求 ID：OMJF-12345
-> 需求简述：新增导出功能
-
-部署环境？
-> 1. test
-
-涉及服务？
-> order-server
-
-验收标准（AI 整理，用户确认）：
-1. 导出页面可见且可操作（实测：cwork-test）
-2. 10 万行以内导出成功下载（实测：cwork-test 大数据量场景）
-3. 导出接口无异常日志（实测：cwork-log）
-> 确认，无需调整
-
-是否正确？
-> y
-
-[迭代循环：执行 → 部署 → 实测 → 收敛评估] × N → 收敛 → cwork-commit 提交
-```
-
-**核心原则**：
-- 目标驱动：验收标准是收敛锚点，做没做完由「离目标多近」决定，不由流程走到哪一步决定
-- 双证据收敛：每条验收条目同时拿到实测证据（测试/日志/数据）+ 理论推演结论，缺一不可
-- 禁止篡改锚点：验收标准确认后不得擅自降低/删除来「制造收敛」，变更必须回用户确认
-- 深度追问确认：像审讯一样追问用户，确认清楚所有信息后再开始工作
-- 部署必须使用当前 git 分支；部署前必须确认环境；确认前不动手
-- **停止护栏**：10 轮保底 + 发散检测（连续 2 轮同类失败无进展/目标不可达/需用户决策）提前停止，输出未收敛报告等人工介入
-
-**注意**：cwork-do 是自主工作流，串联多个技能完成完整工作流程。收敛后自动调用 cwork-commit 提交（不询问），未收敛停止时不提交。
-
-### 3.11 cwork-graf
-
-**作用**：Grafana 监控数据只读查询，对话式查 K8S 节点/容器/应用/JVM/数据库/业务监控面板，给排查问题/性能分析提供指标佐证。
-
-**能力**：64 个仪表盘按 8 大类检索（K8S 基础设施/应用监控/服务异常/系统运维/财务/营销/平台服务 + 2 个废弃类）、面板数据查询、PromQL 即时查询、节点总览。常用面板 UID 固化（JVM 大盘 `UOJjh1SMz`、Container `DZ8sNXDZk`、DB `Y6gogUmVk`）。
-
-**脚本**：`graf_query.sh`（list / categories / panels / query / instant / search / overview）。
-
-**核心原则**：绝对只读；不臆造数据，查询无结果如实说；可被 cwork-log/bug/do 联动调起（指标佐证）。
-
----
-
-### 3.12 cwork-code
-
-**作用**：代码仓库只读查询 + clone/pull + codegraph 触发，CodeUp（主平台）+ GitLab（前端 fallback）双平台。
-
-**能力**：查项目列表/详情/分支（API 绝对只读，只封装 GET）、clone/pull 代码到本地工作区，clone/pull 后自动 codegraph 增量同步 + 回写 `.services-map.md`。
-
-**脚本**：`code_query.sh`（list / search / project / branches / clone / pull / sync）。
-
-**核心原则**：clone 禁 `--single-branch`；pull 显式指定当前分支（git-guard）；优先 codegraph 索引查代码，API 只在图谱没有时兜底。
-
----
-
-### 3.13 cwork-requirement
-
-**作用**：云效需求只读查询，对话式查云效 Projex 项目需求列表/详情/按日期筛选，实现前核对需求范围、关联变更。
-
-**能力**：需求列表/详情/关键字搜索/按计划上线·提测时间筛选；阶段 4 需求深度分析（业务变化点 + 代码定位 ASCII 图，codegraph 自动找受影响代码）。
-
-**脚本**：`yunxiao_query.sh`（list / detail / search / by-date / by-test-date）。
-
-**核心原则**：绝对只读；凭证唯一判据=直接试跑 `yunxiao_query.sh list 3`，禁止预检文件路径下结论。
-
----
-
-### 3.14 cwork-image
-
-**作用**：本地工程/jar 打包 Docker 镜像 + push registry + 服务端拉起运行，与 cwork-deploy（正式 CI/CD）互补的快速链路。
-
-**能力**：自动探测工程类型（jar/Node/前端等）并生成 Dockerfile、构建镜像、push 内部 registry、服务端拉起（k8s/docker/compose）。
-
-**脚本**：`image.sh`。
-
-**核心原则**：快速验证链路，正式发布走 cwork-deploy；完成后可用 cwork-log 验证启动。
-
----
-
-### 3.15 cwork-article
-
-**作用**：微信公众号文章写作助手，自动识别文章类型（技术分享/开源项目介绍/产品推广/教程指南）。
-
-**流程**：类型识别 → 信息追问（开源地址/GitHub star/系统地址等）→ 标题生成 → ImageGen 强制封面图（2560x1080）→ 配图（系统真实截图或设计图，禁纯文字）→ 排版（CSS 模板）→ ego-browser 写入公众号编辑器存草稿。
-
-**核心原则**：配图禁纯文字段落截图；发表类按钮禁 JS click（按全文本精确匹配+坐标点击）；写入编辑器后存草稿不直接发表。
-
----
-
-## 四、文件结构
-
-### 产物
-
-每个工程维护 3-4 个文件：
-
-```
-主工程:
-docs/requirements/{requirement_key}/
-├── workflow-state.json  # 内部状态，不提交
-├── analysis.md          # 需求分析文档，提交
-├── changes.md           # 改动简述，提交
-└── plan.md              # 实现计划，提交
-
-依赖工程:
-docs/requirements/{requirement_key}/
-├── workflow-state.json  # 内部状态，不提交
-├── analysis.md          # 需求分析文档（从本工程视角），提交
-└── changes.md           # 改动简述，提交
-```
-
-### .gitignore 配置
-
-```
-docs/requirements/*/workflow-state.json
-```
-
----
-
-## 五、参考文件
-
-| 文件 | 说明 |
+| `cwork-init` | 多服务工程定位、分支切换、服务地图 |
+| `cwork-implement` | 需求分析 + 编写计划 + 方案审查 + 执行 + 推演收敛 |
+| `cwork-test` | 页面自动化测试（Web / 小程序），**条件触发，非必经** |
+| `cwork-commit` | 推演收敛后提交（关联模式不确认） |
+| `cwork-do` | 目标驱动自主循环：实现/修复 → 部署 → 实测 → 双证据收敛后提交 |
+| `cwork-bug` | 快速修 bug：定位（可联动 log/data/graf）→ 修复 → 推演验证 → 回归测试 |
+
+### 排查与工程辅助
+
+| 技能 | 作用 |
 |------|------|
-| `implement/visual-companion.md` | 视觉伴侣（用于需求分析阶段） |
+| `cwork-log` | SLS 日志 + ARMS 链路 |
+| `cwork-data` | Doris 数仓只读 SQL |
+| `cwork-config` | 多环境 Nacos 配置只读 |
+| `cwork-graf` | Grafana 监控只读 |
+| `cwork-code` | CodeUp 主平台 + GitLab fallback；codegraph 优先 |
+| `cwork-requirement` | 云效需求只读 |
+| `cwork-deploy` | Jenkins / 云效构建部署（服务映射见 `deploy/scripts/service-map.json`） |
+| `cwork-doc` | 技术方案文档（ASCII 带框流程图 / 泳道交互图，**不用 mermaid**） |
+| `cwork-image` | 本地打镜像 + push + 拉起 |
+| `cwork-article` | 公众号 / 小红书写作与发布 |
+| `cwork-tech-writer` / `cwork-wuxia-writer` | article 内部人格（不单独当主流程） |
+| `cwork-common` | `code-style.md` + `git-guard.md` 共享规范 |
 
 ---
 
-## 六、对比
+## 二、流程衔接（硬约束）
 
-| 项目 | 传统方式 | cwork 方式 |
-|------|---------|-----------|
-| 需求分析 | 无结构 | 对话式，决策树逐层追问 |
-| 编写计划 | 无 | 规范化计划（禁占位符） |
-| 方案审查 | 无 | 业务/技术/可行性/安全四维推演 |
-| 执行计划 | 直接写代码 | 多 agent 并行，每工程独立视角 |
-| 测试验证 | 运行单元测试 | 逻辑推演替代（bug 修复场景除外，须回归测试） |
-| 推演收敛 | 无 | ≥2 轮自动循环 + 27 项检查清单 |
-| 提交内容 | 全部文件 | src/ 代码改动 + analysis.md + changes.md + plan.md |
-| 多工程处理 | 手动切换目录 | 多 agent 并行 |
+```
+cwork-init → cwork-implement → cwork-test? → cwork-commit
+                 ↑                    │
+            （可选）            三条件全满足才进 test
+                              否则直接 commit
 
----
-
-## 七、注意事项
-
-1. **init 用 git stash 备份本地改动**：不强制丢弃，但建议执行前先提交或暂存
-
-2. **分支命名严格**：`{type}/{YYYYMMDD}_{description}` 格式（type=feature/hotfix/bugfix/refactor），upstream 只能是 origin/<同名分支>
-
-3. **需求分析必须完成**：未获得用户批准前不会执行实现
-
-4. **计划禁止占位符**：不能写"待定"、"TODO"等
-
-5. **每个工程独立记录**：从各自视角记录分析和改动
-
-6. **workflow-state.json 不提交**：加入 .gitignore
-
-7. **常规实现用逻辑推演替代测试**：bug 修复场景例外，必须编写回归测试并跑通
-
----
-
-## 八、安装
-
-```bash
-# 复制到 qoder skills 目录
-cp -r cwork/skills/* ~/.qoder/skills/
+cwork-bug → cwork-commit
+cwork-do  ：目标确认 → 循环[执行→部署→实测→收敛评估] → 收敛后 commit
 ```
 
-安装后可用：
-- `/cwork-init`
-- `/cwork-implement`
-- `/cwork-do`
-- `/cwork-test`
-- `/cwork-commit`
-- `/cwork-deploy`
-- `/cwork-doc`
-- `/cwork-bug`
-- `/cwork-log`
-- `/cwork-data`
-- `/cwork-config`
-- `/cwork-graf`
-- `/cwork-code`
-- `/cwork-requirement`
-- `/cwork-image`
-- `/cwork-article`
+**test 触发（全部满足）**：
+1. 有前端改动（`.vue/.jsx/.tsx/.svelte/.html/.js/.ts` 等）
+2. 涉及新页面或核心交互（非纯样式/纯字段/纯接口对接）
+3. 用户确认要跑（回车跳过=不跑）
+
+**提交时机两条路径（有意区分）**：
+- `implement → commit`：编译/构建通过即可提交
+- `cwork-do`：必须实测 + 理论评估双证据逼近验收标准后才提交
+
+禁止让用户手动发起下一 skill；阶段结束自动衔接。
+
+---
+
+## 三、核心机制
+
+### 深度追问（对用户）
+
+用于 `implement` 需求分析、`bug` 定位：
+
+1. 一次只问一个  
+2. 每个问题带推荐答案；**能选项就选项（A/B/C）**  
+3. 事实自己查，决策归用户  
+4. 确认前不动手 / 不定位  
+5. **模糊→可判定**：禁止停在「请具体点」，追成可判定选项  
+6. **矛盾当场挑明**：与已确认结论冲突时立刻二选一，不带着错共识继续  
+
+### 自问自答质询（对己）
+
+用于推演收敛、bug 推演验证、test：扮演质疑者，一次只质疑一个，事实自己查，形成共识再继续。
+
+### 路径约定（隐私 + 本机可用）
+
+- 服务地图等本机文件：先 Bash `printf '%s/.services-map.md\n' "$CWORK_HOME"` 展开，再 Read  
+- Shell 默认值可用 `$HOME/...`（shell 会展开）  
+- 禁止硬编码 `/Users/<username>/...` 入库  
+- 凭证：`*.local.sh` / `.mcp_config.json` 已 gitignore；IDE 安装靠 `CWORK_HOME` 回源读凭证  
+
+### 技术方案图（cwork-doc）
+
+- **一律 ASCII 带框图**（服务框 + 生命线 + 箭头），适配 MdServer 等不渲染 mermaid 的平台  
+- 禁止 mermaid；禁止 `[节点]--标签-->[节点]` 文字线式  
+- 对齐硬规则：等宽框、全角按 2 格、箭头贴框、画完自查  
+
+### 测试口径（有意区分）
+
+- **implement**：逻辑推演为主；核心流程改动才跑单测  
+- **bug**：修复必须写回归测试并跑通  
+
+---
+
+## 四、安装与同步
+
+源仓库改完技能后，在仓库根执行：
+
+```bash
+node bin/cwork.js
+```
+
+会同步到：
+
+- Claude Code：`CLAUDE.md` + `.cwork/refs/`（由 `AGENTS.md` 生成 CLAUDE 头）  
+- Cursor / Qoder 等安装目录（见脚本输出）  
+
+**注意**：改「对话语言 / 内部技能说明 / test 触发」等总述，改 **`AGENTS.md`**，不要只改 `CLAUDE.md`（下次同步会被覆盖）。
+
+---
+
+## 五、目录结构
+
+```
+skills/
+  <skill>/SKILL.md          # 技能主文档
+  <skill>/scripts/          # 可执行脚本（若有）
+  common/                   # code-style / git-guard
+  README.md                 # 本文件
+AGENTS.md                   # Claude/Cursor 总述源
+bin/cwork.js                # 安装与分发
+```
+
+按需加载参考文件（如 `implement/phases.md`、`doc/tech-design-template.md`）写在各 SKILL 内，不随主文档全量进上下文。
+
+---
+
+## 六、注意事项
+
+1. 排查优先证据：log → data/config/graf，禁止空猜  
+2. 拉分支/推送遵守 `common/git-guard.md`（禁止裸 push/pull，upstream 必须同名）  
+3. `cwork-doc` 出图前自查对齐；内网预览以 MdServer 为准  
+4. 凭证只落本机忽略文件，轮换后用环境变量或 `.config.local.sh` 注入  
+5. 改技能后：`node bin/cwork.js` 再提交，避免 agent 副本过期  
