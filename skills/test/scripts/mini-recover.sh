@@ -14,17 +14,52 @@
 #       端口默认 9420
 
 set -u
-CLI_PATH="/Applications/wechatwebdevtools.app/Contents/MacOS/cli"
 PORT="${2:-9420}"
 PROJECT_PATH="${1:-}"
+
+# 跨平台兼容层(os 判定 / python3 接管 / tmpdir)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+for _cc in "$SCRIPT_DIR/../../common/win-compat.sh" \
+           "$SCRIPT_DIR/../../cwork-common/win-compat.sh" \
+           "${CWORK_HOME:-}/skills/common/win-compat.sh"; do
+  [ -f "$_cc" ] && { . "$_cc"; break; }
+done
+unset _cc
+
+# 微信开发者工具 CLI：WECHAT_DEVTOOLS_CLI 优先，其余按平台候选（不再写死 macOS 路径）
+resolve_devtools_cli() {
+  local c
+  for c in "${WECHAT_DEVTOOLS_CLI:-}" \
+           "/Applications/wechatwebdevtools.app/Contents/MacOS/cli" \
+           "/c/Program Files (x86)/Tencent/微信web开发者工具/cli.bat" \
+           "/c/Program Files/Tencent/微信web开发者工具/cli.bat"; do
+    [ -n "$c" ] && [ -f "$c" ] && { printf '%s\n' "$c"; return 0; }
+  done
+  return 1
+}
+
+CLI_PATH="$(resolve_devtools_cli || true)"
+
+# 端口占用探测：POSIX 用 lsof，Windows/Git Bash 无 lsof 时回退 netstat
+port_listening() {
+  local port="$1"
+  if command -v lsof >/dev/null 2>&1; then
+    lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1
+    return $?
+  fi
+  netstat -ano 2>/dev/null | grep -E "[:.]${port}[[:space:]].*LISTEN" >/dev/null 2>&1
+}
 
 echo "═══════════════════════════════════════════════════════════"
 echo "【小程序自动化挂起恢复】端口 $PORT"
 echo "═══════════════════════════════════════════════════════════"
 
 # 1. 前置校验
-if [ ! -f "$CLI_PATH" ]; then
-  echo "❌ 未找到微信开发者工具 CLI：$CLI_PATH"
+if [ -z "$CLI_PATH" ] || [ ! -f "$CLI_PATH" ]; then
+  echo "❌ 未找到微信开发者工具 CLI（候选路径均不存在）"
+  echo "   请设置 WECHAT_DEVTOOLS_CLI 指向 CLI 可执行文件："
+  echo "     macOS   : /Applications/wechatwebdevtools.app/Contents/MacOS/cli"
+  echo "     Windows : \"C:\\Program Files (x86)\\Tencent\\微信web开发者工具\\cli.bat\""
   exit 1
 fi
 if [ -z "$PROJECT_PATH" ] || [ ! -f "$PROJECT_PATH/project.config.json" ]; then
@@ -36,14 +71,20 @@ fi
 echo "→ 退出微信开发者工具..."
 "$CLI_PATH" quit >/dev/null 2>&1
 sleep 3
-if pgrep -f "wechatwebdevtools" >/dev/null 2>&1; then
-  echo "→ 优雅退出未完成，强制结束进程..."
-  pkill -f "wechatwebdevtools" >/dev/null 2>&1
+# pgrep/pkill 是 procps 工具，Windows/Git Bash 默认没有；无则跳过，依赖 cli quit 生效
+if command -v pgrep >/dev/null 2>&1; then
+  if pgrep -f "wechatwebdevtools" >/dev/null 2>&1; then
+    echo "→ 优雅退出未完成，强制结束进程..."
+    pkill -f "wechatwebdevtools" >/dev/null 2>&1
+    sleep 2
+  fi
+  if pgrep -f "wechatwebdevtools" >/dev/null 2>&1; then
+    echo "❌ 开发者工具进程仍存活，请手动退出后重跑本脚本"
+    exit 1
+  fi
+else
+  echo "→ 当前环境无 pgrep（Windows/Git Bash），跳过进程存活检查"
   sleep 2
-fi
-if pgrep -f "wechatwebdevtools" >/dev/null 2>&1; then
-  echo "❌ 开发者工具进程仍存活，请手动退出后重跑本脚本"
-  exit 1
 fi
 
 # 3. 重新打开项目并开启自动化端口
@@ -60,7 +101,7 @@ echo "→ 开启自动化端口：$PORT"
 # 4. 轮询等待自动化端口就绪（最多约 30 秒）
 echo "→ 等待自动化端口就绪..."
 for _ in $(seq 1 15); do
-  if lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
+  if port_listening "$PORT"; then
     echo "✓ 恢复完成：自动化端口 $PORT 已就绪"
     echo ""
     echo "下一步（AI 执行）："

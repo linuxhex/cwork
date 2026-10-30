@@ -56,6 +56,7 @@
 'use strict';
 
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { execSync, spawn } = require('child_process');
 
@@ -68,15 +69,27 @@ function tmplSel(selector) {
 }
 
 // ── ego-browser 定位 ──
+// Windows 上 node 可能从 PowerShell/cmd 启动，`command -v` 是 bash 内建，拿不到就用 `where`
 function findEgoBrowser() {
+  const isWin = process.platform === 'win32';
   try {
-    const which = execSync('command -v ego-browser', { encoding: 'utf8' }).trim();
-    if (which) return which;
+    const probe = isWin ? 'where ego-browser' : 'command -v ego-browser';
+    const out = execSync(probe, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
+      .split(/\r?\n/)[0].trim();
+    if (out) return out;
   } catch (_) {}
   const candidates = [
-    path.join(require('os').homedir(), '.local/bin/ego-browser'),
+    path.join(os.homedir(), '.local', 'bin', 'ego-browser'),
     '/usr/local/bin/ego-browser',
   ];
+  if (isWin) {
+    const appData = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming');
+    // npm -g 在 Windows 下生成 .cmd 包装器
+    candidates.push(
+      path.join(appData, 'npm', 'ego-browser.cmd'),
+      path.join(appData, 'npm', 'ego-browser'),
+    );
+  }
   for (const c of candidates) {
     if (fs.existsSync(c)) return c;
   }
@@ -972,7 +985,7 @@ function validatePlan(plan) {
 async function main() {
   const args = process.argv.slice(2);
   const planFile = getArg(args, '--plan');
-  const ctxDir = getArg(args, '--ctx-dir') || '/tmp/cwork-web-test-ctx';
+  const ctxDir = getArg(args, '--ctx-dir') || path.join(os.tmpdir(), 'cwork-web-test-ctx');
   const outFile = getArg(args, '--out');
   const snapshotMode = args.includes('--snapshot');
   const snapshotUrl = getArg(args, '--url');

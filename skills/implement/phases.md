@@ -746,7 +746,7 @@ List<Order> orders = new ArrayList<>();
 
 ```bash
 # CODE_WORKSPACE 未设置时兜底默认工作区；禁止加 -q（-q 会吞掉"未初始化"报错，无输出导致误判未安装）
-codegraph sync "${CODE_WORKSPACE:-/Users/caomunian/Work/code-projects}"
+codegraph sync "${CODE_WORKSPACE:-$HOME/code-projects}"
 ```
 
 ---
@@ -932,12 +932,20 @@ for each 推演结论:
 ### Maven 检测
 
 ```bash
+MAVEN_CMD=""
 if command -v mvn &> /dev/null; then
     MAVEN_CMD="mvn"
-elif [ -x "/Applications/IntelliJ IDEA.app/Contents/plugins/maven/lib/maven3/bin/mvn" ]; then
-    MAVEN_CMD="/Applications/IntelliJ IDEA.app/Contents/plugins/maven/lib/maven3/bin/mvn"
+elif command -v mvn.cmd &> /dev/null; then
+    # Windows: Maven 发行包提供 mvn.cmd，Git Bash 里 command -v mvn 通常命中不到
+    MAVEN_CMD="mvn.cmd"
 else
-    MAVEN_CMD=""
+    # IDE 内置 Maven：按平台列举候选路径，命中即用
+    for _mvn in \
+        "/Applications/IntelliJ IDEA.app/Contents/plugins/maven/lib/maven3/bin/mvn" \
+        "/c/Program Files/JetBrains/IntelliJ IDEA/plugins/maven/lib/maven3/bin/mvn.cmd" \
+        "$LOCALAPPDATA/Programs/IntelliJ IDEA/plugins/maven/lib/maven3/bin/mvn.cmd"; do
+        [ -x "$_mvn" ] && { MAVEN_CMD="$_mvn"; break; }
+    done
 fi
 ```
 

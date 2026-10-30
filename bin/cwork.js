@@ -14,11 +14,15 @@
  *   node bin/cwork.js --sync-global --uninstall
  */
 
-import { readFileSync, writeFileSync, mkdirSync, cpSync, rmSync, existsSync, readdirSync, statSync, symlinkSync } from 'fs';
+import { readFileSync, writeFileSync, mkdirSync, cpSync, rmSync, existsSync, readdirSync, statSync, symlinkSync, copyFileSync } from 'fs';
 import { join, resolve, dirname, basename } from 'path';
 import { homedir } from 'os';
+import { fileURLToPath } from 'url';
 
-const ROOT = resolve(dirname(import.meta.url.replace('file://', '')), '..');
+// 必须用 fileURLToPath：Windows 下 import.meta.url 是 file:///C:/a/b.js，
+// 手写 replace('file://','') 会得到 /C:/a/b.js，再 resolve 成 C:\C:\a——路径直接报废
+// （顺带正确处理路径里的空格与 %20 转义）
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const SKILLS_DIR = join(ROOT, 'skills');
 const HOME = homedir();
 const PROJECT = process.cwd();
@@ -173,6 +177,25 @@ function copySkillFiltered(src, dest) {
   walk(src);
 }
 
+// 凭证投放：优先软链，软链失败退化为复制。
+// Windows 下创建符号链接需要开发者模式或管理员权限（否则 EPERM），
+// 只 try/catch 软链会让凭证静默缺失；退化为复制后，产物不再依赖 CWORK_HOME 回源。
+// 代价：复制是快照，改源仓库凭证后需重装才能生效（软链则是实时的）。
+function linkOrCopyCredential(src, dest) {
+  mkdirSync(dirname(dest), { recursive: true });
+  try {
+    symlinkSync(src, dest);
+    return 'link';
+  } catch (_) {
+    try {
+      copyFileSync(src, dest);
+      return 'copy';
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
 function installQoder() {
   console.log('\n📦 Qoder (~/.qoder/skills/)');
   const target = join(HOME, '.qoder', 'skills');
@@ -191,9 +214,7 @@ function installQoder() {
       const srcConfig = join(cworkHome, 'skills', skill, 'scripts', '.config.local.sh');
       const destConfig = join(dest, 'scripts', '.config.local.sh');
       if (existsSync(srcConfig) && !existsSync(destConfig)) {
-        try {
-          symlinkSync(srcConfig, destConfig);
-        } catch (_) { /* 软链失败不阻塞安装 */ }
+        linkOrCopyCredential(srcConfig, destConfig);
       }
     }
     log(skillName);
@@ -600,10 +621,7 @@ function syncClaudeGlobal() {
       const srcCred = join(credHome, 'skills', skill, credRel);
       const destCred = join(dest, credRel);
       if (existsSync(srcCred) && !existsSync(destCred)) {
-        try {
-          symlinkSync(srcCred, destCred);
-          globalSyncCredLinks++;
-        } catch (_) { /* 软链失败不阻塞，仍可走 CWORK_HOME fallback */ }
+        if (linkOrCopyCredential(srcCred, destCred)) globalSyncCredLinks++;
       }
     }
     log(skillName);

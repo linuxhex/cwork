@@ -22,6 +22,16 @@
 
 # 本地配置(基于本文件位置定位, 与调用者工作目录无关)
 _COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# 跨平台兼容层(python3 接管 / tmpdir / 路径转换)
+# 候选顺序: 源仓库 skills/common/ -> IDE 安装的 cwork-common/ -> $CWORK_HOME
+for _cwork_cc in "$_COMMON_DIR/../../common/win-compat.sh" \
+                  "$_COMMON_DIR/../../cwork-common/win-compat.sh" \
+                  "${CWORK_HOME:-}/skills/common/win-compat.sh"; do
+  if [ -f "$_cwork_cc" ]; then . "$_cwork_cc"; break; fi
+done
+unset _cwork_cc
+
 # shellcheck source=.config.local.sh
 if [ -f "$_COMMON_DIR/.config.local.sh" ]; then
   source "$_COMMON_DIR/.config.local.sh"

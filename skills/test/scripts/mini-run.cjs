@@ -52,11 +52,19 @@ const path = require('path');
 function loadAutomator() {
   const candidates = [];
   try { candidates.push(require.resolve('miniprogram-automator')); } catch (_) {}
+  const os = require('os');
   const npmRoots = [
     '/opt/homebrew/lib/node_modules',
     '/usr/local/lib/node_modules',
-    path.join(require('os').homedir(), '.npm-global/lib/node_modules'),
+    path.join(os.homedir(), '.npm-global/lib/node_modules'),
   ];
+  if (process.platform === 'win32') {
+    const appData = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming');
+    npmRoots.push(path.join(appData, 'npm', 'node_modules'));
+  }
+  if (process.env.NODE_PATH) {
+    npmRoots.push(...process.env.NODE_PATH.split(path.delimiter).filter(Boolean));
+  }
   for (const root of npmRoots) {
     candidates.push(path.join(root, 'miniprogram-automator'));
     candidates.push(path.join(root, 'weixin-devtools-mcp/node_modules/miniprogram-automator'));

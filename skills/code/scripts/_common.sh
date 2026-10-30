@@ -19,6 +19,16 @@
 # =============================================================================
 
 _COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# 跨平台兼容层(python3 接管 / tmpdir / 路径转换)
+# 候选顺序: 源仓库 skills/common/ -> IDE 安装的 cwork-common/ -> $CWORK_HOME
+for _cwork_cc in "$_COMMON_DIR/../../common/win-compat.sh" \
+                  "$_COMMON_DIR/../../cwork-common/win-compat.sh" \
+                  "${CWORK_HOME:-}/skills/common/win-compat.sh"; do
+  if [ -f "$_cwork_cc" ]; then . "$_cwork_cc"; break; fi
+done
+unset _cwork_cc
+
 # shellcheck source=.config.local.sh
 if [ -f "$_COMMON_DIR/.config.local.sh" ]; then
   source "$_COMMON_DIR/.config.local.sh"
@@ -64,7 +74,9 @@ if [[ "$CODEUP_ENABLED" != "true" && "$GITLAB_ENABLED" != "true" ]]; then
   fail "至少需要配置一个平台（CodeUp 或 GitLab）: 请执行 cp scripts/config.example.sh scripts/.config.local.sh 并填入凭证"
 fi
 
-CODE_WORKSPACE="${CODE_WORKSPACE:-/Users/caomunian/Work/code-projects}"
+# 代码工作区默认值: 显式 CODE_WORKSPACE > CWORK_WORKSPACE > ~/code-projects
+# (不再内建特定机器的绝对路径； Windows 下由 cwork_win_path 转成原生路径给 codegraph)
+CODE_WORKSPACE="${CODE_WORKSPACE:-${CWORK_WORKSPACE:-$HOME/code-projects}}"
 CODEGRAPH_PATH="${CODEGRAPH_PATH:-$CODE_WORKSPACE}"
 CODEGRAPH_BIN="${CODEGRAPH_BIN:-}"
 
@@ -203,6 +215,11 @@ get_clone_url() {
 trigger_codegraph_sync() {
   local sync_path="${1:-$CODEGRAPH_PATH}"
   local cg_bin="$CODEGRAPH_BIN"
+
+  # codegraph 是原生二进制，Git Bash 的 /c/... 路径它不认，转成 C:\...
+  if cwork_is_windows; then
+    sync_path="$(cwork_win_path "$sync_path")"
+  fi
 
   if [[ -z "$cg_bin" ]]; then
     cg_bin=$(command -v codegraph 2>/dev/null || true)

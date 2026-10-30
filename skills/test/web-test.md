@@ -111,7 +111,7 @@ Web 测试采用 **"AI 生成计划 → 执行器单遍执行 → AI 跑后判�
 | `node web-run.cjs --plan plan.json` | **完整流程（默认推荐）**：单遍执行——确定性断言直接判定，aiAssert 仅采集证据；跑完输出 AI_ASSERT_PENDING，AI 跑后判断合入 result.json |
 | `node web-run.cjs --snapshot --url <页面地址>` | **标准化采集**（观察类操作）：打开页面 + 接口拦截 + snapshotText + pageInfo + 截图 |
 
-通用参数：`--ctx-dir DIR`（aiAssert 上下文目录，默认 `/tmp/cwork-web-test-ctx`）、`--out FILE`（result.json 落点）、`--keep`（结束后移交任务空间保持登录态，人工核验用）。
+通用参数：`--ctx-dir DIR`（aiAssert 上下文目录，默认 `path.join(os.tmpdir(), 'cwork-web-test-ctx')`——Git Bash 下即 `/tmp/cwork-web-test-ctx`，Windows 下为 `%TEMP%\cwork-web-test-ctx`）、`--out FILE`（result.json 落点）、`--keep`（结束后移交任务空间保持登录态，人工核验用）。
 
 **输出文件落点规则**：
 
@@ -119,7 +119,7 @@ Web 测试采用 **"AI 生成计划 → 执行器单遍执行 → AI 跑后判�
 |------|------|
 | `result.json` | `--out` 指定；未指定时写 **plan.json 同目录** |
 | 失败截图 | result.json 同目录 `screenshots/fail-s{场景}-i{步骤}.png` |
-| aiAssert 上下文 | `--ctx-dir`（默认 /tmp/cwork-web-test-ctx），文件名 `s{场景}_i{步骤}.json` |
+| aiAssert 上下文 | `--ctx-dir`（默认 `<系统临时目录>/cwork-web-test-ctx`），文件名 `s{场景}_i{步骤}.json` |
 | AI 判断依据 | ctx-dir `s{场景}_i{步骤}.json`（截图+DOM 证据，AI 跑后读取） |
 | --snapshot 输出 | `--out` 指定；未指定时写 ctx-dir/snapshot.json + 同名 .png |
 

@@ -3,11 +3,20 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 
-# 使用 docker 完整路径，避免 source 时 PATH 问题
-DOCKER="${DOCKER:-$(which docker 2>/dev/null || echo /usr/local/bin/docker)}"
-KUBECTL="${KUBECTL:-$(which kubectl 2>/dev/null || echo /usr/local/bin/kubectl)}"
-SSH_BIN="${SSH_BIN:-$(which ssh 2>/dev/null || echo /usr/bin/ssh)}"
-GIT_BIN="${GIT_BIN:-$(which git 2>/dev/null || echo /usr/bin/git)}"
+# 跨平台兼容层(python3 接管 / tmpdir / 路径转换)
+# 候选顺序: 源仓库 skills/common/ -> IDE 安装的 cwork-common/ -> $CWORK_HOME
+for _cwork_cc in "$SCRIPT_DIR/../../common/win-compat.sh" \
+                  "$SCRIPT_DIR/../../cwork-common/win-compat.sh" \
+                  "${CWORK_HOME:-}/skills/common/win-compat.sh"; do
+  if [ -f "$_cwork_cc" ]; then . "$_cwork_cc"; break; fi
+done
+unset _cwork_cc
+
+# 工具定位: 用 command -v 统一探测（Windows 下是 docker.exe，不再假设 /usr/local/bin）
+DOCKER="${DOCKER:-$(command -v docker 2>/dev/null || echo docker)}"
+KUBECTL="${KUBECTL:-$(command -v kubectl 2>/dev/null || echo kubectl)}"
+SSH_BIN="${SSH_BIN:-$(command -v ssh 2>/dev/null || echo ssh)}"
+GIT_BIN="${GIT_BIN:-$(command -v git 2>/dev/null || echo git)}"
 
 # ── 加载凭证 ──
 load_config() {

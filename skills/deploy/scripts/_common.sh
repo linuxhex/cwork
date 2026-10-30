@@ -3,8 +3,17 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 
+# 跨平台兼容层(python3 接管 / tmpdir / 路径转换)
+# 候选顺序: 源仓库 skills/common/ -> IDE 安装的 cwork-common/ -> $CWORK_HOME
+for _cwork_cc in "$SCRIPT_DIR/../../common/win-compat.sh" \
+                  "$SCRIPT_DIR/../../cwork-common/win-compat.sh" \
+                  "${CWORK_HOME:-}/skills/common/win-compat.sh"; do
+  if [ -f "$_cwork_cc" ]; then . "$_cwork_cc"; break; fi
+done
+unset _cwork_cc
+
 # 使用 curl 完整路径，避免 source 时 PATH 问题
-CURL="${CURL:-$(which curl 2>/dev/null || echo /usr/bin/curl)}"
+CURL="${CURL:-$(command -v curl 2>/dev/null || echo curl)}"
 
 # ── 加载凭证 ──
 load_config() {

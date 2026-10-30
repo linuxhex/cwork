@@ -8,16 +8,17 @@
 
 ### 必须满足
 
-1. 微信开发者工具已安装（macOS: `/Applications/wechatwebdevtools.app`）
+1. 微信开发者工具已安装（macOS: `/Applications/wechatwebdevtools.app`；Windows: `C:\Program Files (x86)\Tencent\微信web开发者工具`）
 2. 项目有 `project.config.json`（含 appid）
 3. `miniprogram-automator` 已安装（`npm install -g miniprogram-automator` 或随 `weixin-devtools-mcp` 内嵌）
 
 ### 微信开发者工具 CLI
 
-CLI 路径（macOS 默认）：
+CLI 路径（按平台默认，可用环境变量 `WECHAT_DEVTOOLS_CLI` 覆盖）：
 
 ```
-/Applications/wechatwebdevtools.app/Contents/MacOS/cli
+macOS:   /Applications/wechatwebdevtools.app/Contents/MacOS/cli
+Windows: C:/Program Files (x86)/Tencent/微信web开发者工具/cli.bat
 ```
 
 核心命令：
@@ -32,7 +33,14 @@ CLI 路径（macOS 默认）：
 ### 自动检测
 
 ```bash
-CLI_PATH="/Applications/wechatwebdevtools.app/Contents/MacOS/cli"
+# 按平台取默认值，可用 WECHAT_DEVTOOLS_CLI 覆盖（与 mini-recover.sh 的 resolve_devtools_cli 保持一致）
+if [ -n "${WECHAT_DEVTOOLS_CLI:-}" ]; then
+    CLI_PATH="$WECHAT_DEVTOOLS_CLI"
+elif [ "$(uname -s)" = "Darwin" ]; then
+    CLI_PATH="/Applications/wechatwebdevtools.app/Contents/MacOS/cli"
+else
+    CLI_PATH="/c/Program Files (x86)/Tencent/微信web开发者工具/cli.bat"
+fi
 PROJECT_PATH=""  # 从 project.config.json 所在目录推断
 
 if [ ! -f "$CLI_PATH" ]; then

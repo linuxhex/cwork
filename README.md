@@ -97,6 +97,57 @@ node /path/to/cwork/bin/cwork.js --tool auto
 
 安装后技能名会加 `cwork-` 前缀，避免与已有 skills 冲突。卸载：`node bin/cwork.js --uninstall --tool <tool>`。
 
+### Windows 使用
+
+技能脚本是 POSIX bash（依赖 curl/sed/cygpath/heredoc），Windows 上统一由 **Git for Windows 自带的 bash** 当宿主。`bin/cwork.ps1` / `bin/cwork.cmd` 只是启动器，不重写任何技能逻辑，只做三件事：找到 bash、托管 `CWORK_HOME`、把参数原样透传。
+
+**前置依赖**
+
+| 依赖 | 说明 |
+|------|------|
+| Git for Windows | 必需，提供 bash/curl/sed/cygpath。`bash` 通常不在 PATH 上，启动器会依次从 `CWORK_BASH`、注册表、`git.exe` 所在目录、常见安装目录推导 |
+| Python 3 | 部分技能（日志签名、Nacos 签名、数据查询）用 `python3` 内联脚本 |
+| Node.js | 安装器 `bin/cwork.js` 与页面/小程序测试脚本 |
+
+**注意：Microsoft Store 版 `python3` 陷阱**。`%LOCALAPPDATA%\Microsoft\WindowsApps\python3.exe` 是 0 字节的应用执行别名，执行会弹商店。`skills/common/win-compat.sh` 会探测并跳过它，自动回退到 `python` / `py`，因此只要装了 python.org 的解释器即可，**无需修改任何技能脚本**。
+
+**安装与自检**
+
+```powershell
+# 安装（等同 node bin/cwork.js --tool auto）
+.\bin\cwork.cmd install --tool qoder
+
+# 环境诊断：bash / python / node / git / 技能目录 / 兼容层
+.\bin\cwork.cmd doctor
+```
+
+`cwork.cmd` 会带 `-ExecutionPolicy Bypass` 调起 `cwork.ps1`，**不需要**改全局执行策略。
+
+**运行技能脚本**
+
+```powershell
+.\bin\cwork.cmd log sls_query prod logs order-service "ERROR" 50
+.\bin\cwork.cmd config nacos_query test get application.yaml
+.\bin\cwork.cmd data mcp_client.py query --sql "select 1"
+.\bin\cwork.cmd <技能>            # 不带脚本名时列出该技能下可运行的脚本
+```
+
+**环境变量**
+
+| 变量 | 作用 |
+|------|------|
+| `CWORK_HOME` | cwork 源仓库根。未设置时启动器默认取本仓库；技能从该目录加载公共服务地图与凭证 |
+| `CWORK_BASH` | 指定 `bash.exe`（默认自动探测 Git for Windows） |
+| `CWORK_PYTHON` | 指定 Python 3 解释器（默认 `python` / `python3` / `py`） |
+| `CWORK_SKIP_PY_SHIM` | 设为 `1` 关闭 `python3` 接管（调试用） |
+
+**用法要点**
+
+- 参数原样透传，不做 shell 展开；含空格的值用双引号包住。
+- 盘符路径会自动把 `\` 转成 `/`（Git Bash 与 node 都能识别）。
+- 在 Git Bash 里可以绕开启动器直接跑脚本，例如 `bash skills/log/scripts/sls_query.sh prod list`。
+- 服务地图为本地隐藏配置，默认读 `$CWORK_HOME/.services-map.md`，未设置 `CWORK_HOME` 时回落到 `~/.services-map.md`。
+
 ## 它是怎么工作的
 
 ### 自主工作流（cwork-do）—— 核心亮点
