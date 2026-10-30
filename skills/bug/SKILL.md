@@ -340,20 +340,20 @@ description: 快速修复 bug。问题明确时直接修复，问题不明确时
    /cwork-log
    > 查车队活动服务日志
 
-   # 手动查（如需精确控制）：
+   # 手动查（如需精确控制；脚本在 cwork-log 技能目录，勿用相对 scripts/）：
    # 1. 拿 pid（先查 ARMS_PID_CACHE.md，索引失效才跑 arms_apps.sh）
-   bash scripts/arms_apps.sh cn-hangzhou "order"
+   bash "$CWORK_HOME/skills/log/scripts/arms_apps.sh" cn-hangzhou "order"
 
    # 2. 用 traceId 查链路
-   bash scripts/arms_trace.sh "<pid>" "<traceId>" <ts_ms>
+   bash "$CWORK_HOME/skills/log/scripts/arms_trace.sh" "<pid>" "<traceId>" <ts_ms>
 
    # 3. 或用接口关键字 + 时间窗查 SLS 日志
-   bash scripts/sls_query.sh <env> logs all "order/submit and ERROR" 100
+   bash "$CWORK_HOME/skills/log/scripts/sls_query.sh" <env> logs all "order/submit and ERROR" 100
    ```
 
    **联动原则**：cwork-bug 负责"定位问题并修复"，cwork-log 负责"深挖后端根因"。拿到后端日志证据（异常堆栈 + 文件:行号）后，回到代码定位修复。
 
-   > **注意**：调用 cwork-log 需阿里云密钥已配置（`scripts/.config.local.sh` 或环境变量），未配置时跳过后端日志查询，仅从代码层面分析。
+   > **注意**：调用 cwork-log 需阿里云密钥已配置（`$CWORK_HOME/skills/log/scripts/.config.local.sh` 或环境变量），未配置时跳过后端日志查询，仅从代码层面分析。
 
 **数据查询联动（cwork-data）** — 用数仓数据佐证 bug
 
@@ -372,11 +372,11 @@ bug 涉及具体业务数据？
 ```
 **调用示例**：
 ```bash
-cd skills/data/scripts/mcp-client
+cd "$CWORK_HOME/skills/data/scripts/mcp-client"
 python3 mcp_client.py query --sql "SELECT * FROM internal.dwd.dwd_order_settle_model WHERE dt='<日期>' AND <条件> LIMIT 10"
 ```
 **联动原则**：cwork-bug 管「定位并修复」，cwork-data 管「数据佐证」。拿到数据证据后回到代码定位修复。
-> **注意**：调用 cwork-data 需 `skills/data/scripts/mcp-client/.mcp_config.json` 已配置，未配置时仅从代码/日志层面分析。
+> **注意**：调用 cwork-data 需 `$CWORK_HOME/skills/data/scripts/mcp-client/.mcp_config.json` 已配置，未配置时仅从代码/日志层面分析。
 
 **监控查询联动（cwork-graf）** — 用监控指标佐证性能类 bug
 

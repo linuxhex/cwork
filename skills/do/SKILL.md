@@ -310,7 +310,7 @@ if 执行失败：
 ### 2.2 部署验证
 
 - **必须使用当前 git 分支**，部署到阶段 1 确认的环境，部署本轮改动的所有服务
-- 调用 cwork-deploy：`bash deploy.sh deploy <服务名> <环境> <当前分支>`
+- 调用 cwork-deploy：`bash "$CWORK_HOME/skills/deploy/scripts/deploy.sh" deploy <服务名> <环境> <当前分支>`
 - **部署后验证**（每轮必做，属实测证据的一部分）：调用 cwork-log 查最近 2 分钟启动日志——启动成功、无 ERROR
 
 **部署失败**：调用 cwork-log 查失败原因；代码问题 → 本轮内修复重部署（次数过多计为该轮失败）；环境/配置问题且自己修不了 → 计为该轮失败进差距分析。
@@ -448,14 +448,15 @@ if 执行失败：
 ### 调用示例
 
 ```bash
+# 脚本在 cwork-log 技能目录，勿用相对 scripts/
 # 查服务启动日志
-bash scripts/sls_query.sh <环境> logs all "<服务名>" 50 <from> <to>
+bash "$CWORK_HOME/skills/log/scripts/sls_query.sh" <环境> logs all "<服务名>" 50 <from> <to>
 
 # 查错误日志
-bash scripts/sls_query.sh <环境> logs all "<服务名> and ERROR" 50 <from> <to>
+bash "$CWORK_HOME/skills/log/scripts/sls_query.sh" <环境> logs all "<服务名> and ERROR" 50 <from> <to>
 
 # 查链路追踪
-bash scripts/arms_trace.sh "<pid>" "<traceId>" <ts_ms>
+bash "$CWORK_HOME/skills/log/scripts/arms_trace.sh" "<pid>" "<traceId>" <ts_ms>
 ```
 
 ---

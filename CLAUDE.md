@@ -14,13 +14,11 @@
 - cwork-commit — 提交代码
 
 ## 内部技能（不暴露）
-- cwork-brainstorming（由 implement 内部调用）
-- cwork-writing-plans（由 implement 内部调用）
-- cwork-executing-plans（由 implement 内部调用）
-- cwork-loop-refined（由 implement 内部调用）
 - cwork-tech-writer（由 article 内部调用：科技技术分享高手人格，技术布道者口吻）
 - cwork-wuxia-writer（由 article 内部调用：金庸式武侠写作人格，章回体半文半白）
 - cwork-common（共享规范文件目录，implement/bug 写代码时强制引用其中的 code-style.md 统一代码规范；**所有技能拉分支/推送时强制引用其中的 git-guard.md**：upstream 只能是 origin/<同名分支>、禁止裸 git push/pull、建分支后必须纠正并验证 upstream）
+
+> 说明：implement 的计划编写/执行参考全局 superpowers 的 brainstorming / writing-plans / executing-plans 技能（非 cwork 内置，cwork 不单独维护这三个副本）。
 
 ## 深度追问与自问自答机制说明
 cwork 内置了决策树式追问机制，分两种模式：
@@ -37,7 +35,7 @@ cwork 内置了决策树式追问机制，分两种模式：
 
 ## cwork-test 触发条件（implement 结束后评估）
 满足以下**全部**条件才进入 cwork-test，否则跳过直接进 commit：
-1. 有前端代码改动（新增/修改 .vue/.jsx/.tsx/.svelte 等前端文件）
+1. 有前端代码改动（新增/修改 .vue/.jsx/.tsx/.svelte/.html/.js/.ts 等前端文件）
 2. 改动涉及**新页面或核心交互流程**（非纯样式微调、非纯数据字段增删、非纯后端接口对接）
 3. 用户确认需要跑测试（简短询问，回车跳过=不跑）
 
@@ -82,5 +80,5 @@ cwork 内置了决策树式追问机制，分两种模式：
 
 ## 技能文件位置
 
-调用某个技能时，读取 `.cwork/refs/cwork-<name>/SKILL.md` 获取完整指令。
+调用某个技能时，读取 `.cwork/refs/cwork-<name>/SKILL.md` 获取完整指令（`bin/cwork.js` 安装时同步生成，gitignore 不入库）。若该路径不存在，回退读源仓库 `$CWORK_HOME/skills/<name>/SKILL.md`。
 <!-- cwork-skills:end -->

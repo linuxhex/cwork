@@ -450,63 +450,77 @@ codegraph impact <改动符号>             # 改动影响范围评估的实证�
 
 **从代码调用链自动生成图，替代手动写占位符。涉及流程必出流程图，涉及跨服务必出泳道图。**
 
-**① 服务交互泳道图（ASCII，跨服务调用首选）**：从 Feign/Dubbo/HTTP Client 调用关系生成，服务名放框内、箭头标调用内容、箭头旁括号补充调用方式/条件、右侧注释写调用方与场景：
+**图选型决策（先选对图再动手）**：
 
-```
-┌──────────┐      ┌─────────────┐
-│ 大数据服务 │      │   北保服     │
-│          │      │             │
-└────┬─────┘      └──────┬──────┘
-     │ 定期查询保分       │
-     │ (直连北保服)       │
-     │──────────────────>│
-     │                   │ 返回保分数据
-     │<──────────────────│
-     │                   │
-     │ 处理保分数据       │
-     │ (365日内退保→保分=0)│
-     │                   │
-     │ 提供保分查询接口    │  guan-zhong scene=1~5 按需调用
-```
+| 场景 | 图类型 | 语法 |
+|---|---|---|
+| 跨服务调用，强调时序/消息往返 | **时序图**（首选） | mermaid `sequenceDiagram` |
+| 跨服务调用，强调各服务职责边界 | **泳道图** | mermaid `flowchart LR` + `subgraph` 每服务一泳道 |
+| 单服务内业务分支/状态流转 | **流程图** | mermaid `flowchart TD` |
+| 平台不渲染 mermaid（纯文本评审） | ASCII 兜底 | 见模板「ASCII 兜底」节 |
 
-**② 业务流程图（ASCII，业务流程首选）**：从代码分支逻辑生成，判断节点单独成框写成问句、**每条分支线旁必须标条件**、异常/降级分支必须画出来：
+**① 时序图（mermaid `sequenceDiagram`，跨服务调用首选）**：从 Feign/Dubbo/HTTP/MQ 调用链生成。硬规则：`autonumber` 必加（评审时按序号讨论）；`participant` 顺序 = 调用方在上、被调方居中、DB/MQ 等数据层在下；同步调用 `->>` 实线、异步/MQ `--)` 虚线；`activate/deactivate` 圈生命周期；**分支/降级/重试用 `alt`/`opt`/`loop`/`critical` 块表达，不许拉平成直线**；关键前提/副作用用 `Note over`：
 
-```
-              ┌────────────────┐
-              │ 用户进入充电页  │
-              └───────┬────────┘
-                      │
-                      ▼
-            ┌────────────────────┐
-            │ 查询用户保分         │
-            │ (guan-zhong→大数据)  │
-            └─────────┬──────────┘
-                      │
-            ┌─────────┴──────────┐
-            │  保分查询成功？      │
-            └─────────┬──────────┘
-             成功 │        │ 失败/超时
-                  ▼        ▼
-      ┌────────────────┐  ┌──────────────────┐
-      │ 判断保分是否达标 │  │ 降级：按无保分处理 │
-      └───────┬────────┘  │ (不阻断主流程)     │
-              │           └─────────┬────────┘
-    ┌─────────┴─────────┐           │
-    │  保分 >= 阈值(80)？ │           │
-    └─────────┬─────────┘           │
-        是 │      │ 否               │
-           ▼      ▼                  │
-   ┌───────────┐ ┌───────────┐       │
-   │ 展示权益价 │ │ 展示原价   │<──────┘
-   └─────┬─────┘ └─────┬─────┘
-         └──────┬──────┘
-                ▼
-        ┌───────────────┐
-        │ 用户下单充电    │
-        └───────────────┘
+```mermaid
+sequenceDiagram
+    autonumber
+    participant App as 充电小程序
+    participant GW as guan-zhong服务
+    participant BD as 大数据服务
+    participant RMDB as MySQL
+
+    App->>GW: GET /insurance/price
+    activate GW
+    GW->>BD: 查询用户保分(直连RPC)
+    alt 保分查询成功
+        BD-->>GW: 保分=85
+        Note over GW,BD: 365日内退保→保分=0（大数据侧已处理）
+    else 失败/超时(500ms)
+        BD-->>GW: 降级：按无保分处理
+        Note over GW: 降级不阻断主流程，记监控打点
+    end
+    GW->>GW: 保分>=80 ? 权益价 : 原价
+    GW->>RMDB: SELECT 用户优惠券
+    RMDB-->>GW: 优惠券列表
+    GW-->>App: 价格(权益价/原价)
+    deactivate GW
+    App->>GW: POST /order（下单）
+    GW--)RMDB: 发送订单消息(异步)
 ```
 
-分支多到 ASCII 画不下时改用 mermaid `flowchart TD`，分支同样必须带 `|条件|` 标注：
+要点：每个 `alt` 的分支条件写在块头（`保分查询成功` / `失败/超时(500ms)`）；异步消息必须用虚线；`Note over` 只写关键约束不写废话。
+
+**② 泳道图（mermaid `flowchart LR` + `subgraph`，强调服务职责边界时用）**：每个服务一个 `subgraph`（即一条纵向泳道），节点放对应泳道内，跨泳道边即跨服务调用，**边上必须带 `|调用内容(方式)|` 标注**：
+
+```mermaid
+flowchart LR
+    subgraph APP[充电小程序]
+        A[充电页]
+    end
+    subgraph GW[guan-zhong服务]
+        B[价格计算]
+        C[下单接口]
+    end
+    subgraph BD[大数据服务]
+        D[保分查询RPC]
+        E[保分处理<br/>365日退保→0分]
+    end
+    subgraph DB[数据层]
+        F[(MySQL)]
+        Q[[RocketMQ]]
+    end
+    A -->|GET /insurance/price| B
+    B -->|保分查询(直连RPC)| D
+    D --- E
+    B -->|查券| F
+    A -->|POST /order| C
+    C -.->|订单消息(异步)| Q
+```
+
+要点：泳道从左到右按调用方向排（入口→网关/聚合→下游→数据层）；数据库 `[( )]`、MQ `[[ ]]`、异步 `-.->`；一个节点只属于一个泳道（跨泳道节点说明服务职责没拆清，先梳理再画）。
+
+**③ 业务流程图（mermaid `flowchart TD`，单服务分支逻辑）**：判断节点用 `{ }` 写成问句，**每条分支边必须带 `|条件|` 标注**，异常/降级/兜底分支不许省：
+
 ```mermaid
 flowchart TD
     A[收到导出请求] --> B{用户权限校验}
@@ -515,29 +529,20 @@ flowchart TD
     C --> E{数据量 > 10000?}
     E -->|是| F[异步导出] --> G[返回任务ID]
     E -->|否| H[同步导出] --> I[返回下载链接]
+    F --> J{轮询任务状态}
+    J -->|成功| I
+    J -->|失败/超时| K[标记任务失败<br/>通知用户重试]
 ```
 
-**③ 时序图（mermaid，服务内部调用链）**：从 Controller → Service → Mapper/Feign 调用链自动生成：
-```mermaid
-sequenceDiagram
-    Client->>ExportController: POST /api/export
-    ExportController->>ExportService: exportData(userId, params)
-    ExportService->>UserService: getUserData(userId)
-    UserService-->>ExportService: userInfo
-    ExportService->>OrderService: getOrderList(userId)
-    OrderService-->>ExportService: orderList
-    ExportService->>FileGenerator: generate(userInfo, orderList)
-    FileGenerator-->>ExportService: fileUrl
-    ExportService-->>ExportController: downloadUrl
-```
+**ASCII 兜底（仅当平台不渲染 mermaid 时用）**：判断/泳道用简化 ASCII，注意 CJK 全角字符会导致框线错位——框内文案尽量短、每框宽度按全角字符 2 格估、画完自查对齐；分支条件直接写在箭头旁。样例见 `tech-design-template.md`。
 
 **生成方式**：
 1. 从 Controller 类入口开始，追踪方法调用链
-2. 识别跨服务调用（Feign/Dubbo/HTTP Client）→ 抽成**服务交互泳道图**（① 样式）
-3. 识别分支逻辑（if/else、switch、状态判断、异常捕获/降级）→ 抽成**业务流程图**（② 样式），**每条分支必须标条件，catch/降级分支不能省**
-4. 识别数据库操作（Mapper/Repository）→ 标为数据层
-5. 识别 MQ 操作（RocketMQ/Kafka）→ 标为异步消息
-6. 输出图语法，嵌入技术方案文档；**不涉及流程/交互的不硬凑图**
+2. 识别跨服务调用（Feign/Dubbo/HTTP Client/MQ）→ 画**时序图**（①）或**泳道图**（②）：有消息往返和分支降级的用时序图，只讲职责分工的用泳道图
+3. 识别分支逻辑（if/else、switch、状态判断、异常捕获/降级）→ 画**业务流程图**（③），**每条分支必须标条件，catch/降级分支不能省**
+4. 识别数据库操作（Mapper/Repository）→ 时序图/泳道图中标为数据层节点
+5. 识别 MQ 操作（RocketMQ/Kafka）→ 虚线异步消息，不得画成同步调用
+6. 输出前**自查**：mermaid 语法能渲染（节点 id 不重复、`alt/loop` 有 `end`）、分支全带条件、降级/异常分支在场、异步是虚线；嵌入技术方案文档；**不涉及流程/交互的不硬凑图**
 
 ### REST 接口提取
 
@@ -710,8 +715,8 @@ bash nacos_query.sh <env> get <dataId> DEFAULT_GROUP
 
 **写作硬约束（模板结构不变，填写按此执行）**：
 - **背景/目标简短**：各 1-3 句话说清「为什么做 + 做什么」，禁止铺陈、禁止复述需求文档原文
-- **涉及流程 → 必须画流程图**（ASCII 首选，样例见 `tech-design-template.md`「流程图样例」）：判断节点写成问句、**每条分支线标走向条件**（是/否、成功/失败、状态值）、异常与降级分支必须画出来，并配「关键分支说明」表
-- **涉及服务交互 → 必须画泳道图**（ASCII 首选，样例见 `tech-design-template.md` 顶部），标清调用方向/内容/时机
+- **涉及流程 → 必须画流程图**（mermaid `flowchart TD` 首选，样例见 `tech-design-template.md`）：判断节点写成问句、**每条分支线标走向条件**（是/否、成功/失败、状态值）、异常与降级分支必须画出来，并配「关键分支说明」表
+- **涉及服务交互 → 必须画时序图或泳道图**（mermaid `sequenceDiagram` 首选，强调职责分工用 `flowchart LR`+subgraph 泳道，样例见 `tech-design-template.md`），标清调用方向/内容/时机，异步消息用虚线，分支降级用 `alt/opt/loop` 块表达
 - **涉及表、Nacos 配置 → 一律表格逐项列清**（字段名/类型/默认值/本次改动/说明），禁止「详见代码」
 - **涉及接口 → 标明 `[新增]`/`[修改]`** + 完整 URL + 出入参改动（修改类只列改动字段，并标出哪些是本次新增/变更）
 - **涉及灰度/放量 → 写清节奏和配置**（分几批、每批范围比例、观察指标判据 + 对应 Nacos dataId/key 各阶段取值 + 回滚值）

@@ -27,12 +27,12 @@ description: 页面自动化测试，自动识别 Web/小程序项目，分别�
 ### 在 cwork 流程中的位置
 
 ```
-cwork-init → cwork-implement → cwork-test → cwork-commit
+cwork-init → cwork-implement → cwork-test(条件触发) → cwork-commit
                                     ↑
-                              本技能介入
+                        满足触发条件才介入
 ```
 
-- cwork-implement 完成后自动衔接
+- cwork-implement 完成后评估：前端改动 + 新页面/核心交互 + 用户确认，三条件全满足才进入（否则直接进 cwork-commit）
 - 测试通过后进入 cwork-commit
 
 ## 语言约束（强制）
