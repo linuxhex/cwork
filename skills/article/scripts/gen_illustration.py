@@ -74,47 +74,59 @@ def gen_cover(title: str, output: str, width=2560, height=1080, style="bar", sub
     p = hex_to_rgb(PRIMARY)
     d = hex_to_rgb(DARK)
 
-    title_font = _load_font(120)
-    sub_font = _load_font(48)
+    # 字号与行高随画布自适应（横版 2560 / 竖版 1242 都不崩）
+    title_size = max(64, min(120, width // 12))
+    title_font = _load_font(title_size)
+    sub_font = _load_font(max(32, title_size // 3))
+    line_h = int(title_size * 1.3)
 
     if style == "block":
-        # 底部大色块 + 白字标题
-        draw.rectangle([0, height - 380, width, height], fill=p)
+        # 底部色块 + 白字标题（色块占 1/3 高，竖版下也够放）
+        block_h = max(380, height // 3)
+        draw.rectangle([0, height - block_h, width, height], fill=p)
         lines = _wrap_text(draw, title, title_font, width - 200)
-        y = height - 380 + (380 - len(lines) * 150) // 2
+        y = height - block_h + (block_h - len(lines) * line_h) // 2
         for ln in lines:
             bbox = draw.textbbox((0, 0), ln, font=title_font)
             draw.text(((width - (bbox[2]-bbox[0])) // 2, y), ln, fill="#FFFFFF", font=title_font)
-            y += 150
+            y += line_h
     elif style == "grid":
         # 右侧点阵网格装饰
+        grid_w = min(700, width // 3)
         for i in range(8):
             for j in range(5):
-                x, y = width - 700 + i * 70, 150 + j * 160
-                draw.ellipse([x, y, x + 28, y + 28], fill=p)
-        lines = _wrap_text(draw, title, title_font, width - 900)
-        y = (height - len(lines) * 150) // 2
+                x, y = width - grid_w + i * (grid_w // 10), height // 10 + j * (height // 7)
+                r = max(14, grid_w // 25)
+                draw.ellipse([x, y, x + r, y + r], fill=p)
+        lines = _wrap_text(draw, title, title_font, width - grid_w - 200)
+        y = (height - len(lines) * line_h) // 2
         for ln in lines:
             draw.text((140, y), ln, fill=d, font=title_font)
-            y += 150
+            y += line_h
     else:  # bar（默认）
         # 左侧竖条 + 居中标题 + 右下角圆
-        draw.rectangle([0, 0, 80, height], fill=p)
-        draw.ellipse([width - 420, height - 420, width - 180, height - 180], fill=p)
-        lines = _wrap_text(draw, title, title_font, width - 800)
-        y = (height - len(lines) * 150) // 2 - 40
+        bar_w = max(60, width // 32)
+        circle = max(240, width // 8)
+        draw.rectangle([0, 0, bar_w, height], fill=p)
+        draw.ellipse([width - circle - 60, height - circle - 60, width - 60, height - 60], fill=p)
+        lines = _wrap_text(draw, title, title_font, width - bar_w - circle - 200)
+        y = (height - len(lines) * line_h) // 2 - 40
         for ln in lines:
             bbox = draw.textbbox((0, 0), ln, font=title_font)
             draw.text(((width - (bbox[2]-bbox[0])) // 2, y), ln, fill=d, font=title_font)
-            y += 150
+            y += line_h
 
     if subtitle:
-        lines = _wrap_text(draw, subtitle, sub_font, width - 400)
-        sy = height - 160 if style == "block" else height - 200
-        for ln in lines[:2]:
+        lines = _wrap_text(draw, subtitle, sub_font, width - 400)[:2]
+        if style == "block":
+            # 副标题画在色块内、标题上方（白底色块上灰字不可见，改浅蓝白）
+            sub_fill, start_y = "#E6F0FF", height - block_h + 60
+        else:
+            sub_fill, start_y = hex_to_rgb(GRAY), height - 100 - len(lines) * 66
+        for ln in lines:
             bbox = draw.textbbox((0, 0), ln, font=sub_font)
-            draw.text(((width - (bbox[2]-bbox[0])) // 2, sy), ln, fill=hex_to_rgb(GRAY), font=sub_font)
-            sy += 66
+            draw.text(((width - (bbox[2]-bbox[0])) // 2, start_y), ln, fill=sub_fill, font=sub_font)
+            start_y += 66
 
     img.save(output, quality=95)
     print(f"封面已生成: {output} (style={style})")
