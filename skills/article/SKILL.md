@@ -600,7 +600,7 @@ description: 公众号/小红书文章写作助手。先确认发布平台（默
 
 ## 阶段 8：写入编辑器
 
-> **小红书平台**：目标改为 `https://creator.xiaohongshu.com/publish/publish?source=official`——切「上传图文」tab → 上传图片（首图=封面）→ 标题输入框（≤20 字）→ 正文（**contenteditable 非 textarea**，用 evaluate 改 innerText + dispatch input 事件，**不要 innerHTML**）→ 优先「存草稿」。完整实操步骤（含切 tab、绕过点击拦截、ego 会话生命周期坑）见 `references/theme-xhs.md` 的「发布红线」。**步骤 0 草稿检查**：小红书创作者中心「笔记管理」页查同主题草稿，有则问用户继续编辑。以下为公众号路线：
+> **小红书平台**：目标改为 `https://creator.xiaohongshu.com/publish/publish?source=official`——切「上传图文」tab → 上传图片（首图=封面）→ 标题（**普通 input**，placeholder「填写标题会有更多赞哦」）→ 正文（**tiptap 编辑器**，click 聚焦 + `keyboard.insertText`）→ 存草稿按钮文案是「**暂存离开**」。完整实测步骤与坑见 `references/theme-xhs.md` 的「发布红线」。**步骤 0 草稿检查**：小红书创作者中心「笔记管理」页查同主题草稿，有则问用户继续编辑。以下为公众号路线：
 
 ### 写入流程
 
