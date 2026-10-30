@@ -614,6 +614,7 @@ description: 公众号/小红书文章写作助手。先确认发布平台（默
 0. 检查现有草稿（强制，先于新建）
    - 打开公众号草稿箱：
      URL: https://mp.weixin.qq.com/cgi-bin/appmsg?t=media/appmsg_list&action=list_card&token={token}
+   - ⚠️ token 是登录态凭证：禁止把含真实 token 的完整 URL 写进任何文档/日志/输出，示例一律保留 {token} 占位符
    - 搜索是否有相同主题/标题的草稿（按标题关键词搜索，如文章主题含"cwork"则搜"cwork"）
    - 如有匹配的草稿：
      a. 询问用户："发现已有草稿：[标题]，是否继续编辑？"

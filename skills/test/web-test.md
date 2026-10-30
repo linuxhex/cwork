@@ -632,13 +632,13 @@ node web-run.cjs --snapshot --url "http://localhost:3000/login" --out /tmp/snap-
 
 ```bash
 # 1. 拿 pid（先查 ARMS_PID_CACHE.md，索引失效才跑 arms_apps.sh）
-bash scripts/arms_apps.sh cn-hangzhou "order"
+bash "$CWORK_HOME/skills/log/scripts/arms_apps.sh" cn-hangzhou "order"
 
 # 2. 用 traceId 查链路（traceId 从后端日志 trace 字段取）
-bash scripts/arms_trace.sh "<pid>" "<traceId>" <ts_ms>
+bash "$CWORK_HOME/skills/log/scripts/arms_trace.sh" "<pid>" "<traceId>" <ts_ms>
 
 # 3. 或用接口关键字 + 时间窗查 SLS 日志
-bash scripts/sls_query.sh <env> logs all "order/submit and ERROR" 100
+bash "$CWORK_HOME/skills/log/scripts/sls_query.sh" <env> logs all "order/submit and ERROR" 100
 ```
 
 #### 诊断结论输出

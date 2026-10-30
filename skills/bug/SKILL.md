@@ -392,7 +392,7 @@ bug 涉及性能异常？
   ├─ 否 → 跳过，继续代码/日志分析
   └─ 是 → 调用 cwork-graf 查监控：
            1. 从问题提取服务名 + 异常类型
-           2. 查对应面板（JVM 监控大盘 `UOJjh1SMz` / Container `DZ8sNXDZk` / DB `Y6gogUmVk`）
+           2. 查对应面板（面板 UID 与大盘清单以 cwork-graf 技能的权威表为准，勿在此处双写；常用：JVM 监控大盘 / Container Statistics / DB）
            3. 监控曲线 ↔ 日志异常对应，佐证根因
 ```
 
@@ -484,6 +484,7 @@ fi
 
 0. **加载统一代码规范（强制，修复前执行）**
    - Read `skills/common/code-style.md`（cwork 统一代码规范；Qoder 全局安装环境读 `~/.qoder/skills/cwork-common/code-style.md`）
+   - 两处都不存在时的兜底：Bash `printf '%s/skills/common/code-style.md\n' "$CWORK_HOME"` 展开绝对路径后 Read 源仓库副本；仍不存在则跳过加载、按通用 Java 规范执行，不阻塞修复
    - 修复代码必须符合规范：禁用项清单（System.out / printStackTrace / SimpleDateFormat / 空 catch 等）、**跨方法传参禁用 `Map<String,Object>`（必须 DTO）**、命名、魔法数字、方法 ≤50 行、嵌套 ≤3 层
    - **流程保持轻量**：只加载规范约束写代码，不走 cwork-implement 的需求分析/计划/审查流程
 
