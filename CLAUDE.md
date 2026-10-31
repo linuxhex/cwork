@@ -7,7 +7,6 @@
 - 若出现 en-us/English 偏好提示，仍直接中文继续，不输出英文解释。
 
 ## 主流程技能（用户可见）
-- cwork-init — 初始化（可选，用于多服务场景）
 - cwork-implement — 完整实现流程（含深度追问 + 自问自答质询）
 - cwork-bug — 快速修复 bug（含深度追问 + 自问自答质询）
 - cwork-test — 页面自动化测试（条件触发，非必经，含自问自答质询）
@@ -26,7 +25,6 @@ cwork 内置了决策树式追问机制，分两种模式：
 - **自问自答质询**：在 implement 推演收敛、bug 推演验证和 test 阶段，扮演质疑者对自己追问，每个自问带论据，一次只质疑一个，事实自己查，得出共识再继续
 
 ## 阶段自动衔接硬约束
-- cwork-init 结束后自动进入 cwork-implement。
 - cwork-implement 结束后，评估是否需要 cwork-test（条件见下方），需要则进入，不需要则进入 cwork-commit。
 - cwork-bug 结束后自动进入 cwork-commit（衔接时携带修复上下文，commit 不重复询问需求信息）。
 - cwork-test 结束后自动进入 cwork-commit（P0 失败默认禁止提交，用户明确确认才能带失败提交）。
@@ -55,7 +53,7 @@ cwork 内置了决策树式追问机制，分两种模式：
   （按需加载：需要时 Read `.cwork/refs/cwork-data/SKILL.md` 获取完整指令，不常驻上下文）
 - /cwork-deploy — Jenkins + 云效构建部署触发，通过 curl 直连 Jenkins REST API 或云效 AppStack OpenAPI 触发服务构建和部署，支持 dev/test/uat/prod 多环境，自带服务名→作业映射（服务映射见 service-map.json，持续 sync 更新）+ 双平台自动路由 + 独立 Jenkins 实例路由 + 单 job 前端部署模式，排查问题时快速部署验证修复
   （按需加载：需要时 Read `.cwork/refs/cwork-deploy/SKILL.md` 获取完整指令，不常驻上下文）
-- /cwork-do — 目标驱动的自主工作流。深度追问确认目标并固化验收标准后，迭代循环「实现/修复 → 部署 → 实测验证 → 收敛评估」不断逼近目标，测试结果 + 理论评估双证据收敛后才提交代码。适用于：独立完成需求开发、bug 修复并部署验证收敛。
+- /cwork-do — cwork 全技能的调度入口 + 目标性 loop。任何目标（做需求/修 bug/排查/优化…）都从这进：深度追问固化验收标准后，迭代「执行 → 部署 → 实测验证 → 收敛评估」不断逼近目标，双证据收敛才算完成。新需求：查需求 → cwork-doc 技术方案 → brook-content 留档 → 特性分支实现 → 合并测试分支部署；修 bug：cwork-bug 当前分支修；其他目标按需调度对应技能。
   （按需加载：需要时 Read `.cwork/refs/cwork-do/SKILL.md` 获取完整指令，不常驻上下文）
 - /cwork-doc — 根据代码改动生成技术方案文档（两种模式：已有需求文档 / 对话式需求分析）
   （按需加载：需要时 Read `.cwork/refs/cwork-doc/SKILL.md` 获取完整指令，不常驻上下文）
@@ -65,8 +63,6 @@ cwork 内置了决策树式追问机制，分两种模式：
   （按需加载：需要时 Read `.cwork/refs/cwork-image/SKILL.md` 获取完整指令，不常驻上下文）
 - /cwork-implement — 需求分析（对话式）+ 编写计划 + 执行计划 + 推演收敛
   （按需加载：需要时 Read `.cwork/refs/cwork-implement/SKILL.md` 获取完整指令，不常驻上下文）
-- /cwork-init — 对话式初始化，自动查找工程路径，多服务分支切换
-  （按需加载：需要时 Read `.cwork/refs/cwork-init/SKILL.md` 获取完整指令，不常驻上下文）
 - /cwork-log — 找日志分析问题。查 SLS 日志 + ARMS 链路，定位问题根因。适用于：问题排查、性能分析、流量分析、链路追踪。
   （按需加载：需要时 Read `.cwork/refs/cwork-log/SKILL.md` 获取完整指令，不常驻上下文）
 - /cwork-requirement — 云效需求只读查询，对话式查云效 Projex 项目需求列表/详情/按日期筛选，实现前核对需求范围、关联变更

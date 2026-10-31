@@ -244,5 +244,5 @@ clone 新仓库后**自动更新** `.services-map.md`，保证服务地图与实
 ## 自动衔接
 
 本技能为**独立工具**（和 log/bug/doc/data/config/requirement 同级），不进 init→implement→commit 主流程衔接链。
-完成后不自动调起其他技能；若由 cwork-init 调起，则**带代码就绪状态返回调用方**继续初始化。
+完成后不自动调起其他技能；若由 cwork-implement/do 调起（clone/pull 供其初始化用），则**带代码就绪状态返回调用方**继续。
 随安装发布需在 `bin/cwork.js` 白名单加 `'code'`。

@@ -289,7 +289,6 @@ ${cleaned}
 ## 技能调用方式
 
 每个技能以 \`/cwork-xxx\` 形式调用。可用技能：
-- /cwork-init — 初始化（多服务场景）
 - /cwork-implement — 完整实现流程
 - /cwork-bug — 快速修复 bug
 - /cwork-test — 页面自动化测试
@@ -660,7 +659,6 @@ ${cleaned}
 每个技能以 \`/cwork-xxx\` 形式调用。调用某个技能时，读取 \`.trae/rules/cwork-xxx.md\` 获取完整指令。
 
 可用技能：
-- /cwork-init — 初始化
 - /cwork-implement — 完整实现流程
 - /cwork-bug — 快速修复 bug
 - /cwork-test — 页面自动化测试

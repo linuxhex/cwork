@@ -2,7 +2,7 @@
 
 ## 概述
 
-**适用范围（强制）**：所有 cwork 技能中执行 git 分支操作的场景——cwork-init 建分支、cwork-implement 建/切换分支（单服务不走 init 脚本时 AI 手工执行）、cwork-commit 推送、cwork-code pull、cwork-do 编排。
+**适用范围（强制）**：所有 cwork 技能中执行 git 分支操作的场景——cwork-implement 建/切换分支（含多服务批量初始化）、cwork-do 编排建分支、cwork-commit 推送、cwork-code pull、cwork-do 编排。
 
 **问题背景（已实际发生）**：`git checkout -b/-B <feature> origin/master` 时，git 默认 autoSetupMerge 会把 **origin/master 设为新分支的 upstream**。后果：当前分支关联的远端分支是 master，后续裸 `git push` 把特性代码直接推到远端 master。
 

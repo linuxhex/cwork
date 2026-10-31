@@ -27,7 +27,7 @@ description: 页面自动化测试，自动识别 Web/小程序项目，分别�
 ### 在 cwork 流程中的位置
 
 ```
-cwork-init → cwork-implement → cwork-test(条件触发) → cwork-commit
+cwork-implement → cwork-test(条件触发) → cwork-commit
                                     ↑
                         满足触发条件才介入
 ```

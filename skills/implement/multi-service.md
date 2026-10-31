@@ -9,6 +9,18 @@
 3. **独立文档**：每个服务有独立的 analysis.md、plan.md、changes.md
 4. **独立分支**：每个服务工程都要创建/切换到同一 feature 分支——**必须走 `cwork-common/git-guard.md` 防护命令序列**：建分支后立即纠正 upstream（只能是 `origin/<同名分支>`），验证通过再继续
 
+## 多服务初始化（识别到多服务后、需求分析前，一次完成）
+
+对每个涉及的服务工程，按序执行：
+
+1. **定位工程路径**：优先 Bash `printf "%s/.services-map.md\n" "$CWORK_HOME"` 展开后 Read 服务地图按名匹配；地图未命中/标 `[需确认]` → 从当前目录逐级向上查找同名目录兜底；仍找不到 → 问用户，禁止猜
+2. **校验**：确认目录是 git 仓库（`git -C <目录> rev-parse --is-inside-work-tree`），不是则停下报告
+3. **备份本地改动**：`git stash`（有未提交改动时；stash 后告知用户备份位置）
+4. **创建/切换 feature 分支**：`git fetch origin && git checkout -b feature/<YYYYMMDD>-<需求短名> origin/master`（已在同名分支则复用）；建分支后按 git-guard 纠正并验证 upstream
+5. **建文档目录**：`<工程>/docs/requirements/{requirement_key}/`
+6. **全部服务就位后**：触发 codegraph 图谱更新 `codegraph sync "${CODE_WORKSPACE:-$HOME/Work/code-projects}"`（未装/锁占用则跳过不阻塞；禁止 -q 静默吞错），保证后续分析用最新图谱
+7. **写各服务 workflow-state.json**（含 requirement_id、multi_service_mode: true、main_service、dependent_services）
+
 ## 拆分流程
 
 ```
