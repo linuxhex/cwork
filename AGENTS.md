@@ -15,7 +15,7 @@
 ## 内部技能（不暴露）
 - cwork-tech-writer（由 article 内部调用：科技技术分享高手人格，技术布道者口吻）
 - cwork-wuxia-writer（由 article 内部调用：金庸式武侠写作人格，章回体半文半白）
-- cwork-common（共享规范文件目录，implement/bug 写代码时强制引用其中的 code-style.md 统一代码规范；**所有技能拉分支/推送时强制引用其中的 git-guard.md**：upstream 只能是 origin/<同名分支>、禁止裸 git push/pull、建分支后必须纠正并验证 upstream）
+- cwork-common（共享规范文件目录，implement/bug 写代码时强制引用其中的 code-style.md 统一代码规范；**所有技能拉分支/推送时强制引用其中的 git-guard.md**：upstream 只能是 origin/<同名分支>、禁止裸 git push/pull、建分支后必须纠正并验证 upstream；**日终技能优化时强制引用其中的 feedback-loop.md**：踩坑当场静默记 USAGE_NOTES、改动回源仓库双写、分析时必扫跨 agent 会话反馈）
 
 > 说明：implement 的计划编写/执行参考全局 superpowers 的 brainstorming / writing-plans / executing-plans（非 cwork 内置副本）。
 

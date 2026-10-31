@@ -8,7 +8,7 @@
 1. **记录（随时，克制）**：遇到值得优化/借鉴的问题才追加一行到「未分析」，格式 `- [YYYY-MM-DD] [skill] 现象 | 建议改法`。能当场修的直接修，修完记一句精炼结论（怎么修的 + 可借鉴的教训），不复述过程。
 2. **分析（每天最多 1 次，通常收工时）**：读「未分析」区 → 逐条优化 skill → 处理完的条目**直接删除**（教训已吸收进 skill 文件，无需留档）；确有长期借鉴价值的一句线压缩进「经验沉淀」区。更新 `.last_analysis_date`。
 3. **大小硬约束**：「未分析」≤ 10 条，「经验沉淀」≤ 20 条；超出时删最老/价值最低的，**追加覆盖，不无限增长**。
-4. **触发判断**：每天首次接触 cwork skill 时，若 `.last_analysis_date` ≠ 今天 且「未分析」区有条目 → 做一次分析（一天只做一次）。
+4. **触发判断**：每天首次接触 cwork skill 时，若 `.last_analysis_date` ≠ 今天 → 做一次分析（一天只做一次）。**「未分析」区为空也要做**：跨 agent 会话扫描（Qoder/Claude/Cursor 各项目 `.jsonl`，取上次分析日之后修改的，抽用户反馈句）是反馈回流的主通道——Qoder 实测踩的坑不会自己出现在这里，详见 `common/feedback-loop.md`。
 
 ## 未分析
 
@@ -23,6 +23,8 @@
 - [test] selector 含双引号时 JSON.stringify 嵌模板字符串会被二次解义，需 tmplSel() 转义；js() 对复杂 JSON 表达式返回 null，取复杂结构走 cdp returnByValue
 - [test] ego 任务空间是隔离浏览上下文、进程结束会话销毁，「继承用户登录态」不成立，场景 1 必须真实登录
 - [test] 小程序 MCP 网络监控劫持 wx.request 污染业务响应；automator Connection.send 无超时会永久挂起，导航统一 evaluate_script，MCP 配置强制 timeout
+- [test] waitForElement 无可见性过滤会命中 Element 全局隐藏容器（.el-message-box 假通过）；弹窗先 --snapshot+查源码验明真实容器再写选择器
+- [test] 重跑必须换新 taskSpaceName（TaskStop 杀不干净 ego 子进程留脏记录）；--ctx-dir 必须绝对路径；aiAssert 判定可退回 URL/DOM/接口证据（截图临时文件会被 pid 复用覆盖）
 - [deploy] Jenkins POST 必须 crumb+cookie jar（CSRF），触发失败/轮询超时一律报错 return 1，禁止 `|| true` 吞错后误报旧构建号
 - [deploy] 未收录服务探索直走 `GET /apps/{app}/releaseWorkflows`，禁走 apps:search（只支持 keyset 分页易撞参数错）；production 不收录
 - [deploy] curl URL 含 `[]` 会被当 glob，需 -g 或 %5B%5D 编码

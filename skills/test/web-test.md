@@ -111,7 +111,7 @@ Web 测试采用 **"AI 生成计划 → 执行器单遍执行 → AI 跑后判�
 | `node web-run.cjs --plan plan.json` | **完整流程（默认推荐）**：单遍执行——确定性断言直接判定，aiAssert 仅采集证据；跑完输出 AI_ASSERT_PENDING，AI 跑后判断合入 result.json |
 | `node web-run.cjs --snapshot --url <页面地址>` | **标准化采集**（观察类操作）：打开页面 + 接口拦截 + snapshotText + pageInfo + 截图 |
 
-通用参数：`--ctx-dir DIR`（aiAssert 上下文目录，默认 `/tmp/cwork-web-test-ctx`）、`--out FILE`（result.json 落点）、`--keep`（结束后移交任务空间保持登录态，人工核验用）。
+通用参数：`--ctx-dir DIR`（aiAssert 上下文目录，默认 `/tmp/cwork-web-test-ctx`；**必须绝对路径**——相对路径时 ego 子进程 cwd 变化导致 ctx 文件散落难找，brook-content 实战）、`--out FILE`（result.json 落点）、`--keep`（结束后移交任务空间保持登录态，人工核验用）。
 
 **输出文件落点规则**：
 
@@ -320,7 +320,7 @@ echo "✓ ego-browser 可用：$(command -v ego-browser)"
 | 参数 | 必填 | 说明 |
 |------|------|------|
 | `baseUrl` | 是 | 测试目标地址（本地 dev server 或远程环境） |
-| `taskSpaceName` | 建议 | ego 任务空间名（默认 `cwork-test`；同一 taskSpaceName 的会话登录态独立） |
+| `taskSpaceName` | 建议 | ego 任务空间名（默认 `cwork-test`；同一 taskSpaceName 的会话登录态独立）。**每次重跑换新名**（加时间戳/轮次后缀）——TaskStop 杀 shell 不杀 ego heredoc 子进程，同名 task space 留脏记录，下轮 `useOrCreateTaskSpace` 命中已死空间导致诡异失败（brook-content 实战：S0 侥幸通过、S1 listTabs 即崩） |
 | `totalBudgetMs` | 建议 | 全局看门狗预算（默认 600000 = 10 分钟；到点落盘部分结果后退出） |
 | `scenarios` | **是** | 场景数组；**空数组会被执行器拒绝** |
 
@@ -333,7 +333,7 @@ echo "✓ ego-browser 可用：$(command -v ego-browser)"
 | `navigate` | `url` | 导航到页面；相对路径自动拼 baseUrl，绝对 URL 原样使用 |
 | `waitForNetworkIdle` | 无 | 等待网络空闲 |
 | `waitForLoad` / `waitForNavigation` | 无 | 等待页面加载/跳转完成（两者等价） |
-| `waitForElement` | `selector`, `timeout?`（秒，默认 10） | **等待元素出现**再采集——根治动态渲染导致的选择器乱跑。超时后标记 BLOCKED 继续后续步骤，不报错 |
+| `waitForElement` | `selector`, `timeout?`（秒，默认 10） | **等待元素出现**再采集——根治动态渲染导致的选择器乱跑。超时后标记 BLOCKED 继续后续步骤，不报错。**注意：它不做可见性过滤**——会命中 Element UI 全局隐藏容器（如 `.el-message-box` 隐藏 wrapper，brook-content 实战假通过），弹窗/面板类探测勿单独依赖它，命中后必须紧跟 `assertVisible`/`assertCount` 或截图确认真实可见 |
 | `waitForUrl` | `contains?`/`notContains?`/`matches?`（至少其一，多条件 AND）, `timeout?`（秒，默认 15） | **轮询等待 URL 满足条件**——登录成功判据的标准写法（`waitForUrl notContains /login`）。超时后标记 BLOCKED 继续后续步骤，不报错 |
 | `click` | `selector` | 点击元素（ego click，带遮挡检查）。支持 CSS/text=/role/>>nth=N 等原生选择器 |
 | `dispatchClick` | `selector`, `index?`, `matchText?` | JS 合成 MouseEvent click（bubbles），绕过遮挡检查；用于被悬浮横幅遮挡、ego click 静默点在横幅上的按钮（如 OMP top-tip 横幅盖住筛选按钮）。对标准 @click 监听的按钮有效 |
@@ -382,12 +382,13 @@ echo "✓ ego-browser 可用：$(command -v ego-browser)"
 4. **面板步进 selector**（element-ui 标准）：上一年 `.el-date-picker__prev-btn.el-icon-d-arrow-left`、上一月 `.el-date-picker__prev-btn.el-icon-arrow-left`（class token 精确匹配，不会互串）、日期格 `.el-date-table tr:nth-child(N) td:nth-child(M)`（第一列为周日）、确定 `.el-picker-panel__footer button` 取 `index: 1`（见坑 2，勿依赖 `.is-plain` 等具体 class）。**「prev-btn 不可见」瞬态失败（OMJF-18841 实战）**：根因几乎总是前置的 openDatePicker 面板未真正打开（异步渲染竞态），步进按钮没渲染出来——不是选择器错。执行器已内置面板打开校验+重试；plan 修正循环中遇此失败先核对上一步 `openDatePicker[dbg]` 日志确认面板状态，**禁止直接换/改 prev-btn 选择器盲试**。另注意面板步进后立即选格可能竞态（日历重渲染），步进后紧跟的选格步骤前可加 `waitForElement .el-date-table`（1s 级短超时）做确定性同步。
 5. **同 selector 多个输入框**：用 `index` 字段取第 N 个（如页面 4 个「选择时间」框：0/1=开始充电组、2/3=结束充电组，按渲染顺序）。
 6. **列表页筛选区默认收起**（YKC OMP 系页面只显 3 项）：先 `click .ykc-search-arrow` 展开再操作深部筛选控件，否则 v-show 隐藏元素全部 Element not found。
-7. **多 tab 会话**：登录态不跨任务空间——新 taskSpaceName 必须自带登录场景。
+7. **多 tab 会话**：登录态不跨任务空间——新 taskSpaceName 必须自带登录场景。重跑换新 taskSpaceName（坑 13 同理：同名空间脏记录）。
 8. **展开/收起 toggle 操作前必须先读状态**（实战：恢复默认保留了展开态，AI 以为要展开又点一次 toggle，反而收起）：toggle 是**反向操作**，点之前用 js 查容器可见元素数或展开态 class 确认当前状态——「恢复默认/翻页/切 tab 后状态可能被重置」，历史状态不可信，盲点 toggle 必反。
 9. **v-show 隐藏元素：DOM 存在 ≠ 可点**：收起状态下筛选控件仍留在 DOM（`querySelectorAll` 找得到、assertCount 也能过）但坐标/宽高全 0，click 无效或被遮挡拦截。判可交互必须查可见性（`assertVisible` 已内置 zero-size 检查；探索时用 js 查 `getBoundingClientRect`），plan 里对筛选控件的步骤必须前置「展开容器」步骤，不用元素存在性断言替代可见性。
 10. **ego click 遮挡检查被拦 / 静默点在横幅上（OMP top-tip 横幅实战）**：ego 对被遮挡元素会拒绝 click（遮挡检查）；更隐蔽的是**静默落空**——横幅盖住按钮行时 ego 宽松点击实际点在横幅上，查询不发出产生假结果。plan 中直接改用 `dispatchClick`（JS 合成事件通道，绕过遮挡检查，对标准 @click 监听的按钮有效）；`dispatchClick` 无效（自定义组件不监听合成事件）再升 `clickCdp` 真实鼠标坐标，每次升级前先观察一次（铁律：探索套路）。
 11. **ykc 系组件 id 透传在根 div，内部 input 需后代选择器**：Vue 2 非 prop 属性继承——`<ykc-input :id="verificationCode">` 的 id 落在组件根 div（`.ykc-input-box`）上，**内部 `<input>` 没有该 id**。`fill #verificationCode` 会报 Element not found，正确写法是后代选择器 `#verificationCode input`（OMP 验证码输入框实测）。同理适用 ykc-select/ykc-date 等所有 ykc 封装组件。
 12. **断言类步骤用 CSS 选择器，文本匹配走 `assertText` + `expectContains`**：`assertVisible`/`assertText`/`assertCount` 内部用 `document.querySelector`（只读断言，CSS 够用），不支持 `:has-text()` 伪类。另注意：**同名选择器可能匹配到隐藏弹窗**——`.el-dialog__footer button:has-text('确认')` 这类宽选择器会命中页面上隐藏 el-dialog 的按钮（OMP 登录页假点击根因），断言/点击前先 `assertCount` 确认匹配数，弹窗类操作限定容器（如 `.customize-dialog .bnt-right`）。
+13. **弹窗先验明正身再写选择器**：Element UI 项目里弹窗未必是 el-message-box/el-dialog——YKC 系自绘 `$cusDialog`（`#tDialog`/`.customize-dialog`）动态挂 body，DOM 里同名 Element 隐藏容器是干扰项（brook-content 实战：`.el-message-box` 命中的是全局隐藏容器，假通过）。写弹窗交互前先 `--snapshot` + 查源码确认弹窗真实容器，选择器限定该容器。
 13. **列表查询 0 条时分页栏从 DOM 消失**（OMP 实测）：`.page-total`「共 N 条」在结果为空时整条移除，`assertText .page-total` 必失败。0 条场景断言改用空态文案：`assertText body expectContains "暂无数据"`（或实测空态文案），勿断分页栏。
 
 ### 登录场景模板（固化复用，选择器必须实测）
