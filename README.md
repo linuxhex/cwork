@@ -58,9 +58,8 @@
 **主流程技能（用户可见）**
 
 ```
-cwork-init      → 对话式初始化（多服务场景：查路径、校验、切分支）
-cwork-implement → 需求分析 + 编写计划 + 执行计划 + 推演收敛
-cwork-do        → 目标驱动自主工作流（迭代循环直到收敛，双证据验收）
+cwork-do        → 全技能调度入口 + 目标性 loop（任何目标从这进，双证据收敛才结束）
+cwork-implement → 需求分析 + 编写计划 + 执行计划 + 推演收敛（含多服务批量初始化）
 cwork-bug       → 快速修复 bug（定位 → 修复 → 验证 → 提交）
 cwork-test      → 页面自动化测试（Web / 小程序自动识别，条件触发）
 cwork-commit    → 统一提交所有工程（分支一致性校验 + commit + push）
@@ -143,16 +142,16 @@ order-service 视角：主服务需要订单数据，我新增 /order/list 接�
 ## 使用示例
 
 ```
-用户: /cwork-init
+用户: /cwork-do
 
-Claude: 需求名称是什么？
-用户: 用户导出
+Claude: 要做什么类型的工作？
+用户: 1. 实现新需求
 
-Claude: 分支名称是什么？（以 feature_ 开头，如 feature_userExport）
-用户: feature_userExport
+Claude: 需求 ID 和简述？
+用户: OMJF-12345，新增用户数据导出
 
-Claude: 依赖工程目录名有哪些？（多个用逗号分隔，没有则回车跳过）
-用户: user-service,order-service
+Claude: 涉及 order-server，测试分支探测到 test，确认？验收标准：…
+用户: y
 
 Claude: [自动初始化 3 个工程路径 + 切分支 ✓ → 进入 implement]
 

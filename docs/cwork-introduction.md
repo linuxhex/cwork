@@ -20,10 +20,9 @@ cwork 是一套面向多工程联动研发的自动化 workflow 技能体系，�
 
 ### 主流程技能（用户可见）
 
-- **cwork-init** — 初始化工作区（可选，用于多服务场景）
 - **cwork-implement** — 需求分析 + 编写计划 + 执行计划 + 推演收敛
 - **cwork-bug** — 快速修复 bug（含深度追问 + 自问自答质询）
-- **cwork-do** — 自主工作流（目标确认 → 迭代循环[执行→部署→实测→收敛评估] → 收敛提交）
+- **cwork-do** — 全技能调度入口 + 目标性 loop（目标确认 → 迭代循环[执行→部署→实测→收敛评估] → 收敛提交；新需求含查需求/技术方案/留档/分支流程）
 - **cwork-test** — 页面自动化测试（条件触发，非必经）
 - **cwork-commit** — 提交所有工程
 
@@ -94,11 +93,8 @@ cwork 是一套面向多工程联动研发的自动化 workflow 技能体系，�
 ### 多服务场景
 
 ```
-/cwork-init
+/cwork-implement（识别多服务后自动：定位工程/建分支/建文档目录/图谱预热）
     ↓
-自动查找工程路径、切换分支
-    ↓
-/cwork-implement
     ↓
 多 agent 并行执行（每个工程一个独立 agent）
     ↓
@@ -214,7 +210,7 @@ node bin/cwork.js --uninstall --tool codex
 
 **支持工具**：codex / claude / cursor / gemini / qoder / windsurf / aider / opencode / qwen / antigravity / hermes / trae / kiro / openclaw / cline / copilot
 
-安装后技能名会加前缀 `cwork-`（例如 `cwork-init`、`cwork-implement`），避免和已有 skills 冲突。
+安装后技能名会加前缀 `cwork-`（例如 `cwork-do`、`cwork-implement`），避免和已有 skills 冲突。
 
 ---
 
