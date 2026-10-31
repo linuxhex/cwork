@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Git 是给人设计的，可改代码的已经不是人了</title>
+<style>
+  body { max-width: 750px; margin: 0 auto; padding: 24px 16px; background: #fff;
+         font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+         font-size: 16px; line-height: 1.75; color: #333; letter-spacing: 0.5px; }
+  img { max-width: 100%; }
+</style>
+</head>
+<body>
+<section style="margin-bottom: 30px;">
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">Agent 一次改了 47 个文件。你打开 PR 的 diff，决定认真审一遍。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">翻到第 12 个文件，你已经记不清前面看过什么。翻到第 20 个，你开始只看文件名不看内容。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">最后你看了一眼 CI：绿了。你点了合并。</p>
+  <div style="background: #fff3cd; padding: 14px 18px; border-radius: 4px; color: #856404; margin: 20px 0; line-height: 1.75;">
+    <p style="margin: 4px 0;">⚠️ 这篇文章想说一件不太政治正确的事：<strong>你点合并的那一刻，其实已经放弃审阅了。</strong>问题不在你懒，在于工具假设的工作方式变了。</p>
+  </div>
+</section>
+
+<hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+
+<section style="margin-bottom: 30px;">
+  <h2 style="font-size: 18px; font-weight: bold; color: #333; border-left: 4px solid #1890FF; padding-left: 12px; margin: 20px 0;">一、Git 的三个设计假设</h2>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">Git 不是"给代码用的工具"，它是"给人看代码用的工具"。它的三层核心语义，每一层都押注在一个关于人的假设上。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;"><strong style="color: #333;">diff：假设变更量在人眼可读的规模内。</strong>一个人一个下午改 200 行、动 3 个文件，diff 读起来是享受。Agent 十分钟改 47 个文件、增删 4000 行，diff 就变成了一堵墙。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;"><strong style="color: #333;">commit message：假设作者知道自己为什么这样改。</strong>人能写出"因为老逻辑在并发下会丢更新，所以换成版本号比较"。Agent 写的是"更新相关逻辑以支持新需求"——它不是敷衍，它确实没有贯穿始终的意图。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;"><strong style="color: #333;">merge / review：假设审阅者能重构作者的意图。</strong>你看 diff 时真正在做的，是反推"这人想干嘛，这么干合不合适"。意图不清，这个反推就直接失效。</p>
+
+  <p style="text-align: center; margin: 24px 0;">
+  <img src="images/01-three-semantics.png" style="max-width: 100%; border-radius: 8px; display: block; margin: 0 auto;" alt="">
+</p>
+</section>
+
+<hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+
+<section style="margin-bottom: 30px;">
+  <h2 style="font-size: 18px; font-weight: bold; color: #333; border-left: 4px solid #1890FF; padding-left: 12px; margin: 20px 0;">二、社区已经在给三种不同的答案</h2>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">这个问题最近密集冒头。GitHub 上出现了三个定位完全不同的项目，恰好对应三条路。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;"><strong style="color: #333;">第一条：重写版本控制语义。</strong><strong style="color: #1890FF;">git-ai</strong>，2026 年 10 月 15 日建库，三天拿到 2,298 star，仓库描述只有一句"Git designed for AI agents"。它的判断是：Agent 的变更表达方式和人类不同，应该从协议层重做。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;"><strong style="color: #333;">第二条：在 Git 之上叠审计层。</strong><strong style="color: #1890FF;">atlas</strong> 把自己定位成"Agent 的 source control"——追踪多个编码 Agent 的改动，并支持统一查询。它不动 Git，动的是"谁在什么时候改了什么"这件事的可追溯性。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;"><strong style="color: #333;">第三条：隔离执行，集中审阅。</strong><strong style="color: #1890FF;">Orca</strong> 把不同编码 Agent 放进各自独立的 git worktree 里跑，再把结果集中到一个地方审阅。它承认冲突和混乱是常态，先把执行环境隔开。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">三条路的分歧在于：<strong style="color: #333;">是 Git 错了，还是用法错了，还是审阅入口错了。</strong></p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">三个项目在短时间内集中出现，本身就说明这不是一个人的幻觉。当不同团队在不同层面同时动手，往往意味着真问题已经被碰到了，只是还没人能说清该在哪一层解决。</p>
+</section>
+
+<hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+
+<section style="margin-bottom: 30px;">
+  <h2 style="font-size: 18px; font-weight: bold; color: #333; border-left: 4px solid #1890FF; padding-left: 12px; margin: 20px 0;">三、为什么"CI 绿了"替代不了审阅</h2>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">很多人实际上是这么做的：CI 绿了就合并。这有三个漏洞。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;"><strong style="color: #333;">漏洞一：CI 只验证你写过的测试。</strong>没测的行为，等于没有约束。一个 40% 覆盖率的项目，CI 绿了说明不了什么。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;"><strong style="color: #333;">漏洞二：Agent 可能改测试。</strong>它发现测试不过，最省事的修法是让断言变松。从它自己的目标看，这是合理的；从你的目标看，这是把保险丝剪了。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;"><strong style="color: #333;">漏洞三：功能对，结构错。</strong>CI 能验证"这个接口返回对了"，验证不了"这段逻辑放错层了"。而后者才是三个月后让你改不动代码的原因。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">说到底，<strong style="color: #333;">你把"正确性"和"可接受性"混成了一件事。</strong>CI 管前者，审阅管后者。两者不能互相替代。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">还有一个更隐蔽的代价：把 CI 当审阅，等于把责任交给了一个不会负责的系统。出事那天，你能找到的是"那次构建是绿的"，而不是"谁判断过这么改是对的"。</p>
+</section>
+
+<hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+
+<section style="margin-bottom: 30px;">
+  <h2 style="font-size: 18px; font-weight: bold; color: #333; border-left: 4px solid #1890FF; padding-left: 12px; margin: 20px 0;">四、三条路线的真实代价</h2>
+  <table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px;">
+    <tbody>
+      <tr>
+        <th style="background: #1890FF; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;">路线</th>
+        <th style="background: #1890FF; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;">解决什么</th>
+        <th style="background: #1890FF; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;">代价与局限</th>
+      </tr>
+      <tr>
+        <td style="padding: 10px; border: 1px solid #ddd; color: #333; font-weight: bold;">重写协议<br>（git-ai）</td>
+        <td style="padding: 10px; border: 1px solid #ddd; color: #555;">变更表达更结构化、更适配机器读写</td>
+        <td style="padding: 10px; border: 1px solid #ddd; color: #555;">极早期；IDE、CI、代码托管平台都不配套</td>
+      </tr>
+      <tr>
+        <td style="padding: 10px; border: 1px solid #ddd; color: #333; font-weight: bold; background: #f9f9f9;">叠加审计层<br>（atlas）</td>
+        <td style="padding: 10px; border: 1px solid #ddd; color: #555; background: #f9f9f9;">多 Agent 改动可追踪、可查询</td>
+        <td style="padding: 10px; border: 1px solid #ddd; color: #555; background: #f9f9f9;">记录下来了，但"该不该这么改"还得人看</td>
+      </tr>
+      <tr>
+        <td style="padding: 10px; border: 1px solid #ddd; color: #333; font-weight: bold;">隔离执行 + 集中审阅<br>（Orca）</td>
+        <td style="padding: 10px; border: 1px solid #ddd; color: #555;">并行冲突减少，审阅入口统一</td>
+        <td style="padding: 10px; border: 1px solid #ddd; color: #555;">审阅瓶颈仍在人身上，规模上不去</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p style="text-align: center; margin: 24px 0;">
+  <img src="images/02-three-routes.png" style="max-width: 100%; border-radius: 8px; display: block; margin: 0 auto;" alt="">
+</p>
+
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">看这张表你会发现一件事：<strong style="color: #333;">三条路没有一条解决"审阅速度"。</strong>它们解决的是记录、隔离、表达。真正卡住你的那一环，还是得靠别的方式。</p>
+</section>
+
+<hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+
+<section style="margin-bottom: 30px;">
+  <h2 style="font-size: 18px; font-weight: bold; color: #333; border-left: 4px solid #1890FF; padding-left: 12px; margin: 20px 0;">五、不换工具也能做的五件事</h2>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">这五条都是流程约束，今天就能上，不依赖任何新项目。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">✅ <strong style="color: #333;">限制单次变更规模。</strong>一次任务最多动 N 个文件，超了就拆。这是五条里最有效的一条，因为它直接把 diff 拉回人眼可读的区间。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">✅ <strong style="color: #333;">把意图前置。</strong>先让 Agent 出改动计划：改哪些文件、为什么、明确不动哪些。审完计划再放行执行。<strong style="color: #333;">审计划比审 diff 便宜一个数量级。</strong></p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">✅ <strong style="color: #333;">diff 分层看，不要顺序看。</strong>先看新增和删除的文件，再看修改的；修改里优先看接口定义、类型声明、数据库 schema。这三处错，其余全错。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">✅ <strong style="color: #333;">测试只增不改。</strong>禁止 Agent 修改已有测试；新增测试必须单独成一个 commit，你能一眼看出它加了什么约束。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">✅ <strong style="color: #333;">让它写变更说明，再对着 diff 复核一次。</strong>机器自查不能代替人审，但能拦住"说明里说要改 A，实际改了 B"这种自相矛盾。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">✅ <strong style="color: #333;">给 Agent 的改动独立分支，禁止直推主干。</strong>这不只是隔离风险，更是强制留出一个"人可以介入"的节点。没有这个节点，前面四条都会被绕过去。</p>
+  <div style="background: #e8f5e9; padding: 14px 18px; border-radius: 4px; color: #1b5e20; margin: 20px 0; line-height: 1.75;">
+    <p style="margin: 4px 0;">🌱 如果只允许做一件事，做第一条。<strong>把单次变更规模砍到人审得动的量级</strong>，比换任何工具都管用。</p>
+  </div>
+</section>
+
+<hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+
+<section style="margin-bottom: 30px;">
+  <h2 style="font-size: 18px; font-weight: bold; color: #333; border-left: 4px solid #1890FF; padding-left: 12px; margin: 20px 0;">六、边界：什么时候才真的该换 Git</h2>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">我不建议你现在去迁移到 git-ai 这类项目。理由很实际：版本控制是所有工具链的地基，IDE、CI、代码托管、部署、回滚全压在上面。地基还在施工，你别把楼先盖上去。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">值得认真看这些新方向的信号是：<strong style="color: #333;">你同时在跑 10 个以上的 Agent，并且在做自动合并、自动集成。</strong>到了那个量级，人审阅这条路无论如何都走不通，才需要重新设计变更表达。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">在那之前，你的问题不是 Git 不行，是你放行的变更规模太大。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">这也带来一个反直觉的结论：Agent 写得越快，你越该把单次提交切小。产出速度翻十倍，审阅成本按规模线性上升，最后一定是审阅先崩。<strong style="color: #333;">把提交切小，是你唯一能主动控制的变量。</strong></p>
+  <div style="background: linear-gradient(135deg, #1890FF 0%, #0B5FCC 100%); padding: 22px 20px; border-radius: 8px; margin: 24px 0; color: white; text-align: center;">
+    <p style="margin: 0; font-size: 17px; font-weight: bold; line-height: 1.7;">代码审阅的瓶颈从来不是 diff 工具，<br>是你放行的变更规模。</p>
+  </div>
+</section>
+
+<hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+
+<section style="margin-bottom: 30px;">
+  <h2 style="font-size: 18px; font-weight: bold; color: #333; border-left: 4px solid #1890FF; padding-left: 12px; margin: 20px 0;">参考信息来源</h2>
+  <p style="line-height: 1.75; color: #666; margin: 10px 0; font-size: 14px;">📚 仓库（为 Agent 设计的 Git）：github.com/feder-cr/git-ai</p>
+  <p style="line-height: 1.75; color: #666; margin: 10px 0; font-size: 14px;">📚 仓库（Agent 的 source control）：github.com/pacifio/atlas</p>
+  <p style="line-height: 1.75; color: #666; margin: 10px 0; font-size: 14px;">📚 仓库（多 Agent worktree 隔离与集中审阅）：github.com/stablyai/orca</p>
+  <p style="line-height: 1.75; color: #666; margin: 10px 0; font-size: 14px;">📊 榜单：GitHub Trending 周榜（github.com/trending?since=weekly），快照时间 2026-10-19 与 2026-10-26</p>
+  <p style="line-height: 1.75; color: #999; margin: 12px 0; font-size: 13px;">说明：文中 star 数为上述快照值，会随时间变化；仓库定位以各仓库 README 自述为准，git-ai 属于极早期项目，本文不构成采用建议。</p>
+</section>
+
+<hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+
+<section style="margin-bottom: 30px;">
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">如果这篇对你有用：</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">👍 <strong style="color: #333;">点个赞</strong>，给正在审大 diff 的自己<br>💬 <strong style="color: #333;">留言说说</strong>：你审过的最大一次 Agent 提交，是多少个文件？<br>🔄 <strong style="color: #333;">转发</strong>给那位"CI 绿了就合"的同事</p>
+</section>
+
+</body>
+</html>

@@ -1,0 +1,142 @@
+<section style="margin-bottom: 30px;">
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">周五下午，你从 GitHub 上找了个 skill，一行命令装进自己的编码 Agent。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">然后它突然"会做代码安全审计"了。你试了两个仓库，结论挺像模像样。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">整个过程里，你没有打开过那个仓库的任何一个文件。</p>
+  <div style="background: #fff3cd; padding: 14px 18px; border-radius: 4px; color: #856404; margin: 20px 0; line-height: 1.75;">
+    <p style="margin: 4px 0;">⚠️ 这篇文章不是在劝你别装 skill。恰恰相反——它在 2026 年是封装 Agent 能力最有效的方式。但你现在把它当"配置项"装，而它实际是"依赖项"。</p>
+  </div>
+</section>
+
+<hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+
+<section style="margin-bottom: 30px;">
+  <h2 style="font-size: 18px; font-weight: bold; color: #333; border-left: 4px solid #1890FF; padding-left: 12px; margin: 20px 0;">一、先看一个信号：安全技能自己上了榜</h2>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">2026 年 10 月 26 日的 GitHub Trending 周榜快照里，排在第一位的不是模型、不是框架，而是一个安全审计技能包：</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">Cloudflare 的 <strong style="color: #333;">security-audit-skill</strong>，一周新增约 <strong style="color: #1890FF;">15,072 star</strong>，累计 47,178。同期还有一个做逆向与授权渗透的技能路由包，月增 9,403。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">这两个项目的共同点很关键：<strong style="color: #333;">它们把安全能力做成了 Agent 可加载的 skill，而不是独立 CLI。</strong></p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">这说明市场需求是真的。但也同时说明另一件事：<strong style="color: #333;">技能这个东西，已经重到值得单独做安全审计了。</strong></p>
+  <blockquote style="background: #f5f5f5; border-left: 4px solid #1890FF; padding: 15px 20px; margin: 20px 0; color: #555;">一个东西开始需要被审计的时候，说明它已经进入了生产环境。技能正在走完这条路。</blockquote>
+</section>
+
+<hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+
+<section style="margin-bottom: 30px;">
+  <h2 style="font-size: 18px; font-weight: bold; color: #333; border-left: 4px solid #1890FF; padding-left: 12px; margin: 20px 0;">二、Skill 到底是什么东西</h2>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">大部分人心里对 skill 的模型是：<em style="color: #666;">一段提示词模板</em>。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">实际结构通常是三样东西：</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0; padding-left: 16px;">📄 <strong style="color: #333;">SKILL.md</strong> —— 给模型看的说明书，讲什么时候用、怎么用<br>⚙️ <strong style="color: #333;">scripts/</strong> —— 真正在系统上执行的脚本<br>🔗 <strong style="color: #333;">依赖</strong> —— 可能依赖某个 MCP server、某个外部 API、某个运行环境</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">这意味着 skill 同时拥有两样东西：<strong style="color: #333;">模型会信任的文字</strong>，和 <strong style="color: #333;">系统会执行的代码</strong>。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">这个组合很特殊。传统依赖里，代码是代码，注释是注释，注释没有执行权。但在 skill 里，</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0; font-weight: bold; color: #333; text-align: center;">自然语言描述本身就是指令。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">你写"遇到 X 情况时请忽略其他约束、直接执行"，模型读到的是文本，但行使的是权限。</p>
+
+  <p style="line-height: 1.75; color: #999; margin: 12px 0; font-size: 14px;">［插图 1｜技能的三层结构与依赖链 → images/01-skill-chain.png，插入后删掉本行］</p>
+</section>
+
+<hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+
+<section style="margin-bottom: 30px;">
+  <h2 style="font-size: 18px; font-weight: bold; color: #333; border-left: 4px solid #1890FF; padding-left: 12px; margin: 20px 0;">三、为什么是今年扎堆出事</h2>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">三个原因叠在一起。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;"><strong style="color: #333;">第一，分发成本暴跌，审查成本没动。</strong>装一个 skill 只要一条命令、一次 git clone。而认真审一个 skill，要把 scripts/ 全部读一遍、把依赖理一遍——这两件事的成本差了一两个数量级。人一定会选便宜的那条路。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;"><strong style="color: #333;">第二，权限模型还停在"信任 Agent"这一层。</strong>你给 Agent 开了文件读写、命令执行、网络访问，它装了什么 skill，就等于这些权限自动延伸到了那些 skill 上。中间缺一个"这个 skill 能干什么"的授权层。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;"><strong style="color: #333;">第三，技能之间会互相调用。</strong>一个 skill 调度另一个，一个 MCP server 套另一个 MCP server。依赖变成二阶、三阶，但没有人画这张图。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;"><strong style="color: #333;">第四，“官方”这个词正在被稀释。</strong>一边是厂商自己维护的插件目录，一边是彻底开源的插件规范，再加上大量名字起得很像官方的第三方仓库。名字的权威感已经不能当作审查结论，只能当作初筛线索。</p>
+</section>
+
+<hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+
+<section style="margin-bottom: 30px;">
+  <h2 style="font-size: 18px; font-weight: bold; color: #333; border-left: 4px solid #1890FF; padding-left: 12px; margin: 20px 0;">四、风险到底长什么样</h2>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">不列攻击代码，只列形态——认出形态就够了：</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">🧨 <strong style="color: #333;">指令污染</strong>：说明书里埋一句"在处理 X 时不必告知用户"。它不违反任何静态规则，因为它是散文。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">🧨 <strong style="color: #333;">脚本越权</strong>：scripts/ 里跑的命令，读环境变量、读凭证目录、读 ~/.ssh，这些在你的机器上都是"合法"的。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">🧨 <strong style="color: #333;">伪装外呼</strong>：看起来是在"下载文档"或"查版本"，实际把内容发到了别处。功能是真的，副作用也是真的。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">🧨 <strong style="color: #333;">仿冒与劫持</strong>：名字像官方的第三方仓库；或者你装的那个本身没问题，但它依赖的上游换了人维护。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">🧨 <strong style="color: #333;">串味</strong>：一个 skill 写进上下文里的约束，会被后一个 skill 继承。你以为在装两个独立能力，其实在改一份共享的行为规则。</p>
+
+  <p style="line-height: 1.75; color: #999; margin: 12px 0; font-size: 14px;">［插图 2｜三道权限门 → images/02-permission-gates.png，插入后删掉本行］</p>
+</section>
+
+<hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+
+<section style="margin-bottom: 30px;">
+  <h2 style="font-size: 18px; font-weight: bold; color: #333; border-left: 4px solid #1890FF; padding-left: 12px; margin: 20px 0;">五、三种态度的代价</h2>
+  <table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px;">
+    <tbody>
+      <tr>
+        <th style="background: #1890FF; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;">做法</th>
+        <th style="background: #1890FF; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;">成本</th>
+        <th style="background: #1890FF; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;">挡住什么</th>
+        <th style="background: #1890FF; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;">挡不住什么</th>
+      </tr>
+      <tr>
+        <td style="padding: 10px; border: 1px solid #ddd; color: #333; font-weight: bold;">只装官方 / 知名作者</td>
+        <td style="padding: 10px; border: 1px solid #ddd; color: #555;">极低</td>
+        <td style="padding: 10px; border: 1px solid #ddd; color: #555;">大部分野生投毒</td>
+        <td style="padding: 10px; border: 1px solid #ddd; color: #555;">仿冒仓库、上游被换手</td>
+      </tr>
+      <tr>
+        <td style="padding: 10px; border: 1px solid #ddd; color: #333; font-weight: bold; background: #f9f9f9;">装完通读 scripts/ + SKILL.md</td>
+        <td style="padding: 10px; border: 1px solid #ddd; color: #555; background: #f9f9f9;">中</td>
+        <td style="padding: 10px; border: 1px solid #ddd; color: #555; background: #f9f9f9;">显式注入、可疑外呼</td>
+        <td style="padding: 10px; border: 1px solid #ddd; color: #555; background: #f9f9f9;">藏得深的、依赖链深处的</td>
+      </tr>
+      <tr>
+        <td style="padding: 10px; border: 1px solid #ddd; color: #333; font-weight: bold;">沙箱 + 最小权限 + 网络白名单</td>
+        <td style="padding: 10px; border: 1px solid #ddd; color: #555;">高</td>
+        <td style="padding: 10px; border: 1px solid #ddd; color: #555;">大部分后果</td>
+        <td style="padding: 10px; border: 1px solid #ddd; color: #555;">逻辑正确但数据流走的场景</td>
+      </tr>
+    </tbody>
+  </table>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">注意最后一列：<strong style="color: #333;">没有一种做法是"安全"的，只有"把风险降到可接受"的。</strong>这和引入开源依赖时的处境一模一样。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">更要命的是成本的不对称：装错一个 skill，代价可能是凭证泄露；而认真审一个 skill，代价是你一下午的时间。人脑在这种不对称面前，几乎一定是选错的那一边。<strong style="color: #333;">所以制度要比自觉可靠。</strong></p>
+</section>
+
+<hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+
+<section style="margin-bottom: 30px;">
+  <h2 style="font-size: 18px; font-weight: bold; color: #333; border-left: 4px solid #1890FF; padding-left: 12px; margin: 20px 0;">六、能马上做的五件事</h2>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">✅ <strong style="color: #333;">把 skill 当代码审，不当文档读。</strong>先看 scripts/，再看 SKILL.md。顺序反过来，你会被说明书写得很漂亮的东西说服。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">✅ <strong style="color: #333;">把"读"和"执行"分开授权。</strong>只读文档的 skill 和能跑命令的 skill，不该拿同一份权限。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">✅ <strong style="color: #333;">给 skill 建档。</strong>来源地址、版本号、谁审的、哪天审的。四列就够了，成本极低，但出问题时能追溯。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">✅ <strong style="color: #333;">把依赖图画出来。</strong>skill → MCP server → API key → 谁付钱。画到第二层你就会发现问题。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">✅ <strong style="color: #333;">用扫描器做基线，别当结论。</strong>扫描器只能发现"模式"，发现不了"意图"。它挡得住粗制滥造，挡不住精心设计。</p>
+  <div style="background: #e8f5e9; padding: 14px 18px; border-radius: 4px; color: #1b5e20; margin: 20px 0; line-height: 1.75;">
+    <p style="margin: 4px 0;">🌱 判断一个 skill 要不要审，有个粗暴但有效的标准：<strong>它能不能在你的机器上执行命令、能不能往外发网络请求。</strong>只要占一条，就当代码审。</p>
+  </div>
+</section>
+
+<hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+
+<section style="margin-bottom: 30px;">
+  <h2 style="font-size: 18px; font-weight: bold; color: #333; border-left: 4px solid #1890FF; padding-left: 12px; margin: 20px 0;">七、边界：这不是让你不用 skill</h2>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">技能生态正在快速标准化——主流编辑器厂商已经在同一时间把插件与技能的规范推到台前，官方目录和开源规范两条路线都在跑。这是好事，它意味着可复用、可组合、可分发。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">代价是你多了一层要维护的供应链。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">这和当年引入 npm 一样：你拿到了整个生态，也接过了它的风险。区别在于，npm 的风险有 SCA 工具盯着，而技能的风险目前主要靠人的自觉。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">团队层面真正能落地的做法很少，但都有效：<strong style="color: #333;">把 skill 纳入代码评审流程</strong>（跟改一行生产代码走同一套审批），<strong style="color: #333;">把安装入口收敛</strong>（不许各自从论坛链接装，只从内部登记过的源装），<strong style="color: #333;">给 skill 配可回滚机制</strong>（出事能一键撤回到上一个版本）。</p>
+  <div style="background: linear-gradient(135deg, #1890FF 0%, #0B5FCC 100%); padding: 22px 20px; border-radius: 8px; margin: 24px 0; color: white; text-align: center;">
+    <p style="margin: 0; font-size: 17px; font-weight: bold; line-height: 1.7;">技能不是配置项，是依赖项。<br>依赖项就该有依赖项的管理方式。</p>
+  </div>
+</section>
+
+<hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+
+<section style="margin-bottom: 30px;">
+  <h2 style="font-size: 18px; font-weight: bold; color: #333; border-left: 4px solid #1890FF; padding-left: 12px; margin: 20px 0;">参考信息来源</h2>
+  <p style="line-height: 1.75; color: #666; margin: 10px 0; font-size: 14px;">📚 仓库（安全审计技能）：github.com/cloudflare/security-audit-skill</p>
+  <p style="line-height: 1.75; color: #666; margin: 10px 0; font-size: 14px;">📚 仓库（逆向与安全技能路由）：github.com/zhaoxuya520/reverse-skill</p>
+  <p style="line-height: 1.75; color: #666; margin: 10px 0; font-size: 14px;">📚 仓库（官方插件目录）：github.com/anthropics/claude-plugins-official</p>
+  <p style="line-height: 1.75; color: #666; margin: 10px 0; font-size: 14px;">📚 仓库（开源插件规范）：github.com/cursor/plugins</p>
+  <p style="line-height: 1.75; color: #666; margin: 10px 0; font-size: 14px;">📊 榜单：GitHub Trending 周榜（github.com/trending?since=weekly），快照时间 2026-10-26</p>
+  <p style="line-height: 1.75; color: #666; margin: 10px 0; font-size: 14px;">📊 榜单：OpenGithubs 每周飙升榜（github.com/OpenGithubs/github-weekly-rank）</p>
+  <p style="line-height: 1.75; color: #999; margin: 12px 0; font-size: 13px;">说明：文中 star 数为 2026-10-26 榜单快照值，会随时间变化；仓库用途以各仓库 README 自述为准。</p>
+</section>
+
+<hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+
+<section style="margin-bottom: 30px;">
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">如果这篇对你有用：</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">👍 <strong style="color: #333;">点个赞</strong>，让更多装 skill 的人看到<br>💬 <strong style="color: #333;">留言说说</strong>：你装过的 skill 里，有几个是打开看过 scripts/ 的？<br>🔄 <strong style="color: #333;">转发</strong>给群里那位"一键装一堆插件"的同事</p>
+</section>

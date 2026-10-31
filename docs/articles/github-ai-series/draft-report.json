@@ -1,0 +1,89 @@
+[
+  {
+    "dir": "a2-git-for-agents",
+    "title": "Git 是给人设计的，可改代码的已经不是人了",
+    "ok": true,
+    "inject": {
+      "ok": true,
+      "usedFallback": false,
+      "h2": 7,
+      "table": 1,
+      "img": 0,
+      "chars": 3372,
+      "head": "\n  \n\nAgent 一次改了 47 个文件。你打开 PR 的 diff，决定认真审一遍。\n\n\n  \n\n翻到第 12 个",
+      "info": [
+        {
+          "tag": "DIV",
+          "len": 22,
+          "hasPlaceholder": false
+        },
+        {
+          "tag": "DIV",
+          "len": 0,
+          "hasPlaceholder": false
+        },
+        {
+          "tag": "DIV",
+          "len": 10,
+          "hasPlaceholder": true
+        }
+      ]
+    },
+    "save_clicked": true,
+    "appmsgid": "",
+    "verify": {
+      "h2": 7,
+      "table": 1,
+      "img": 0,
+      "chars": 3052,
+      "markers": 2,
+      "title": "",
+      "head": "Agent 一次改了 47 个文件。你打开 PR 的 diff，决定认真审一遍。"
+    },
+    "token": "1542083504"
+  },
+  {
+    "dir": "a3-multi-agent-parallel",
+    "title": "多开五个 Agent 一起干活，为什么反而更慢",
+    "ok": true,
+    "inject": {
+      "ok": true,
+      "usedFallback": false,
+      "h2": 7,
+      "table": 1,
+      "img": 0,
+      "chars": 2899,
+      "head": "\n  \n\n你把一个需求拆成五份，开了五个 Agent 并行跑。理论上五倍速度。\n\n\n  \n\n两个小时后，你在手动合并五个",
+      "info": [
+        {
+          "tag": "DIV",
+          "len": 23,
+          "hasPlaceholder": false
+        },
+        {
+          "tag": "DIV",
+          "len": 0,
+          "hasPlaceholder": false
+        },
+        {
+          "tag": "DIV",
+          "len": 10,
+          "hasPlaceholder": true
+        }
+      ]
+    },
+    "save_clicked": true,
+    "appmsgid": "",
+    "verify": {
+      "h2": 7,
+      "table": 1,
+      "img": 0,
+      "chars": 2605,
+      "markers": 2,
+      "pageHasTitle": true,
+      "title": "",
+      "head": "你把一个需求拆成五份，开了五个 Agent 并行跑。理论上五倍速度。\n\n两个小时"
+    },
+    "token": "1542083504"
+  }
+]
