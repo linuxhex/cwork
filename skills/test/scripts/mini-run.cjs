@@ -106,8 +106,10 @@ class Runner {
     const target = step.url.split('?')[0].replace(/^\/+/, '');
     const deadline = Date.now() + Math.min(this.stepTimeoutMs, 8000);
     let current = '';
+    let pollIdx = 0;
     while (Date.now() < deadline) {
-      await sleep(300);
+      await sleep(pollIdx === 0 ? 100 : 200);
+      pollIdx++;
       try {
         const page = await this.currentPage();
         current = (page && page.path) ? await this.t(page.path, '读取页面path') : '';
@@ -126,6 +128,22 @@ class Runner {
     return el;
   }
 
+  // 等 UI 稳定：先等 minMs，再轮询页面 path 变化，命中或超 maxMs 返回
+  async _waitForSettle(minMs, maxMs) {
+    await sleep(minMs);
+    const start = Date.now();
+    let lastPath = '';
+    try { const p = await this.currentPage(); lastPath = (p && p.path) ? await this.t(p.path, 'settle-path') : ''; } catch (_) {}
+    while (Date.now() - start < maxMs - minMs) {
+      await sleep(150);
+      try {
+        const p = await this.currentPage();
+        const cur = (p && p.path) ? await this.t(p.path, 'settle-path') : '';
+        if (cur && cur !== lastPath) return; // 页面已切换
+      } catch (_) { /* 切换中，继续 */ }
+    }
+  }
+
   async runStep(step, idx) {
     const label = `步骤${idx + 1} ${step.action}`;
     try {
@@ -138,7 +156,7 @@ class Runner {
         case 'click': {
           const el = await this.findElement(step.selector, step.index);
           await this.t(el.tap(), `点击 ${step.selector}`);
-          await sleep(300); // 等 UI 反馈/页面切换
+          await this._waitForSettle(300, 1500);
           return { ok: true, detail: step.selector };
         }
         case 'input': {
