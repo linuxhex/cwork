@@ -325,9 +325,10 @@ async function main() {
   const outFile = args.includes('--out') ? args[args.indexOf('--out') + 1] : null;
   const checkOnly = args.includes('--check');
   const snapshotMode = args.includes('--snapshot');
+  const snapshotPagesArg = args.includes('--snapshot-pages') ? args[args.indexOf('--snapshot-pages') + 1] : null;
 
-  if (!planFile && !checkOnly && !snapshotMode) {
-    console.error('用法：node mini-run.cjs --check | --snapshot [--out snap.json] | --plan plan.json [--out result.json]');
+  if (!planFile && !checkOnly && !snapshotMode && !snapshotPagesArg) {
+    console.error('用法：node mini-run.cjs --check | --snapshot [--out snap.json] | --snapshot-pages "a,b" [--out snaps.json] | --plan plan.json [--out result.json]');
     process.exit(1);
   }
 
@@ -345,11 +346,13 @@ async function main() {
   try {
     console.log(`→ 连接 ${wsEndpoint}（原生 automator，无请求劫持）...`);
     mp = await withTimeout(automator.connect({ wsEndpoint }), 15000, '连接开发者工具');
+    const t0 = Date.now();
 
     if (checkOnly) {
       const page = await withTimeout(mp.currentPage(), 10000, '获取当前页面');
       const p = (page && page.path) ? await withTimeout(page.path, 5000, '读取path') : '(空)';
       console.log(`✓ 探活成功：automator 可用，当前页面 ${p}`);
+      console.log(`⏱ 耗时：${Date.now() - t0}ms`);
       return;
     }
 
@@ -359,6 +362,24 @@ async function main() {
       if (outFile) fs.writeFileSync(outFile, JSON.stringify(snap, null, 2), 'utf8');
       console.log(`✓ 快照完成：${snap.path}，${snap.elements.length} 个可交互元素${outFile ? `，已存 ${outFile}` : ''}`);
       console.log('SNAPSHOT_JSON=' + JSON.stringify(snap));
+      console.log(`⏱ 耗时：${Date.now() - t0}ms`);
+      return;
+    }
+
+    if (snapshotPagesArg) {
+      // 一次连接导航+多页快照，pages 形如 "pageA,pageB,pageC"
+      const pages = snapshotPagesArg.split(',').map((s) => s.trim()).filter(Boolean);
+      const runner = new Runner(mp, stepTimeoutMs);
+      const snaps = [];
+      for (const p of pages) {
+        await runner.navigate({ url: '/' + p.replace(/^\/+/, '') });
+        const s = await runner.snapshot();
+        snaps.push(s);
+      }
+      if (outFile) fs.writeFileSync(outFile, JSON.stringify(snaps, null, 2), 'utf8');
+      console.log(`✓ 多页快照完成：${pages.length} 页${outFile ? `，已存 ${outFile}` : ''}`);
+      console.log('SNAPSHOT_JSON=' + JSON.stringify(snaps));
+      console.log(`⏱ 耗时：${Date.now() - t0}ms`);
       return;
     }
 
@@ -396,6 +417,7 @@ async function main() {
     console.log(`\n═══ 结果：通过 ${summary.passed} / 失败 ${summary.failed}（共 ${summary.scenarios.length} 场景）${outFile ? `，详情 ${outFile}` : ''} ═══`);
     console.log('RESULT_JSON=' + JSON.stringify(summary));
     process.exitCode = failedScenarios > 0 ? 1 : 0;
+    console.log(`⏱ 耗时：${Date.now() - t0}ms`);
   } catch (err) {
     console.error(`❌ ${err.message}`);
     process.exitCode = 2;
