@@ -5,6 +5,8 @@
 .qoder/
 .trae/
 .cwork/
+# .cwork/refs/ 是安装副本，需入库（分发器整目录覆盖生成）；.cwork/ 整体忽略，
+# 副本文件用 git add -f 强制纳入（与历史 SKILL.md/android-run.cjs 等入库方式一致）
 .idea/
 
 # cwork-log 本地密钥配置(含 AK/SK, 勿提交)
