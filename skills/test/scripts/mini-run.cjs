@@ -208,7 +208,7 @@ class Runner {
     }
   }
 
-  // 快照：当前页 path + data + 可交互元素清单（供 AI 生成 plan.json 时写准确选择器）
+  // 快照：当前页 path + data + 可交互元素清单（批量 evaluate，去逐元素 RPC）
   async snapshot() {
     const page = await this.currentPage();
     const pagePath = (page && page.path) ? await this.t(page.path, 'snapshot-path') : '';
@@ -223,29 +223,54 @@ class Runner {
 
     let elements = [];
     try {
-      const els = await this.t(page.$$(interactiveSelector), 'snapshot-elements');
-      if (els && els.length > 0) {
-        const limit = Math.min(els.length, 80);
-        for (let i = 0; i < limit; i++) {
+      // 一次 evaluate 拉全部元素的 tag/text/attrs，替代逐元素 3 次 RPC
+      const raw = await this.t(this.mp.evaluate((sel) => {
+        const qs = document.querySelectorAll(sel);
+        const out = [];
+        for (let i = 0; i < Math.min(qs.length, 80); i++) {
+          const el = qs[i];
+          const attrs = {};
+          for (const a of el.attributes) attrs[a.name] = a.value;
+          out.push({ tag: el.tagName, text: el.innerText || '', attrs });
+        }
+        return out;
+      }, interactiveSelector), 'snapshot-elements-batch');
+      if (Array.isArray(raw)) {
+        for (const item of raw) {
           try {
-            const el = els[i];
-            const tag = (await this.t(el.tagName(), `snapshot-tag-${i}`)) || '';
-            const text = (await this.t(el.text(), `snapshot-text-${i}`)) || '';
-            const attrs = (await this.t(el.attrs(), `snapshot-attrs-${i}`)) || {};
+            const tag = item.tag || '';
+            const text = (item.text || '').trim().slice(0, 60);
+            const attrs = item.attrs || {};
             const selector = this._buildSelector(tag, attrs, text);
             elements.push({
-              tag,
-              text: text.trim().slice(0, 60),
-              selector,
+              tag, text, selector,
               placeholder: attrs.placeholder || '',
               type: attrs.type || '',
               id: attrs.id || '',
               className: attrs.class || '',
             });
-          } catch (_) { /* 单个元素读取失败不影响整体 */ }
+          } catch (_) { /* 单个解析失败不影响整体 */ }
         }
       }
-    } catch (_) { /* 元素查询失败不阻塞快照 */ }
+    } catch (_) {
+      // evaluate 批量失败时回退逐元素（兼容旧 automator 版本）
+      try {
+        const els = await this.t(page.$$(interactiveSelector), 'snapshot-elements-fallback');
+        if (els && els.length > 0) {
+          const limit = Math.min(els.length, 80);
+          for (let i = 0; i < limit; i++) {
+            try {
+              const el = els[i];
+              const tag = (await this.t(el.tagName(), `snapshot-tag-${i}`)) || '';
+              const text = (await this.t(el.text(), `snapshot-text-${i}`)) || '';
+              const attrs = (await this.t(el.attrs(), `snapshot-attrs-${i}`)) || {};
+              const selector = this._buildSelector(tag, attrs, text);
+              elements.push({ tag, text: text.trim().slice(0, 60), selector, placeholder: attrs.placeholder || '', type: attrs.type || '', id: attrs.id || '', className: attrs.class || '' });
+            } catch (_) {}
+          }
+        }
+      } catch (_) { /* 元素查询失败不阻塞快照 */ }
+    }
 
     return { path: pagePath, data: pageData, elements };
   }
