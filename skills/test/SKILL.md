@@ -1,6 +1,6 @@
 ---
 name: cwork-test
-description: 页面自动化测试，自动识别 Web/小程序项目，分别走 ego-browser 或 miniprogram-automator 链路
+description: 页面自动化测试，自动识别 Web/小程序/安卓项目，分别走 ego-browser / miniprogram-automator / BlueStacks5+ADB 链路
 ---
 # cwork-test
 

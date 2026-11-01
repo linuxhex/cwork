@@ -1,7 +1,5 @@
----
-name: cwork-test
-description: 页面自动化测试，自动识别 Web/小程序项目，分别走 ego-browser 或 miniprogram-automator 链路
----
+# cwork-test
+
 # cwork-test
 
 
@@ -440,4 +438,11 @@ cwork-test 也可以独立使用（不依赖 cwork-implement）：
 ```
 
 ---
+
+
+
+---
+## 参考文件位置
+
+本技能的参考文件位于 `.cwork/refs/cwork-test/` 目录下（按需 Read，不常驻上下文），按 SKILL.md 内引用路径读取。例如 "见 `references/catalog-detail.md`" 对应 `.cwork/refs/cwork-test/references/catalog-detail.md`，"Read 同目录 `design-guide.md`" 对应 `.cwork/refs/cwork-test/design-guide.md`。
 
