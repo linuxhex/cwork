@@ -12,7 +12,7 @@
 
 ## 未分析
 
-（当前无待分析条目）
+- [2026-11-01] [test] 新增 android-run.cjs，BlueStacks5+ADB 驱动，对齐官方 Skill 能力 | 待实测 uiautomator dump 解析稳定性
 
 ## 经验沉淀（≤ 20 条，只留可长期借鉴的）
 
