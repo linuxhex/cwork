@@ -728,30 +728,36 @@ function generateStepCode(L, step, label, si, i, baseUrl) {
 
     case 'exportApi': {
       // 导出完整 API 响应到文件（供 Doris vs ES 数据比对等场景）
+      // filename 缺省自动生成 export-api-s{场景}-i{步骤}.json（探针 plan 常漏写，硬抛打断排障）
       // 支持单接口（urlPattern 字符串）或多接口批量导出（urlPatterns 数组）
-      if (!step.filename) {
-        throw new Error('exportApi 需要 filename: ' + JSON.stringify(step.desc || step.action));
-      }
       const patterns = step.urlPatterns || (step.urlPattern ? [step.urlPattern] : []);
       if (patterns.length === 0) {
         throw new Error('exportApi 需要 urlPattern 或 urlPatterns: ' + JSON.stringify(step.desc || step.action));
       }
+      const filename = step.filename || ('export-api-s' + si + '-i' + i + '.json');
       L(`  {`);
       L(`    await refreshResponses();`);
       L(`    const __patterns = ${JSON.stringify(patterns)};`);
+      L(`    const __wm = __apiWatermark;`);
       L(`    const __exported = [];`);
       L(`    for (const __p of __patterns) {`);
-      L(`      const __resp = findResponse(__p);`);
+      L(`      const __resp = findResponse(__p, __wm);`);
       L(`      if (__resp) {`);
       L(`        __exported.push({ urlPattern: __p, response: __resp });`);
       L(`      } else {`);
-      L(`        log('  ⚠ exportApi: 未捕获接口 ' + __p);`);
+      L(`        const __fallback = findResponse(__p);`);
+      L(`        if (__fallback) {`);
+      L(`          __exported.push({ urlPattern: __p, response: __fallback, note: 'pre-watermark' });`);
+      L(`          log('  ⚠ exportApi: 水位线后无新响应，回退导出池中最新匹配 ' + __p);`);
+      L(`        } else {`);
+      L(`          log('  ⚠ exportApi: 未捕获接口 ' + __p);`);
+      L(`        }`);
       L(`      }`);
       L(`    }`);
       L(`    if (__exported.length === 0) {`);
       L(`      throw new Error(${JSON.stringify(step.desc || 'exportApi')} + ': 未捕获任何接口响应');`);
       L(`    }`);
-      L(`    const __outFile = path.join(RESULT_DIR, ${JSON.stringify(step.filename)});`);
+      L(`    const __outFile = path.join(RESULT_DIR, ${JSON.stringify(filename)});`);
       L(`    fs.writeFileSync(__outFile, JSON.stringify(__exported.length === 1 ? __exported[0].response : __exported, null, 2));`);
       L(`    log('  ✓ exportApi: 导出 ' + __exported.length + ' 个接口响应到 ' + __outFile);`);
       L(`  }`);

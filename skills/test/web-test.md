@@ -364,7 +364,7 @@ echo "✓ ego-browser 可用：$(command -v ego-browser)"
 | `assertApi` | `urlPattern`, `expectStatus?`, `expectBodyCode?`, `timeout?`（秒，默认 8） | 接口断言：状态码 / 业务码；**短轮询等「触发动作之后」的新响应**（click/fill/clickCdp 前自动打水位线，只认水位线后匹配，默认 8s）。避免命中进页旧列表（OMJF-19967 反面：筛选未回就命中进页 query） |
 
 | `assertDataConsistency` | `selector`, `urlPattern`, `apiField` | **页面 ↔ 接口一致性**：页面元素文本 vs 接口响应字段（apiField 支持 `data.orders[0].orderNo` 路径语法）；生成期强制要求 urlPattern + apiField |
-| `exportApi` | `urlPattern` 或 `urlPatterns[]`, `filename`, `filter?` | **导出完整 API 响应到文件**（result.json 同目录）。支持单接口或多接口批量导出；`filter: { status: 200 }` 过滤条件。用于 Doris vs ES 数据比对等场景 |
+| `exportApi` | `urlPattern` 或 `urlPatterns[]`, `filename?`（缺省 `export-api-s{场景}-i{步骤}.json`）, `filter?` | **导出完整 API 响应到文件**（result.json 同目录）。优先导出水位线后新响应；没有则回退池中最新并告警。用于探针/Doris vs ES 比对 |
 | `aiAssert` | `prompt`, `capture?: ["screenshot","dom","apiResponses"]` | AI 判断兜底：**单遍契约下仅采集证据**（截图+DOM 写 ctx 文件），步骤标 aiPending 不计入 passed；跑完 AI 读 ctx 判断后合入 result.json。prompt 必须写成可判定判据 |
 
 **选择器歧义处理（ego-browser 原生选择器方言，所有支持 selector 的 action 通用）**：
