@@ -175,12 +175,6 @@ function generateHeredoc(plan, ctxDir, keep = false, resultPath = null) {
   L(`function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }`);
   L(``);
 
-  // 获取拦截的接口响应
-  L(`async function getCapturedResponses() {`);
-  L(`  const raw = await js('JSON.stringify(window.__capturedResponses || [])');`);
-  L(`  return JSON.parse(raw);`);
-  L(`}`);
-  L(``);
   // 取最新一条匹配响应——同一接口可能被多次调用，取旧的会断言到过期数据
   L(`function findResponse(urlPattern) {`);
   L(`  for (let __i = __lastResponses.length - 1; __i >= 0; __i--) {`);
@@ -191,8 +185,16 @@ function generateHeredoc(plan, ctxDir, keep = false, resultPath = null) {
   L(`}`);
   L(``);
   L(`let __lastResponses = [];`);
+  // 增量拉取：__capturedResponses 只增不减，全量回传在长会话里每步都是大 payload；
+  // Node 侧记已拉取偏移，只取 slice(offset) 的新增段拼接（消费点才拉，动作步骤不拉）
+  L(`let __pulledCount = 0;`);
   L(`async function refreshResponses() {`);
-  L(`  __lastResponses = await getCapturedResponses();`);
+  L(`  const __raw = await js('JSON.stringify((window.__capturedResponses || []).slice(' + __pulledCount + '))');`);
+  L(`  const __fresh = JSON.parse(__raw);`);
+  L(`  if (Array.isArray(__fresh) && __fresh.length > 0) {`);
+  L(`    __pulledCount += __fresh.length;`);
+  L(`    __lastResponses = __lastResponses.concat(__fresh);`);
+  L(`  }`);
   L(`}`);
   L(``);
 
@@ -250,6 +252,7 @@ function generateHeredoc(plan, ctxDir, keep = false, resultPath = null) {
     L(`__currentScenario = ${JSON.stringify(sc.name)};`);
     L(`log('');`);
     L(`log('【场景】' + __currentScenario + '（${pri}）');`);
+    L(`const __t0_${si} = Date.now();`);
     // P0 失败阻断：被阻断的场景不执行，结果标 blocked（不计入 passed/failed）
     L(`if (__blockedAfterP0) {`);
     L(`  log('  ⬜ BLOCKED——前置 P0 场景失败，跳过执行');`);
@@ -305,7 +308,7 @@ function generateHeredoc(plan, ctxDir, keep = false, resultPath = null) {
 
     L(`}`);
     L(`if (__result_${si}.steps.some(s => s.pending)) __result_${si}.aiPending = true;`);
-    L(`log('  场景结果: ' + (__result_${si}.aiPending ? '◌ 待AI判断（确定性步骤' + (__result_${si}.ok ? '已全过' : '有失败') + '）' : (__result_${si}.ok ? '✓ 通过' : '✗ 失败')));`);
+    L(`log('  场景结果: ' + (__result_${si}.aiPending ? '◌ 待AI判断（确定性步骤' + (__result_${si}.ok ? '已全过' : '有失败') + '）' : (__result_${si}.ok ? '✓ 通过' : '✗ 失败')) + '，耗时 ' + ((Date.now() - __t0_${si}) / 1000).toFixed(1) + 's');`);
     L(`if (!__result_${si}.ok && ${JSON.stringify(pri)} === 'P0') {`);
     L(`  __blockedAfterP0 = true;`);
     L(`  log('⛔ P0 场景失败，后续场景全部标记 BLOCKED');`);
@@ -343,13 +346,11 @@ function generateStepCode(L, step, label, si, i, baseUrl) {
       const navUrl = /^https?:\/\//i.test(step.url || '') ? step.url : (baseUrl || '') + (step.url || '');
       L(`  await gotoAndWait(${JSON.stringify(navUrl)});`);
       L(`  await waitForLoad();`);
-      L(`  await refreshResponses();`);
       break;
     }
 
     case 'waitForNetworkIdle':
       L(`  await waitForNetworkIdle();`);
-      L(`  await refreshResponses();`);
       break;
 
     case 'waitForLoad':
@@ -390,8 +391,9 @@ function generateStepCode(L, step, label, si, i, baseUrl) {
       L(`    await sleep(80);`);
       L(`    await cdp('Input.dispatchMouseEvent', { type: 'mouseReleased', x: __r.x, y: __r.y, button: 'left', clickCount: 1 });`);
       L(`  }`);
-      L(`  await sleep(600);`);
-      L(`  await refreshResponses();`);
+      // click 后不固定长睡：后续步骤用 waitForUrl/waitForElement/assertApi 做确定性同步；
+      // 200ms 仅缓冲事件处理器同步执行（小程序侧同款优化：条件等待替代固定 sleep）
+      L(`  await sleep(200);`);
       break;
 
     case 'js':
@@ -443,17 +445,16 @@ function generateStepCode(L, step, label, si, i, baseUrl) {
       L(`    if (!__panelOpen) throw new Error('openDatePicker 失败: 面板未打开（已重试 1 次），检查 selector/index 是否指向真实可聚焦输入框，或先用 --snapshot 实测控件结构');`);
       L(`    cliLog('openDatePicker[dbg] 面板已打开并可见');`);
       L(`  }`);
-      // 面板打开后等待内部组件渲染（从 400ms 增加到 600ms，防竞态）
-      L(`  await sleep(600);`);
-      // 等待日历表格出现（element-ui 异步渲染，需确定性同步）
+      // 面板打开已由上面轮询校验真实可见，无需固定长睡：短缓冲等 nextTick 渲染即可
+      L(`  await sleep(200);`);
+      // 等待日历表格出现（element-ui 异步渲染，确定性同步替代固定 sleep）
       L(`  try { await waitForElement('.el-date-table', { timeout: 2 }); } catch (e) { cliLog('openDatePicker[warn] 日历表格未出现（可能非日期面板）'); }`);
       // 如果是 has-time 模式，等待时间选择器出现
       L(`  const __hasTime = await js('document.querySelector(".el-time-spinner") ? "yes" : "no"');`);
       L(`  if (__hasTime === 'yes') {`);
       L(`    try { await waitForElement('.el-time-spinner', { timeout: 2 }); } catch (e) {}`);
-      L(`    await sleep(300); // 时间选择器渲染缓冲`);
+      L(`    await sleep(150); // 时间选择器渲染缓冲`);
       L(`  }`);
-      L(`  await refreshResponses();`);
       break;
 
     case 'dispatchClick':
@@ -467,24 +468,21 @@ function generateStepCode(L, step, label, si, i, baseUrl) {
       L(`    let __r = null; if (typeof __raw === 'string') { try { __r = JSON.parse(__raw); } catch (e) {} }`);
       L(`    if (!__r || !__r.ok) throw new Error('dispatchClick 失败: ' + JSON.stringify(__ev && __ev.result && __ev.result.value));`);
       L(`  }`);
-      L(`  await sleep(500);`);
-      L(`  await refreshResponses();`);
+      L(`  await sleep(200);`);
       break;
 
     case 'click':
       // 直接委托 ego-browser 原生 click()，支持 CSS/text=/role/>>nth=N 等原生选择器
       // 多匹配时 ego 自动列出候选（Candidates: 1. xxx 2. yyy），无需 fallback
       L(`  await click(${JSON.stringify(step.selector)}, { label: ${JSON.stringify(step.desc || '点击')} });`);
-      L(`  await sleep(500);`);
-      L(`  await refreshResponses();`);
+      L(`  await sleep(200);`);
       break;
 
     case 'fill':
       // 直接委托 ego-browser 原生 fillInput()，支持 CSS/text=/role 等原生选择器
       // 多匹配时 ego 自动列出候选（Candidates: 1. xxx 2. yyy），无需 fallback
       L(`  await fillInput(${JSON.stringify(step.selector)}, ${JSON.stringify(step.value)});`);
-      L(`  await sleep(200);`);
-      L(`  await refreshResponses();`);
+      L(`  await sleep(100);`);
       break;
 
     case 'assertVisible':
@@ -715,8 +713,9 @@ function generateStepCode(L, step, label, si, i, baseUrl) {
       if (captures.includes('dom')) {
         L(`    try { __ctx.dom = await snapshotText(); } catch(e) { __ctx.domError = e.message; }`);
       }
-      // 接口响应
+      // 接口响应（refreshResponses 已改为消费点懒拉，此处是消费点）
       if (captures.includes('apiResponses')) {
+        L(`    await refreshResponses();`);
         L(`    __ctx.apiResponses = __lastResponses;`);
       }
       // 页面信息

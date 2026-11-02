@@ -106,6 +106,13 @@ Web 测试采用 **"AI 生成计划 → 执行器单遍执行 → AI 跑后判�
 
 **位置**：`skills/test/scripts/web-run.cjs`
 
+**性能模型（小程序侧同款优化，已内置）**：
+
+- **接口响应增量懒拉**：动作步骤（click/fill/navigate）后**不再**全量回拉接口响应；`assertApi`/`assertDataConsistency`/`exportApi`/aiAssert(apiResponses) 等消费点才拉，且只拉上次偏移之后的新增段——长会话不再每步传大 payload
+- **条件等待替代固定 sleep**：click 后仅 200ms 事件缓冲，跳转/渲染同步靠后续步骤的 `waitForUrl`/`waitForElement`/`waitForNetworkIdle` 确定性等待；openDatePicker 面板已轮询校验真实打开，不再固定长睡
+- **阶段耗时埋点**：每场景结束输出耗时（`场景结果: ✓ 通过，耗时 3.2s`），慢场景直接看日志定位
+- plan 写法配套：click 后紧跟的断言若依赖异步渲染，**必须**显式加 `waitForElement`/`waitForUrl` 同步步骤，不要靠"再多睡一会"
+
 | 命令 | 用途 |
 |------|------|
 | `node web-run.cjs --plan plan.json` | **完整流程（默认推荐）**：单遍执行——确定性断言直接判定，aiAssert 仅采集证据；跑完输出 AI_ASSERT_PENDING，AI 跑后判断合入 result.json |
