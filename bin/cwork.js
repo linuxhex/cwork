@@ -291,7 +291,7 @@ ${cleaned}
 每个技能以 \`/cwork-xxx\` 形式调用。可用技能：
 - /cwork-implement — 完整实现流程
 - /cwork-bug — 快速修复 bug
-- /cwork-test — 页面自动化测试
+- /cwork-test — 页面自动化测试（Web/小程序/安卓）
 - /cwork-commit — 提交代码
 - /cwork-code — 代码仓库查询
 - /cwork-log — 查日志分析
@@ -661,7 +661,7 @@ ${cleaned}
 可用技能：
 - /cwork-implement — 完整实现流程
 - /cwork-bug — 快速修复 bug
-- /cwork-test — 页面自动化测试
+- /cwork-test — 页面自动化测试（Web/小程序/安卓）
 - /cwork-commit — 提交代码
 - /cwork-code — 代码仓库查询
 - /cwork-log — 查日志分析

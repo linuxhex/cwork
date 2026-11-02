@@ -1,6 +1,6 @@
 ---
 name: cwork-test
-description: 页面自动化测试，自动识别 Web/小程序项目，分别走 ego-browser 或 miniprogram-automator 链路
+description: 页面自动化测试，自动识别 Web/小程序/安卓项目，分别走 ego-browser / miniprogram-automator / BlueStacks5+ADB 链路
 ---
 # cwork-test
 
@@ -13,6 +13,7 @@ description: 页面自动化测试，自动识别 Web/小程序项目，分别�
 
 | 项目类型 | 识别条件 | 驱动引擎 | 测试链路 |
 |---------|---------|---------|---------|
+| **安卓应用** | 显式 `--android` / `*.apk` / adb 已连 BlueStacks | ADB 直连 BlueStacks 5 | 安卓链路 |
 | **微信小程序** | 存在 `project.config.json` 且含 `appid` | miniprogram-automator（直连） | 小程序链路 |
 | **Web 应用** | 存在 `package.json`（无小程序配置） | ego-browser（web-run.cjs 执行器） | Web 链路 |
 
@@ -46,8 +47,12 @@ cwork-implement → cwork-test(条件触发) → cwork-commit
 启动时执行以下检测，**只走一条链路**：
 
 ```bash
-# ① 优先检测小程序
-if [ -f "project.config.json" ] && grep -q '"appid"' project.config.json; then
+# ① 优先检测安卓（显式 --android / *.apk / adb 已连 BlueStacks）
+if echo "$@" | grep -q -- '--android' || ls *.apk 2>/dev/null | grep -q . || adb devices 2>/dev/null | grep -q "device$"; then
+    PROJECT_TYPE="android"
+    echo "识别为安卓应用，走安卓测试链路（BlueStacks5+ADB）"
+# ② 其次检测小程序
+elif [ -f "project.config.json" ] && grep -q '"appid"' project.config.json; then
     PROJECT_TYPE="mini"
     echo "识别为微信小程序项目，走小程序测试链路"
 else
@@ -63,8 +68,8 @@ fi
 【cwork-test】项目类型识别
 ═══════════════════════════════════════════════════════════════
 
-→ 项目类型：{mini/web}
-→ 驱动引擎：{miniprogram-automator / ego-browser}
+→ 项目类型：{android/mini/web}
+→ 驱动引擎：{adb + BlueStacks 5 / miniprogram-automator / ego-browser}
 → 进入对应链路...
 ```
 
@@ -81,6 +86,12 @@ fi
 # 小程序测试链路
 
 > **按需加载**：PROJECT_TYPE=mini 时 Read 同目录 `mini-test.md`，不随本文件全量加载。
+
+---
+
+# 安卓测试链路
+
+> **按需加载**：PROJECT_TYPE=android 时 Read 同目录 `android-test.md`，不随本文件全量加载。
 
 ---
 
@@ -130,7 +141,7 @@ for each 测试场景:
 
 **测试三原则（质量把关，强制）：**
 1. **场景可追溯**：每个测试场景必须标注来源（changes.md 改动点 / analysis.md 业务规则 / 需求描述），无来源的"顺手测"场景砍掉
-2. **正反面覆盖**：正向（功能生效）+ 反向（错误输入/越权/边界/异常）都要测，只测快乐路径不算测试
+2. **正反面覆盖**：正向（功能生效）+ 反向（错误输入/越权/边界/异常）都要测，只测快乐路径不算测试。**反例从输入面推导**：快照后先列出当前页面所有可交互输入点（input/picker/按钮），反例场景（非法值/边界值/特殊字符/空值）从这些输入点推导，而非凭空编造
 3. **断言全面准确**：确定性断言优先（assertText/assertApi/assertDataConsistency），判定客观可复现；aiAssert 只用于视觉/语义兜底
 
 **覆盖面检查清单：**
@@ -153,7 +164,7 @@ for each 测试场景:
 
 **自问模板：**
 1. "全部通过是真的没问题，还是我的测试太浅了？"
-2. "失败的用例是 bug 还是测试本身的问题？我确信吗？"
+2. "失败的用例是 bug 还是测试本身的问题？连续复现了吗？我确信吗？"
 3. "有没有我刻意跳过的'不好测'的场景？"
 
 **自问自答循环：**
@@ -167,6 +178,12 @@ elif 有失败:
     自答：从截图/网络请求/代码看，原因是...
     如果确认是 bug：记录到修复建议
     如果是测试问题：自己调整测试用例
+
+    失败定性硬约束（吸收 rev-skills 崩溃分析思想）：
+    - 确定性复现：同一失败步骤原 plan 重跑，连续 2 次复现才定性为「真 bug」；
+      只复现 1 次或时有时无 → 标「瞬态失败」（竞态/异步/环境），单独排查不混入 bug 清单
+    - 失败≠bug，须确认可达性：失败步骤须确认「选择器对、元素真在、操作真生效」，
+      排除选择器软失效/弹窗遮挡/前置状态未就绪等测试本身问题，再定性为页面 bug
 ```
 
 ## 阶段四：结果报告
@@ -267,6 +284,7 @@ if 测试失败:
 - **执行器/脚本改动必须回源仓库双写**（`$CWORK_HOME/skills/test/`），禁止只 patch 安装副本——安装是整目录覆盖分发，副本 patch 下次分发即被冲掉；改完当场记一笔到 `skills/USAGE_NOTES.md`「未分析」区（静默，不打印）
 - **Web**：环境未就绪（服务未启动）/ ego-browser 未安装，禁止执行测试
 - **小程序**：微信开发者工具未安装 / project.config.json 不存在 / miniprogram-automator 未安装，禁止执行
+- **安卓**：BlueStacks 5 未安装 / ADB 不可用 / `adb devices` 无在线设备 / 目标包未安装且无 APK 路径，禁止执行测试
 - 测试规划未经用户确认，禁止执行
 - **Web 链路必须使用 web-run.cjs 执行器**，禁止 AI 手写执行类 heredoc（执行器内部已保证单 heredoc 约束）；页面观察/诊断统一走 `--snapshot` 标准通道，--snapshot 表达不了的多步观察允许一次性只读 heredoc（单 heredoc 内完成、只读、不产生测试结论，观察后修正 plan 重跑）
 - **操作卡死防线（Web/小程序通用）**：页面操作不生效时必须走「探索套路」——每轮「观察 → 操作 → 验证」闭环、换通道前必须先观察（截图 + 真实 DOM，本地有源码直接查组件事件绑定），禁止无观察连环盲试；同一目标 3 次操作无效标 BLOCKED 继续后续步骤，场景失败即收场，全局预算到点停止输出报告（详见 web-test.md「探索套路与止损极值」）

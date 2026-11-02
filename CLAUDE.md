@@ -9,7 +9,7 @@
 ## 主流程技能（用户可见）
 - cwork-implement — 完整实现流程（含深度追问 + 自问自答质询）
 - cwork-bug — 快速修复 bug（含深度追问 + 自问自答质询）
-- cwork-test — 页面自动化测试（条件触发，非必经，含自问自答质询）
+- cwork-test — 页面自动化测试（条件触发，非必经，含自问自答质询；Web/小程序/安卓）
 - cwork-commit — 提交代码
 
 ## 内部技能（不暴露）
@@ -69,7 +69,7 @@ cwork 内置了决策树式追问机制，分两种模式：
   （按需加载：需要时 Read `.cwork/refs/cwork-requirement/SKILL.md` 获取完整指令，不常驻上下文）
 - /cwork-tech-writer — 科技技术分享高手人格。承接 cwork-article 流程层，用资深技术布道者的思维框架、语言风格、写作套路创作技术分享/开源项目/产品推广/教程/行业观察类内容。适用于：技术原理、架构设计、最佳实践、开源介绍、产品解读。
   （按需加载：需要时 Read `.cwork/refs/cwork-tech-writer/SKILL.md` 获取完整指令，不常驻上下文）
-- /cwork-test — 页面自动化测试，自动识别 Web/小程序项目，分别走 ego-browser 或 miniprogram-automator 链路
+- /cwork-test — 页面自动化测试，自动识别 Web/小程序/安卓项目，分别走 ego-browser / miniprogram-automator / BlueStacks5+ADB 链路
   （按需加载：需要时 Read `.cwork/refs/cwork-test/SKILL.md` 获取完整指令，不常驻上下文）
 - /cwork-wuxia-writer — 金庸式武侠写作人格。承接 cwork-article 流程层，用承金庸一脉的思维框架、语言风格、写作套路创作章回体、半文半白、侠义精神的武侠故事/小说。适用于：武侠小说、江湖短篇、章回体叙事。
   （按需加载：需要时 Read `.cwork/refs/cwork-wuxia-writer/SKILL.md` 获取完整指令，不常驻上下文）

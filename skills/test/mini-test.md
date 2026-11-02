@@ -318,6 +318,12 @@ node mini-run.cjs --snapshot --out snap-login.json
 {"action": "evaluate", "script": "JSON.stringify({path: __page__.route, data: __page__.data})"}
 ```
 
+**多页快照合并**（推荐）：一次连接导航+多页快照，替代反复起进程：
+
+```bash
+node mini-run.cjs --snapshot-pages "pages/login/login,pages/index/index" --out snaps.json
+```
+
 ## 小程序阶段三：测试执行
 
 ### 执行流程

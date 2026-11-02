@@ -1,0 +1,448 @@
+# cwork-test
+
+# cwork-test
+
+
+# 页面自动化测试
+
+## 概述
+
+`cwork-test` 是 cwork 的统一测试技能，**启动时自动识别项目类型**，然后走对应测试链路：
+
+| 项目类型 | 识别条件 | 驱动引擎 | 测试链路 |
+|---------|---------|---------|---------|
+| **安卓应用** | 显式 `--android` / `*.apk` / adb 已连 BlueStacks | ADB 直连 BlueStacks 5 | 安卓链路 |
+| **微信小程序** | 存在 `project.config.json` 且含 `appid` | miniprogram-automator（直连） | 小程序链路 |
+| **Web 应用** | 存在 `package.json`（无小程序配置） | ego-browser（web-run.cjs 执行器） | Web 链路 |
+
+### 核心流程
+
+1. **项目识别**：自动检测项目类型，选择对应测试链路
+2. **环境准备**：按项目类型启动对应环境
+3. **测试规划**：结合需求改动生成 plan.json（声明式测试计划），按测试三原则设计（场景可追溯、正反面覆盖、断言准确），自问自答质询测试设计
+4. **测试执行**：Web 走 web-run.cjs 执行器（读取 plan.json → 生成 ego-browser heredoc → 执行）；小程序走 mini-run.cjs 执行器
+5. **结果报告**：记录测试结果（含截图证据），发现问题自动修复并重测，自问自答质询结果
+
+### 在 cwork 流程中的位置
+
+```
+cwork-implement → cwork-test(条件触发) → cwork-commit
+                                    ↑
+                        满足触发条件才介入
+```
+
+- cwork-implement 完成后评估：前端改动 + 新页面/核心交互 + 用户确认，三条件全满足才进入（否则直接进 cwork-commit）
+- 测试通过后进入 cwork-commit
+
+## 语言约束（强制）
+
+- **所有对话必须使用中文**
+- **所有测试报告必须使用中文**
+- 仅在必要处保留英文：命令、路径、选择器、代码
+
+## 项目类型识别
+
+启动时执行以下检测，**只走一条链路**：
+
+```bash
+# ① 优先检测安卓（显式 --android / *.apk / adb 已连 BlueStacks）
+if echo "$@" | grep -q -- '--android' || ls *.apk 2>/dev/null | grep -q . || adb devices 2>/dev/null | grep -q "device$"; then
+    PROJECT_TYPE="android"
+    echo "识别为安卓应用，走安卓测试链路（BlueStacks5+ADB）"
+# ② 其次检测小程序
+elif [ -f "project.config.json" ] && grep -q '"appid"' project.config.json; then
+    PROJECT_TYPE="mini"
+    echo "识别为微信小程序项目，走小程序测试链路"
+else
+    PROJECT_TYPE="web"
+    echo "识别为 Web 项目，走 Web 测试链路"
+fi
+```
+
+识别后输出：
+
+```
+═══════════════════════════════════════════════════════════════
+【cwork-test】项目类型识别
+═══════════════════════════════════════════════════════════════
+
+→ 项目类型：{android/mini/web}
+→ 驱动引擎：{adb + BlueStacks 5 / miniprogram-automator / ego-browser}
+→ 进入对应链路...
+```
+
+---
+
+# Web 测试链路
+
+> **按需加载**：PROJECT_TYPE=web 时 Read 同目录 `web-test.md`，不随本文件全量加载。
+>
+> **核心架构**：Web 链路 = "AI 生成 plan.json → web-run.cjs 执行器**单遍**执行 → AI 跑后判断合入"。执行器内部自动生成 ego-browser heredoc，保证整个测试会话在一个 heredoc 内（单 tab、登录态不丢失）；确定性断言（数据/布局/样式/接口/URL）直接判定，aiAssert 仅采集证据（步骤标 aiPending 不计 passed），跑完输出 AI_ASSERT_PENDING 由 AI 判断合入 result.json，**不重跑**。执行器内置假通过防线（aiAssert 声明数 vs 采集数比对）与 plan 生成期校验（空场景/凑数等待/登录无确定性判据拒绝执行）。
+
+---
+
+# 小程序测试链路
+
+> **按需加载**：PROJECT_TYPE=mini 时 Read 同目录 `mini-test.md`，不随本文件全量加载。
+
+---
+
+# 安卓测试链路
+
+> **按需加载**：PROJECT_TYPE=android 时 Read 同目录 `android-test.md`，不随本文件全量加载。
+
+---
+
+# 通用阶段（Web 和小程序共用）
+
+## 自问自答质询（测试设计质询）
+
+对测试设计进行自我质询，确保覆盖面足够。全程自问自答，不涉及用户——自己扮演质疑者，自己回答，自己决策是否补充：
+
+**质询规则：**
+1. **逐层自问**：对每个测试场景，沿决策树追问"如果这里有 bug，我的场景能抓到吗？"
+2. **每个自问带论据和自答**：提出质疑后，自己给出回答——"我怀疑覆盖不足，原因是 X，我决定补充场景 Y"
+3. **一次只质疑一个场景**：逐个场景质询和自答，不要一次性罗列所有疑点
+4. **事实自己查**：能从代码/需求文档确认的，直接查，不要空猜
+5. **自己闭环**：每个质疑必须自己给出结论——是补充场景还是确认可靠，不留给用户判断
+
+**自问自答示例：**
+```
+自问："导出功能只测了 CSV，Excel 路径呢？"
+自答："代码里有两条导出路径，Excel 路径未覆盖。我补充 Excel 导出场景。"
+→ 补充场景
+
+自问："大数据量导出只测了 1000 行，边界是多少？"
+自答："我查下数据库，最大表 50 万行。只测 1000 行不够，补充 10 万行场景。"
+→ 补充场景
+
+自问："网络超时场景测了吗？"
+自答："这是前端测试，导出是同步下载，网络超时不适用。确认可靠。"
+→ 记录：经自问验证，场景可靠
+```
+
+**自问模板：**
+1. "最可能出问题的场景我测了吗？"
+2. "有没有只测了快乐路径，忽略了异常路径？"
+3. "测试数据是否覆盖了边界情况？"
+
+**自问自答循环：**
+```
+for each 测试场景:
+    自问：这个场景能发现真正的 bug 吗？如果这里有 bug，我的场景能抓到吗？
+    自答：我怀疑/确认...，原因是...
+    如果发现覆盖不足：
+        自己决定补充测试场景，不问用户
+    如果确认可靠：
+        记录：经自问验证，测试设计可靠
+```
+
+**测试三原则（质量把关，强制）：**
+1. **场景可追溯**：每个测试场景必须标注来源（changes.md 改动点 / analysis.md 业务规则 / 需求描述），无来源的"顺手测"场景砍掉
+2. **正反面覆盖**：正向（功能生效）+ 反向（错误输入/越权/边界/异常）都要测，只测快乐路径不算测试。**反例从输入面推导**：快照后先列出当前页面所有可交互输入点（input/picker/按钮），反例场景（非法值/边界值/特殊字符/空值）从这些输入点推导，而非凭空编造
+3. **断言全面准确**：确定性断言优先（assertText/assertApi/assertDataConsistency），判定客观可复现；aiAssert 只用于视觉/语义兜底
+
+**覆盖面检查清单：**
+- [ ] 主路径（快乐路径）覆盖
+- [ ] 异常路径覆盖（错误输入、网络异常等）
+- [ ] 边界条件覆盖（空数据、大数据量、特殊字符）
+- [ ] 交互状态覆盖（加载中、禁用状态、权限限制）
+- [ ] 每个场景已标注来源（changes.md/analysis.md）
+
+## 自问自答质询（结果质询）
+
+对测试结果进行自我质询。全程自问自答，不涉及用户——自己扮演质疑者，自己回答，自己决策：
+
+**质询规则：**
+1. **逐层自问**：对每个测试结论，沿决策树追问"如果这个判断是错的呢？"
+2. **每个自问带论据和自答**：提出质疑后，自己给出回答——"我怀疑判断有误，原因是 X，我决定去验证 Y"
+3. **一次只质疑一个结论**：逐个结论质询和自答，不要一次性罗列所有疑点
+4. **事实自己查**：能从截图/网络请求/代码验证的，直接查，不要空猜
+5. **自己闭环**：每个质疑必须自己给出结论——是补充测试还是确认结果可靠，不留给用户判断
+
+**自问模板：**
+1. "全部通过是真的没问题，还是我的测试太浅了？"
+2. "失败的用例是 bug 还是测试本身的问题？连续复现了吗？我确信吗？"
+3. "有没有我刻意跳过的'不好测'的场景？"
+
+**自问自答循环：**
+```
+if 全部通过:
+    自问：我是否因为测试通过就放松了警惕？如果这里有隐藏 bug，最可能藏在哪？
+    自答：我怀疑/确认...，原因是...
+    如果发现遗漏：自己决定补充测试，不问用户
+elif 有失败:
+    自问：失败是真的 bug 还是测试环境/用例问题？如果判断错了呢？
+    自答：从截图/网络请求/代码看，原因是...
+    如果确认是 bug：记录到修复建议
+    如果是测试问题：自己调整测试用例
+
+    失败定性硬约束（吸收 rev-skills 崩溃分析思想）：
+    - 确定性复现：同一失败步骤原 plan 重跑，连续 2 次复现才定性为「真 bug」；
+      只复现 1 次或时有时无 → 标「瞬态失败」（竞态/异步/环境），单独排查不混入 bug 清单
+    - 失败≠bug，须确认可达性：失败步骤须确认「选择器对、元素真在、操作真生效」，
+      排除选择器软失效/弹窗遮挡/前置状态未就绪等测试本身问题，再定性为页面 bug
+```
+
+## 阶段四：结果报告
+
+### 报告格式
+
+测试结果记录到 `docs/requirements/{requirement_key}/test-report.md`：
+
+```markdown
+# 测试报告
+
+## 概要
+- 测试时间：{YYYY-MM-DD HH:mm:ss}
+- 项目类型：{Web/小程序}
+- 测试环境：{http://localhost:3000 / 微信开发者工具模拟器}
+- 驱动引擎：{ego-browser / miniprogram-automator}
+- 场景总数：{N}
+- 通过：{M}
+- 失败：{K}
+- 通过率：{M/N * 100}%
+
+## 详细结果
+
+### 场景 1：用户登录 ✓
+| 步骤 | 操作 | 结果 | 截图 |
+|------|------|------|------|
+| 1 | 打开 /login | ✓ | |
+| 2 | 输入用户名 | ✓ | |
+| 3 | 输入密码 | ✓ | |
+| 4 | 点击登录 | ✓ | |
+| 5 | 验证跳转 | ✓ | screenshots/场景1-最终.png |
+
+### 场景 2：数据列表展示 ✗
+| 步骤 | 操作 | 结果 | 截图 | 备注 |
+|------|------|------|------|------|
+| 1 | 打开 /dashboard | ✓ | | |
+| 2 | 验证列表加载 | ✗ | screenshots/场景2-步骤2-fail.png | 接口返回 500 |
+
+## 失败分析
+
+### 场景 2：数据列表展示
+- 失败步骤：步骤 2 — 验证列表加载
+- **前端诊断**：接口 GET /api/dashboard 返回 500，traceId=abc123
+- **后端诊断**（cwork-log）：
+  - 日志：DashboardService.query 抛 NullPointerException
+  - 代码位置：DashboardService.java:45
+- 定性：**后端问题**（非前端 bug）
+- 建议：修 DashboardService.java:45 空指针处理
+
+## 修复建议
+1. [场景2·后端] 修 DashboardService.java:45 空指针，参考 cwork-log 链路证据
+```
+
+### 截图证据
+
+截图保存到 `docs/requirements/{requirement_key}/screenshots/` 目录：
+
+| 截图类型 | 命名规则 | 何时捕获 |
+|---------|---------|---------|
+| 步骤失败 | `fail-s{场景}-i{步骤}.png`（web-run.cjs 自动归档到 result.json 同目录 screenshots/） | 步骤执行失败时（必须，自动） |
+| AI 断言上下文 | `s{场景}_i{步骤}.png`（ctx-dir） | aiAssert 收集时（自动） |
+| 场景最终 | `{场景名}-最终.png` | 场景所有步骤完成后（必须） |
+| 步骤成功 | `{场景名}-步骤{N}-pass.png` | 步骤执行成功时（可选，默认不捕获） |
+
+### 自动修复循环
+
+测试失败时，先做诊断，再尝试自动修复：
+
+```
+if 测试失败:
+    1. 诊断（Web: drainEvents + captureScreenshot + snapshotText + pageInfo; 小程序: mini-run.cjs --snapshot 取页面结构 + evidence 取证；接口问题调 cwork-log 查后端）
+    2. 若有后端接口失败 → 调用 cwork-log 查后端日志/链路，拿到异常堆栈 + 文件:行号
+    3. 综合前后端证据定位根因：
+       - 纯前端：修前端代码
+       - 后端问题：按 cwork-log 指出的文件:行号修后端代码
+    4. 等待热更新
+    5. 重新执行失败的场景
+    6. 最多重试 3 次
+    7. 仍失败则记录到报告（含前端截图 + 后端日志证据），等待人工处理
+```
+
+## 阶段切换通知
+
+```
+═══════════════════════════════════════════════════════════════
+【阶段切换】进入阶段 N/4：{阶段名称}
+═══════════════════════════════════════════════════════════════
+```
+
+四个阶段：
+1. 阶段 1/4：环境准备
+2. 阶段 2/4：测试规划
+3. 阶段 3/4：测试执行
+4. 阶段 4/4：结果报告
+
+## HARD GATE
+
+- **执行器/脚本改动必须回源仓库双写**（`$CWORK_HOME/skills/test/`），禁止只 patch 安装副本——安装是整目录覆盖分发，副本 patch 下次分发即被冲掉；改完当场记一笔到 `skills/USAGE_NOTES.md`「未分析」区（静默，不打印）
+- **Web**：环境未就绪（服务未启动）/ ego-browser 未安装，禁止执行测试
+- **小程序**：微信开发者工具未安装 / project.config.json 不存在 / miniprogram-automator 未安装，禁止执行
+- **安卓**：BlueStacks 5 未安装 / ADB 不可用 / `adb devices` 无在线设备 / 目标包未安装且无 APK 路径，禁止执行测试
+- 测试规划未经用户确认，禁止执行
+- **Web 链路必须使用 web-run.cjs 执行器**，禁止 AI 手写执行类 heredoc（执行器内部已保证单 heredoc 约束）；页面观察/诊断统一走 `--snapshot` 标准通道，--snapshot 表达不了的多步观察允许一次性只读 heredoc（单 heredoc 内完成、只读、不产生测试结论，观察后修正 plan 重跑）
+- **操作卡死防线（Web/小程序通用）**：页面操作不生效时必须走「探索套路」——每轮「观察 → 操作 → 验证」闭环、换通道前必须先观察（截图 + 真实 DOM，本地有源码直接查组件事件绑定），禁止无观察连环盲试；同一目标 3 次操作无效标 BLOCKED 继续后续步骤，场景失败即收场，全局预算到点停止输出报告（详见 web-test.md「探索套路与止损极值」）
+- **每个测试场景必须真实点击/交互执行，无例外**：plan 里的所有场景都要在真实浏览器中实际操作并验证，禁止模拟执行、跳过执行、复用历史执行结果充当本次结果
+- **回归测试禁止复用历史 plan.json**：每次测试必须重新快照生成 plan（防页面变更后选择器软失效漏报）；选择器失效时整场景 plan 重新生成
+- **登录成功判据必须是确定性 URL 断言**：登录场景必须含 `waitForUrl`/`assertUrl`（URL 离开登录页），禁止以 aiAssert/按钮状态/凑数等待作为登录成功的唯一判据（执行器 validatePlan 已机械拦截；实战根因：选择器点错隐藏弹窗 → 校验接口从未发出 → 登录灰死 → 凑数断言跑出假通过）
+- 所有 P0 场景必须通过才能进入 cwork-commit（唯一例外：用户明确确认「带 P0 失败提交」，见自动衔接）
+- P1/P2 场景失败可记录但不阻塞提交
+- 调用 cwork-log 查后端日志需阿里云密钥已配置（`scripts/.config.local.sh` 或环境变量），未配置时跳过后端诊断，仅保留前端证据
+
+## 与 cwork-implement 的衔接
+
+cwork-implement 完成后：
+
+1. 自动检测项目类型（小程序 or Web）
+2. 有前端改动 → 自动进入 cwork-test（内部按项目类型走对应链路）
+3. 无前端改动 → 跳过，直接进入 cwork-commit
+
+```
+═══════════════════════════════════════════════════════════════
+【自动衔接】检测到前端改动，进入 cwork-test（{项目类型}）
+═══════════════════════════════════════════════════════════════
+```
+
+## 独立使用
+
+cwork-test 也可以独立使用（不依赖 cwork-implement）：
+
+```
+用户：帮我测试一下这个页面
+→ 自动识别项目类型
+→ 直接进入环境准备阶段
+→ 询问测试重点或自动分析页面生成场景
+```
+
+## ego-browser 常用 helpers 速查（Web 链路）
+
+| 分类 | Helper | 说明 |
+|------|--------|------|
+| **任务空间** | `useOrCreateTaskSpace(name)` | 创建或复用任务空间 |
+| | `completeTaskSpace(id, {keep})` | 完成并关闭任务空间 |
+| | `handOffTaskSpace(id)` | 将控制权交给用户 |
+| | `takeOverTaskSpace(id)` | 从用户恢复控制权 |
+| **导航** | `openOrReuseTab(url, {wait})` | 打开或复用标签页（**仅会话开头调用一次**） |
+| | `gotoAndWait(url)` | 当前标签页内导航（**场景间切换一律用它，禁止开新页签**） |
+| | `closeTab(target)` | 关闭标签页 |
+| | `pageInfo()` | 获取 URL/标题/视口信息 |
+| **观察** | `snapshotText()` | 获取页面语义树（含 ref 标注） |
+| | `captureScreenshot()` | 截图并返回路径 |
+| **操作** | `click(target, {label})` | 点击元素或坐标 |
+| | `fillInput(target, text)` | 填充输入框 |
+| | `typeText(text)` | 逐字输入文本 |
+| | `pressKey(key)` | 按键 |
+| | `hover(target)` | 悬停 |
+| | `dragMouse([from, to])` | 拖拽 |
+| | `uploadFile(selector, path)` | 上传文件 |
+| **等待** | `wait(seconds)` | 等待指定秒数 |
+| | `waitForLoad()` | 等待页面加载 |
+| | `waitForElement(selector)` | 等待元素出现 |
+| | `waitForNetworkIdle()` | 等待网络空闲 |
+| **滚动** | `scrollBy(px)` | 滚动指定像素 |
+| | `scrollToBottomUntil(fn)` | 滚动到底部直到条件满足 |
+| **执行** | `js(expr)` | 在浏览器中执行 JS |
+| | `cdp(method, params)` | 调用 Chrome DevTools Protocol |
+| **输出** | `cliLog(value)` | 输出到终端（heredoc 内唯一输出方式；**注意：ego nodejs 运行时 cliLog 实际走 stderr 不是 stdout**，外部脚本检测其输出必须双通道扫描） |
+
+> **注意**：`@N` ref 仅对最近一次 `snapshotText()` 有效。跨步骤引用元素时，使用 `loc=...` 值或 CSS 选择器。
+
+## 输出文件
+
+| 文件 | 说明 | 提交 |
+|------|------|------|
+| plan.json | 测试计划（声明式，Web 链路必须） | 提交 |
+| result.json | 测试结果（含截图路径；aiAssert 步骤由 AI 跑后判断合入） | 提交 |
+| ctx 目录 s{i}_i{j}.json | aiAssert 证据上下文（截图+DOM，AI 跑后判断依据，临时文件） | 不提交 |
+| test-report.md | 测试报告 | 提交 |
+| screenshots/ | 截图证据目录 | 提交 |
+
+## 自动衔接
+
+1. **写测试报告**：无论通过/失败，均生成 `test-report.md`（含截图证据）
+2. **有失败场景**：询问用户"测试有失败场景，是否调起 cwork-bug 进行代码修复？"
+   - 用户确认 → 进入 cwork-bug 修复 → 修复后重新执行失败场景 → 全部通过 → 进入 cwork-commit
+   - 用户跳过 → 按失败级别分流（与 HARD GATE 对齐）：
+     - 仅 P1/P2 失败 → 记录到报告，进入 cwork-commit
+     - 存在 P0 失败 → 明确告知「P0 场景未通过，默认禁止提交」；用户仍要提交必须明确确认「带 P0 失败提交」，确认后将 P0 失败清单记入报告再进入 cwork-commit（禁止静默跳过）
+3. **全部通过**：询问用户是否调起 commit 技能进行代码提交，经用户确认后再进入 commit
+
+---
+
+## 并行测试（场景数 ≥ 8 自动触发）
+
+### 触发条件
+
+当 plan.json 的场景数 ≥ 8 时，自动进入并行模式（小程序项目除外）。
+
+### 并行架构
+
+```
+主 Agent
+  ├─ 生成完整 plan.json
+  ├─ split-plan.cjs：拆分为 N 个子 plan（每组含登录场景）
+  ├─ Spawn N 个子 Agent（并行执行）
+  │   ├─ Agent 1: plan-ag1.json → result-ag1.json
+  │   ├─ Agent 2: plan-ag2.json → result-ag2.json
+  │   └─ Agent 3: plan-ag3.json → result-ag3.json
+  └─ merge-results.cjs：合并结果 → result.json → test-report.md
+```
+
+### 资源隔离
+
+- 每个子 Agent 独立 ego-browser 进程（天然隔离）
+- 每个子 Agent 独立 task space（不同 taskSpaceName，天然隔离）
+- 每个子 Agent 独立登录（独立 cookie/session）
+- 结果文件独立命名（result-ag1.json / result-ag2.json / result-ag3.json）
+
+### 分组策略
+
+- 登录场景：提取为公共前置，每组都包含
+- 业务场景：按顺序均分到 N 组（N = min(场景数/3, 3)）
+- 最多 3 个子 Agent（硬限制）
+
+### 子 Agent Prompt 模板
+
+```markdown
+你是 cwork-test 子 agent，负责执行分配给你的测试场景组。
+
+## 输入
+- 子 plan 文件: {planFile}
+- 结果输出: {resultFile}
+
+## 任务
+1. 执行测试: `node web-run.cjs --plan {planFile} --out {resultFile}`
+2. 如果有 aiAssert，读取 ctx 文件判断 pass/fail，合入 {resultFile}
+
+## 约束
+- 独立执行，不与其他 agent 交互
+- 登录场景必须完整执行（URL 断言判成功）
+- 失败场景首败即停，继续下一场景
+```
+
+### 用户接口
+
+```bash
+# 自动并行（场景数 ≥ 8）
+/cwork-test
+
+# 强制并行（指定 agent 数）
+/cwork-test --parallel 3
+
+# 强制串行（调试/小改动）
+/cwork-test --serial
+```
+
+---
+
+
+
+---
+## 参考文件位置
+
+本技能的参考文件位于 `.cwork/refs/cwork-test/` 目录下（按需 Read，不常驻上下文），按 SKILL.md 内引用路径读取。例如 "见 `references/catalog-detail.md`" 对应 `.cwork/refs/cwork-test/references/catalog-detail.md`，"Read 同目录 `design-guide.md`" 对应 `.cwork/refs/cwork-test/design-guide.md`。
+

@@ -106,8 +106,10 @@ class Runner {
     const target = step.url.split('?')[0].replace(/^\/+/, '');
     const deadline = Date.now() + Math.min(this.stepTimeoutMs, 8000);
     let current = '';
+    let pollIdx = 0;
     while (Date.now() < deadline) {
-      await sleep(300);
+      await sleep(pollIdx === 0 ? 100 : 200);
+      pollIdx++;
       try {
         const page = await this.currentPage();
         current = (page && page.path) ? await this.t(page.path, '读取页面path') : '';
@@ -126,6 +128,22 @@ class Runner {
     return el;
   }
 
+  // 等 UI 稳定：先等 minMs，再轮询页面 path 变化，命中或超 maxMs 返回
+  async _waitForSettle(minMs, maxMs) {
+    await sleep(minMs);
+    const start = Date.now();
+    let lastPath = '';
+    try { const p = await this.currentPage(); lastPath = (p && p.path) ? await this.t(p.path, 'settle-path') : ''; } catch (_) {}
+    while (Date.now() - start < maxMs - minMs) {
+      await sleep(150);
+      try {
+        const p = await this.currentPage();
+        const cur = (p && p.path) ? await this.t(p.path, 'settle-path') : '';
+        if (cur && cur !== lastPath) return; // 页面已切换
+      } catch (_) { /* 切换中，继续 */ }
+    }
+  }
+
   async runStep(step, idx) {
     const label = `步骤${idx + 1} ${step.action}`;
     try {
@@ -138,7 +156,7 @@ class Runner {
         case 'click': {
           const el = await this.findElement(step.selector, step.index);
           await this.t(el.tap(), `点击 ${step.selector}`);
-          await sleep(300); // 等 UI 反馈/页面切换
+          await this._waitForSettle(300, 1500);
           return { ok: true, detail: step.selector };
         }
         case 'input': {
@@ -208,7 +226,7 @@ class Runner {
     }
   }
 
-  // 快照：当前页 path + data + 可交互元素清单（供 AI 生成 plan.json 时写准确选择器）
+  // 快照：当前页 path + data + 可交互元素清单（批量 evaluate，去逐元素 RPC）
   async snapshot() {
     const page = await this.currentPage();
     const pagePath = (page && page.path) ? await this.t(page.path, 'snapshot-path') : '';
@@ -223,29 +241,54 @@ class Runner {
 
     let elements = [];
     try {
-      const els = await this.t(page.$$(interactiveSelector), 'snapshot-elements');
-      if (els && els.length > 0) {
-        const limit = Math.min(els.length, 80);
-        for (let i = 0; i < limit; i++) {
+      // 一次 evaluate 拉全部元素的 tag/text/attrs，替代逐元素 3 次 RPC
+      const raw = await this.t(this.mp.evaluate((sel) => {
+        const qs = document.querySelectorAll(sel);
+        const out = [];
+        for (let i = 0; i < Math.min(qs.length, 80); i++) {
+          const el = qs[i];
+          const attrs = {};
+          for (const a of el.attributes) attrs[a.name] = a.value;
+          out.push({ tag: el.tagName, text: el.innerText || '', attrs });
+        }
+        return out;
+      }, interactiveSelector), 'snapshot-elements-batch');
+      if (Array.isArray(raw)) {
+        for (const item of raw) {
           try {
-            const el = els[i];
-            const tag = (await this.t(el.tagName(), `snapshot-tag-${i}`)) || '';
-            const text = (await this.t(el.text(), `snapshot-text-${i}`)) || '';
-            const attrs = (await this.t(el.attrs(), `snapshot-attrs-${i}`)) || {};
+            const tag = item.tag || '';
+            const text = (item.text || '').trim().slice(0, 60);
+            const attrs = item.attrs || {};
             const selector = this._buildSelector(tag, attrs, text);
             elements.push({
-              tag,
-              text: text.trim().slice(0, 60),
-              selector,
+              tag, text, selector,
               placeholder: attrs.placeholder || '',
               type: attrs.type || '',
               id: attrs.id || '',
               className: attrs.class || '',
             });
-          } catch (_) { /* 单个元素读取失败不影响整体 */ }
+          } catch (_) { /* 单个解析失败不影响整体 */ }
         }
       }
-    } catch (_) { /* 元素查询失败不阻塞快照 */ }
+    } catch (_) {
+      // evaluate 批量失败时回退逐元素（兼容旧 automator 版本）
+      try {
+        const els = await this.t(page.$$(interactiveSelector), 'snapshot-elements-fallback');
+        if (els && els.length > 0) {
+          const limit = Math.min(els.length, 80);
+          for (let i = 0; i < limit; i++) {
+            try {
+              const el = els[i];
+              const tag = (await this.t(el.tagName(), `snapshot-tag-${i}`)) || '';
+              const text = (await this.t(el.text(), `snapshot-text-${i}`)) || '';
+              const attrs = (await this.t(el.attrs(), `snapshot-attrs-${i}`)) || {};
+              const selector = this._buildSelector(tag, attrs, text);
+              elements.push({ tag, text: text.trim().slice(0, 60), selector, placeholder: attrs.placeholder || '', type: attrs.type || '', id: attrs.id || '', className: attrs.class || '' });
+            } catch (_) {}
+          }
+        }
+      } catch (_) { /* 元素查询失败不阻塞快照 */ }
+    }
 
     return { path: pagePath, data: pageData, elements };
   }
@@ -282,9 +325,10 @@ async function main() {
   const outFile = args.includes('--out') ? args[args.indexOf('--out') + 1] : null;
   const checkOnly = args.includes('--check');
   const snapshotMode = args.includes('--snapshot');
+  const snapshotPagesArg = args.includes('--snapshot-pages') ? args[args.indexOf('--snapshot-pages') + 1] : null;
 
-  if (!planFile && !checkOnly && !snapshotMode) {
-    console.error('用法：node mini-run.cjs --check | --snapshot [--out snap.json] | --plan plan.json [--out result.json]');
+  if (!planFile && !checkOnly && !snapshotMode && !snapshotPagesArg) {
+    console.error('用法：node mini-run.cjs --check | --snapshot [--out snap.json] | --snapshot-pages "a,b" [--out snaps.json] | --plan plan.json [--out result.json]');
     process.exit(1);
   }
 
@@ -302,11 +346,13 @@ async function main() {
   try {
     console.log(`→ 连接 ${wsEndpoint}（原生 automator，无请求劫持）...`);
     mp = await withTimeout(automator.connect({ wsEndpoint }), 15000, '连接开发者工具');
+    const t0 = Date.now();
 
     if (checkOnly) {
       const page = await withTimeout(mp.currentPage(), 10000, '获取当前页面');
       const p = (page && page.path) ? await withTimeout(page.path, 5000, '读取path') : '(空)';
       console.log(`✓ 探活成功：automator 可用，当前页面 ${p}`);
+      console.log(`⏱ 耗时：${Date.now() - t0}ms`);
       return;
     }
 
@@ -316,6 +362,24 @@ async function main() {
       if (outFile) fs.writeFileSync(outFile, JSON.stringify(snap, null, 2), 'utf8');
       console.log(`✓ 快照完成：${snap.path}，${snap.elements.length} 个可交互元素${outFile ? `，已存 ${outFile}` : ''}`);
       console.log('SNAPSHOT_JSON=' + JSON.stringify(snap));
+      console.log(`⏱ 耗时：${Date.now() - t0}ms`);
+      return;
+    }
+
+    if (snapshotPagesArg) {
+      // 一次连接导航+多页快照，pages 形如 "pageA,pageB,pageC"
+      const pages = snapshotPagesArg.split(',').map((s) => s.trim()).filter(Boolean);
+      const runner = new Runner(mp, stepTimeoutMs);
+      const snaps = [];
+      for (const p of pages) {
+        await runner.navigate({ url: '/' + p.replace(/^\/+/, '') });
+        const s = await runner.snapshot();
+        snaps.push(s);
+      }
+      if (outFile) fs.writeFileSync(outFile, JSON.stringify(snaps, null, 2), 'utf8');
+      console.log(`✓ 多页快照完成：${pages.length} 页${outFile ? `，已存 ${outFile}` : ''}`);
+      console.log('SNAPSHOT_JSON=' + JSON.stringify(snaps));
+      console.log(`⏱ 耗时：${Date.now() - t0}ms`);
       return;
     }
 
@@ -353,6 +417,7 @@ async function main() {
     console.log(`\n═══ 结果：通过 ${summary.passed} / 失败 ${summary.failed}（共 ${summary.scenarios.length} 场景）${outFile ? `，详情 ${outFile}` : ''} ═══`);
     console.log('RESULT_JSON=' + JSON.stringify(summary));
     process.exitCode = failedScenarios > 0 ? 1 : 0;
+    console.log(`⏱ 耗时：${Date.now() - t0}ms`);
   } catch (err) {
     console.error(`❌ ${err.message}`);
     process.exitCode = 2;
