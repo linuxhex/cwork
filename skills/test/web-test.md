@@ -359,7 +359,7 @@ echo "✓ ego-browser 可用：$(command -v ego-browser)"
 | `assertCount` | `selector`, `expect` 或 `min`/`max` 至少其一 | 元素数量精确匹配或范围 |
 | `assertStyle` | `selector`, `property`, `expect` 或 `expectPattern` | computed style 精确匹配或正则匹配 |
 | `assertLayout` | `selector`, `expectAlign: "center"` 或 `expectGrid: {columns: N}` | 居中（偏差 ≤ 10px）/ 网格列数 |
-| `assertApi` | `urlPattern`, `expectStatus?`, `expectBodyCode?` | 接口断言：状态码 / 业务码（body.code）；同接口多次调用取**最新**一条 |
+| `assertApi` | `urlPattern`, `expectStatus?`, `expectBodyCode?`, `timeout?`（秒，默认 8） | 接口断言：状态码 / 业务码（body.code）；同接口多次调用取**最新**一条。**短轮询等响应出现**（每 300ms refresh，默认 8s）——点击/提交后响应有异步窗口，禁止靠固定 sleep 碰运气（OMJF-19967 导出：click 后 200ms 即断言捕不到 → 假失败） |
 | `assertDataConsistency` | `selector`, `urlPattern`, `apiField` | **页面 ↔ 接口一致性**：页面元素文本 vs 接口响应字段（apiField 支持 `data.orders[0].orderNo` 路径语法）；生成期强制要求 urlPattern + apiField |
 | `exportApi` | `urlPattern` 或 `urlPatterns[]`, `filename`, `filter?` | **导出完整 API 响应到文件**（result.json 同目录）。支持单接口或多接口批量导出；`filter: { status: 200 }` 过滤条件。用于 Doris vs ES 数据比对等场景 |
 | `aiAssert` | `prompt`, `capture?: ["screenshot","dom","apiResponses"]` | AI 判断兜底：**单遍契约下仅采集证据**（截图+DOM 写 ctx 文件），步骤标 aiPending 不计入 passed；跑完 AI 读 ctx 判断后合入 result.json。prompt 必须写成可判定判据 |

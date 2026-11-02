@@ -16,6 +16,7 @@
 - [2026-11-01] [test] 小程序快照批量化+条件等待+多页合并+耗时埋点 | 实测前后对比耗时
 - [2026-11-01] [implement] 借鉴 impeccable/ponytail 思想增强前端设计与编码（7支柱/反slop/分模式/critique/三问/意图优先/最小改动） | 实测验证审查流程是否被正确触发
 - [2026-11-02] [test] Web 同款加速：接口响应增量懒拉+条件等待替代固定 sleep+场景耗时埋点 | 实测前后对比耗时
+- [2026-11-02] [test] OMJF-19967 实测过程（慢+假失败）：① ego waitForElement/click/fill 原生 timeout 对条件永不满足不生效→withHardCap；② assertText 读 input.textContent 恒空→改 .value；③ assertApi 点确认后 200ms 即断言捕不到异步接口→短轮询；④ 菜单 aiAssert 点一级后未等二级展开就截图（证据虚）；⑤ 7 场景约 2–3min，waitForNetworkIdle 占大半 | 详见 docs/requirements/OMJF-19967/test-process-notes.md
 
 ## 经验沉淀（≤ 20 条，只留可长期借鉴的）
 

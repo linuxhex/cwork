@@ -649,9 +649,17 @@ function generateStepCode(L, step, label, si, i, baseUrl) {
     }
 
     case 'assertApi':
+      // 点击/提交后接口响应有异步窗口：固定 sleep 不够（OMJF-19967 导出：click 后 200ms 即断言 → 未捕获
+      // 探针加 waitForNetworkIdle 后捕获到 exportAbnOrderInfo 200）。短轮询等匹配响应出现再断言
       L(`  {`);
-      L(`    await refreshResponses();`);
-      L(`    const __resp = findResponse(${JSON.stringify(step.urlPattern)});`);
+      L(`    const __apiDeadline = Date.now() + Number(${Number(step.timeout || 8)}) * 1000;`);
+      L(`    let __resp = null;`);
+      L(`    while (Date.now() < __apiDeadline) {`);
+      L(`      await refreshResponses();`);
+      L(`      __resp = findResponse(${JSON.stringify(step.urlPattern)});`);
+      L(`      if (__resp) break;`);
+      L(`      await sleep(300);`);
+      L(`    }`);
       L(`    if (!__resp) throw new Error(${JSON.stringify(step.desc || '接口未调用')} + ': ' + ${JSON.stringify(step.urlPattern)});`);
       if (step.expectStatus !== undefined) {
         L(`    if (__resp.status !== ${Number(step.expectStatus)}) throw new Error(${JSON.stringify(step.desc || '接口状态码错误')} + ': 期望 ' + ${Number(step.expectStatus)} + ', 实际 ' + __resp.status);`);
