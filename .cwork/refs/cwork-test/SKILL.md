@@ -1,5 +1,7 @@
-# cwork-test
-
+---
+name: cwork-test
+description: 页面自动化测试，自动识别 Web/小程序/安卓项目，分别走 ego-browser / miniprogram-automator / BlueStacks5+ADB 链路
+---
 # cwork-test
 
 
@@ -289,6 +291,7 @@ if 测试失败:
 - **每个测试场景必须真实点击/交互执行，无例外**：plan 里的所有场景都要在真实浏览器中实际操作并验证，禁止模拟执行、跳过执行、复用历史执行结果充当本次结果
 - **回归测试禁止复用历史 plan.json**：每次测试必须重新快照生成 plan（防页面变更后选择器软失效漏报）；选择器失效时整场景 plan 重新生成
 - **登录成功判据必须是确定性 URL 断言**：登录场景必须含 `waitForUrl`/`assertUrl`（URL 离开登录页），禁止以 aiAssert/按钮状态/凑数等待作为登录成功的唯一判据（执行器 validatePlan 已机械拦截；实战根因：选择器点错隐藏弹窗 → 校验接口从未发出 → 登录灰死 → 凑数断言跑出假通过）
+- **等待与反向断言（性能/假失败，OMJF-19967）**：单场景 `waitForNetworkIdle` ≤2（validatePlan ≥3 拒绝）；navigate 后禁止紧跟断言（中间加 waitForUrl/waitForElement）；菜单删除/下线路由/文案消失等「不应出现」用 `assertText expectNotContains`，禁止只靠 aiAssert；`assertApi` 已短轮询，操作后直接断言不必再堆 idle
 - 所有 P0 场景必须通过才能进入 cwork-commit（唯一例外：用户明确确认「带 P0 失败提交」，见自动衔接）
 - P1/P2 场景失败可记录但不阻塞提交
 - 调用 cwork-log 查后端日志需阿里云密钥已配置（`scripts/.config.local.sh` 或环境变量），未配置时跳过后端诊断，仅保留前端证据
@@ -438,11 +441,4 @@ cwork-test 也可以独立使用（不依赖 cwork-implement）：
 ```
 
 ---
-
-
-
----
-## 参考文件位置
-
-本技能的参考文件位于 `.cwork/refs/cwork-test/` 目录下（按需 Read，不常驻上下文），按 SKILL.md 内引用路径读取。例如 "见 `references/catalog-detail.md`" 对应 `.cwork/refs/cwork-test/references/catalog-detail.md`，"Read 同目录 `design-guide.md`" 对应 `.cwork/refs/cwork-test/design-guide.md`。
 
