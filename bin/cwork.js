@@ -265,11 +265,24 @@ function installCursor() {
   // 4) 分发共享规范文件（skills/common/ → .cursor/rules/cwork-common/）
   installCommonFiles(target);
 
-  // 5) 同步 USAGE_NOTES.md 到 ~/.cursor/skills/（同 installClaude/installQoder，漏同步导致全局副本与源仓库分叉）
+  // 5) 全量同步技能到 ~/.cursor/skills/（同 installQoder/installClaude 全局技能模式）。
+  //    此前只同步 USAGE_NOTES.md，脚本/参考文件停留旧版本无人发现——Cursor 若从全局技能目录加载即分叉
   const cursorSkillsDir = join(HOME, '.cursor', 'skills');
   mkdirSync(cursorSkillsDir, { recursive: true });
+  const cursorSkillList = readSkillDirs();
+  for (const skill of cursorSkillList) {
+    const skillName = `cwork-${skill}`;
+    const src = join(SKILLS_DIR, skill);
+    const dest = join(cursorSkillsDir, skillName);
+    rmSync(dest, { recursive: true, force: true });
+    copySkillFiltered(src, dest);
+    log(skillName);
+  }
+  // USAGE_NOTES.md 单文件同步：它在 skills 根目录、不在技能目录遍历内
   const usageSrcCursor = join(SKILLS_DIR, 'USAGE_NOTES.md');
   if (existsSync(usageSrcCursor)) writeFileSync(join(cursorSkillsDir, 'USAGE_NOTES.md'), readFileSync(usageSrcCursor));
+  // 分发共享规范文件（skills/common/ → ~/.cursor/skills/cwork-common/）
+  installCommonFiles(cursorSkillsDir);
 }
 
 function buildCursorMainRule() {
