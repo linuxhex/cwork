@@ -162,6 +162,7 @@ function generateHeredoc(plan, ctxDir, keep = false, resultPath = null) {
   L(`// ── 辅助函数 ──`);
   L(`let __stepIdx = 0;`);
   L(`let __scenarioIdx = 0;`);
+  L(`let __stepT0 = 0;`);
   L(`const __results = [];`);
   L(`let __currentScenario = null;`);
   // AI 断言证据采集：aiAssert 步骤把证据文件路径挂到 __aiPendingCtx，外层步骤包装读取后归档
@@ -193,8 +194,9 @@ function generateHeredoc(plan, ctxDir, keep = false, resultPath = null) {
   L(``);
 
   // 取最新一条匹配响应——同一接口可能被多次调用，取旧的会断言到过期数据
-  L(`function findResponse(urlPattern) {`);
-  L(`  for (let __i = __lastResponses.length - 1; __i >= 0; __i--) {`);
+  L(`function findResponse(urlPattern, afterIdx) {`);
+  L(`  const __from = (typeof afterIdx === 'number') ? afterIdx : 0;`);
+  L(`  for (let __i = __lastResponses.length - 1; __i >= __from; __i--) {`);
   L(`    const __r = __lastResponses[__i];`);
   L(`    if (__r.url && __r.url.includes(urlPattern)) return __r;`);
   L(`  }`);
@@ -205,6 +207,9 @@ function generateHeredoc(plan, ctxDir, keep = false, resultPath = null) {
   // 增量拉取：__capturedResponses 只增不减，全量回传在长会话里每步都是大 payload；
   // Node 侧记已拉取偏移，只取 slice(offset) 的新增段拼接（消费点才拉，动作步骤不拉）
   L(`let __pulledCount = 0;`);
+  // 接口水位线：click/fill 等触发动作前 refresh 并记下 length；assertApi 只认水位线之后的新响应，
+  // 避免命中进页时的旧列表请求（OMJF-19967 反面场景：筛选未返回就 assertApi 命中进页 query 假通过/假失败）
+  L(`let __apiWatermark = 0;`);
   L(`async function refreshResponses() {`);
   L(`  const __raw = await js('JSON.stringify((window.__capturedResponses || []).slice(' + __pulledCount + '))');`);
   L(`  const __fresh = JSON.parse(__raw);`);
@@ -212,6 +217,10 @@ function generateHeredoc(plan, ctxDir, keep = false, resultPath = null) {
   L(`    __pulledCount += __fresh.length;`);
   L(`    __lastResponses = __lastResponses.concat(__fresh);`);
   L(`  }`);
+  L(`}`);
+  L(`async function markApiWatermark() {`);
+  L(`  await refreshResponses();`);
+  L(`  __apiWatermark = __lastResponses.length;`);
   L(`}`);
   L(``);
 
@@ -285,7 +294,6 @@ function generateHeredoc(plan, ctxDir, keep = false, resultPath = null) {
     for (let i = 0; i < steps.length; i++) {
       const step = steps[i];
       const stepLabel = `场景${si + 1} 步骤${i + 1}`;
-      L(`let __stepT0 = Date.now();`);
       L(`try {`);
       L(`  __stepIdx = ${i};`);
       L(`  __aiPendingCtx = null;`);
@@ -402,6 +410,7 @@ function generateStepCode(L, step, label, si, i, baseUrl) {
     }
 
     case 'clickCdp':
+      L(`  await markApiWatermark();`);
       // CDP 真实鼠标事件（mousedown/focus/click 全链），用于依赖 focus 打开的组件如 el-date-picker 面板
       // 坐标求值走 cdp('Runtime.evaluate') returnByValue，绕开 js() 对复杂表达式返回 null 的坑
       // step.index 支持 querySelectorAll 按索引取元素（默认 0）
@@ -439,6 +448,7 @@ function generateStepCode(L, step, label, si, i, baseUrl) {
       break;
 
     case 'openDatePicker':
+      L(`  await markApiWatermark();`);
       // JS 合成事件通道打开 el-date-picker 面板：对输入框派发 mousedown/focus/mouseup/click 事件序列
       // step.index 支持 querySelectorAll 按索引取元素（默认 0）
       // 面板渲染是 nextTick 异步：必须轮询确认面板真实打开（打事件后同步 count 永远是 0）；
@@ -486,6 +496,7 @@ function generateStepCode(L, step, label, si, i, baseUrl) {
       break;
 
     case 'dispatchClick':
+      L(`  await markApiWatermark();`);
       // JS 合成 click 事件通道：用于被悬浮横幅遮挡、常规坐标点击无法命中的按钮
       // （如 OMP 异常订单页 top-tip 横幅盖住筛选按钮整行，且主滚动在内部容器无法滚开）
       // 可见性过滤 + matchText（与 clickCdp 一致）；未命中 throw，禁止隐藏元素 (0,0) 假通过
@@ -500,6 +511,7 @@ function generateStepCode(L, step, label, si, i, baseUrl) {
       break;
 
     case 'click':
+      L(`  await markApiWatermark();`);
       // 直接委托 ego-browser 原生 click()，支持 CSS/text=/role/>>nth=N 等原生选择器
       // 多匹配时 ego 自动列出候选（Candidates: 1. xxx 2. yyy），无需 fallback
       L(`  const __clickP = click(${JSON.stringify(step.selector)}, { label: ${JSON.stringify(step.desc || '点击')} });`);
@@ -508,6 +520,7 @@ function generateStepCode(L, step, label, si, i, baseUrl) {
       break;
 
     case 'fill':
+      L(`  await markApiWatermark();`);
       // 直接委托 ego-browser 原生 fillInput()，支持 CSS/text=/role 等原生选择器
       // 多匹配时 ego 自动列出候选（Candidates: 1. xxx 2. yyy），无需 fallback
       L(`  const __fillP = fillInput(${JSON.stringify(step.selector)}, ${JSON.stringify(step.value)});`);
@@ -661,18 +674,19 @@ function generateStepCode(L, step, label, si, i, baseUrl) {
     }
 
     case 'assertApi':
-      // 点击/提交后接口响应有异步窗口：固定 sleep 不够（OMJF-19967 导出：click 后 200ms 即断言 → 未捕获
-      // 探针加 waitForNetworkIdle 后捕获到 exportAbnOrderInfo 200）。短轮询等匹配响应出现再断言
+      // 短轮询等「触发动作之后」的新响应：水位线由 click/fill/clickCdp 等在动作前 markApiWatermark 打下。
+      // 只认 watermark 之后的匹配，避免命中进页旧列表（OMJF-19967 反面：筛选未回就命中进页 query）
       L(`  {`);
       L(`    const __apiDeadline = Date.now() + Number(${Number(step.timeout || 8)}) * 1000;`);
+      L(`    const __wm = __apiWatermark;`);
       L(`    let __resp = null;`);
       L(`    while (Date.now() < __apiDeadline) {`);
       L(`      await refreshResponses();`);
-      L(`      __resp = findResponse(${JSON.stringify(step.urlPattern)});`);
+      L(`      __resp = findResponse(${JSON.stringify(step.urlPattern)}, __wm);`);
       L(`      if (__resp) break;`);
       L(`      await sleep(300);`);
       L(`    }`);
-      L(`    if (!__resp) throw new Error(${JSON.stringify(step.desc || '接口未调用')} + ': ' + ${JSON.stringify(step.urlPattern)});`);
+      L(`    if (!__resp) throw new Error(${JSON.stringify(step.desc || '接口未调用')} + ': ' + ${JSON.stringify(step.urlPattern)} + '（水位线后无新响应，可能请求未发出或仍在途）');`);
       if (step.expectStatus !== undefined) {
         L(`    if (__resp.status !== ${Number(step.expectStatus)}) throw new Error(${JSON.stringify(step.desc || '接口状态码错误')} + ': 期望 ' + ${Number(step.expectStatus)} + ', 实际 ' + __resp.status);`);
       }
@@ -695,7 +709,7 @@ function generateStepCode(L, step, label, si, i, baseUrl) {
       L(`    let __vals = null; if (typeof __raw === 'string') { try { __vals = JSON.parse(__raw); } catch (e) {} }`);
       L(`    if (!Array.isArray(__vals)) throw new Error('无法读取页面元素值: ' + JSON.stringify(__ev));`);
       L(`    await refreshResponses();`);
-      L(`    const __apiResp = findResponse(${JSON.stringify(step.urlPattern)});`);
+      L(`    const __apiResp = findResponse(${JSON.stringify(step.urlPattern)}, __apiWatermark);`);
       L(`    if (!__apiResp) throw new Error(${JSON.stringify(step.desc || '数据一致性')} + ': 接口未捕获 ' + ${JSON.stringify(step.urlPattern)});`);
       // 解析 apiField 路径，支持 orders[0].orderNo 语法
       L(`    const __path = ${JSON.stringify(step.apiField)};`);

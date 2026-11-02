@@ -12,6 +12,7 @@
 
 ## 未分析
 
+- [2026-11-02] [test] assertApi 命中进页旧响应（反面竞态）+ heredoc `let __stepT0` 每场景重复声明炸 SyntaxError | 水位线只认动作后新响应；__stepT0 改顶层单次 let
 - [2026-11-02] [log/deploy] SLS stdout 混入 >>> 致 json.loads 炸；裸 bash deploy.sh 任意 cwd 127 | >>> 改 stderr + deploy 强制绝对路径示例
 - [2026-11-01] [test] 新增 android-run.cjs，BlueStacks5+ADB 驱动，对齐官方 Skill 能力 | 待实测 uiautomator dump 解析稳定性
 - [2026-11-01] [test] 小程序快照批量化+条件等待+多页合并+耗时埋点 | 实测前后对比耗时
@@ -39,3 +40,5 @@
 - [log] prod 业务专属库大面积空，主链路 `all`+spring.name；查 all 库必须带关键字
 - [log] 时间戳禁止心算，命令驱动；搜索关键字单号优先
 - [data] Doris 跨 catalog JOIN 大表关联易 OOM（外表全量拉 coordinator），分别查小结果集本地关联；无 WHERE 全表扫描机械拦截
+
+- [未分析][2026-11-02] web-run.cjs：场景内每步 `let __stepT0` 重复声明导致 SyntaxError；改为场景级一次声明、步骤内重赋值（OMJF-19967 UAT 重跑）

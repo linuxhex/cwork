@@ -111,7 +111,7 @@ Web 测试采用 **"AI 生成计划 → 执行器单遍执行 → AI 跑后判�
 - **接口响应增量懒拉**：动作步骤（click/fill/navigate）后**不再**全量回拉接口响应；`assertApi`/`assertDataConsistency`/`exportApi`/aiAssert(apiResponses) 等消费点才拉，且只拉上次偏移之后的新增段——长会话不再每步传大 payload
 - **条件等待替代固定 sleep**：click 后仅 200ms 事件缓冲，跳转/渲染同步靠后续步骤的 `waitForUrl`/`waitForElement` 确定性等待；`waitForNetworkIdle` 仅辅助且有 30s 硬超时 warnOnly；openDatePicker 面板已轮询校验真实打开，不再固定长睡
 - **阶段/步骤耗时埋点**：每步骤与每场景结束输出耗时（`✓ 点筛选 (1.2s)` / `场景结果: ✓ 通过，耗时 3.2s`），慢步骤日志直读
-- **assertApi 短轮询**：默认 8s 等匹配响应出现再断言，操作后直接 assertApi，不必再堆 idle（OMJF-19967 导出假失败根因）
+- **assertApi 短轮询 + 水位线**：默认 8s 等匹配响应；click/fill 等触发动作前自动 `markApiWatermark`，只认动作后新响应，避免进页旧列表假命中（OMJF-19967 反面竞态）
 - **等待类硬超时**：ego 原生 timeout 对「条件永不满足」可能永不 resolve；执行器 `withHardCap` 兜底 click/fill/waitForElement/waitForNetworkIdle
 - plan 写法配套：click 后紧跟的断言若依赖异步渲染，**必须**显式加 `waitForElement`/`waitForUrl`；单场景 `waitForNetworkIdle` ≤2
 
@@ -361,7 +361,8 @@ echo "✓ ego-browser 可用：$(command -v ego-browser)"
 | `assertCount` | `selector`, `expect` 或 `min`/`max` 至少其一 | 元素数量精确匹配或范围 |
 | `assertStyle` | `selector`, `property`, `expect` 或 `expectPattern` | computed style 精确匹配或正则匹配 |
 | `assertLayout` | `selector`, `expectAlign: "center"` 或 `expectGrid: {columns: N}` | 居中（偏差 ≤ 10px）/ 网格列数 |
-| `assertApi` | `urlPattern`, `expectStatus?`, `expectBodyCode?`, `timeout?`（秒，默认 8） | 接口断言：状态码 / 业务码（body.code）；同接口多次调用取**最新**一条。**短轮询等响应出现**（每 300ms refresh，默认 8s）——点击/提交后响应有异步窗口，禁止靠固定 sleep 碰运气（OMJF-19967 导出：click 后 200ms 即断言捕不到 → 假失败） |
+| `assertApi` | `urlPattern`, `expectStatus?`, `expectBodyCode?`, `timeout?`（秒，默认 8） | 接口断言：状态码 / 业务码；**短轮询等「触发动作之后」的新响应**（click/fill/clickCdp 前自动打水位线，只认水位线后匹配，默认 8s）。避免命中进页旧列表（OMJF-19967 反面：筛选未回就命中进页 query） |
+
 | `assertDataConsistency` | `selector`, `urlPattern`, `apiField` | **页面 ↔ 接口一致性**：页面元素文本 vs 接口响应字段（apiField 支持 `data.orders[0].orderNo` 路径语法）；生成期强制要求 urlPattern + apiField |
 | `exportApi` | `urlPattern` 或 `urlPatterns[]`, `filename`, `filter?` | **导出完整 API 响应到文件**（result.json 同目录）。支持单接口或多接口批量导出；`filter: { status: 200 }` 过滤条件。用于 Doris vs ES 数据比对等场景 |
 | `aiAssert` | `prompt`, `capture?: ["screenshot","dom","apiResponses"]` | AI 判断兜底：**单遍契约下仅采集证据**（截图+DOM 写 ctx 文件），步骤标 aiPending 不计入 passed；跑完 AI 读 ctx 判断后合入 result.json。prompt 必须写成可判定判据 |
