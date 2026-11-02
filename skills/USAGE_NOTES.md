@@ -12,6 +12,7 @@
 
 ## 未分析
 
+- [2026-11-02] [test] 反复试错慢因：已知坑是软文档+探索无硬止损（OMP 横幅 46min）| known-pits.md 常驻速查 + validatePlan 强制筛选 dispatchClick + HARD GATE 3 次 BLOCKED
 - [2026-11-02] [test] exportApi 缺 filename 生成期硬抛打断探针 | 缺省自动生成 export-api-s{i}-i{j}.json + 水位线优先
 - [2026-11-02] [test] assertApi 命中进页旧响应（反面竞态）+ heredoc `let __stepT0` 每场景重复声明炸 SyntaxError | 水位线只认动作后新响应；__stepT0 改顶层单次 let
 - [2026-11-02] [log/deploy] SLS stdout 混入 >>> 致 json.loads 炸；裸 bash deploy.sh 任意 cwd 127 | >>> 改 stderr + deploy 强制绝对路径示例
@@ -43,3 +44,5 @@
 - [data] Doris 跨 catalog JOIN 大表关联易 OOM（外表全量拉 coordinator），分别查小结果集本地关联；无 WHERE 全表扫描机械拦截
 
 - [未分析][2026-11-02] web-run.cjs：场景内每步 `let __stepT0` 重复声明导致 SyntaxError；改为场景级一次声明、步骤内重赋值（OMJF-19967 UAT 重跑）
+
+- [未分析][2026-11-02] web-run.cjs：navigate 后 __capturedResponses 重置但 __pulledCount 未清导致 assertApi 水位线假失败；refreshResponses 检测 len<__pulledCount 时重置，navigate 后对齐，js 默认 markApiWatermark（OMJF-19967）

@@ -211,6 +211,15 @@ function generateHeredoc(plan, ctxDir, keep = false, resultPath = null) {
   // 避免命中进页时的旧列表请求（OMJF-19967 反面场景：筛选未返回就 assertApi 命中进页 query 假通过/假失败）
   L(`let __apiWatermark = 0;`);
   L(`async function refreshResponses() {`);
+  // SPA/整页 navigate 后拦截器重装会把 window.__capturedResponses 重置为 []，
+  // 若 Node 侧 __pulledCount 仍沿用旧偏移，slice 永远为空 → assertApi 水位线后假失败（OMJF-19967 UAT）
+  L(`  const __metaRaw = await js('(function(){var a=window.__capturedResponses||[];return JSON.stringify({len:a.length})})()');`);
+  L(`  let __meta = null; try { __meta = JSON.parse(__metaRaw); } catch (e) {}`);
+  L(`  if (__meta && typeof __meta.len === 'number' && __meta.len < __pulledCount) {`);
+  L(`    __pulledCount = 0;`);
+  L(`    __lastResponses = [];`);
+  L(`    __apiWatermark = 0;`);
+  L(`  }`);
   L(`  const __raw = await js('JSON.stringify((window.__capturedResponses || []).slice(' + __pulledCount + '))');`);
   L(`  const __fresh = JSON.parse(__raw);`);
   L(`  if (Array.isArray(__fresh) && __fresh.length > 0) {`);
@@ -375,6 +384,9 @@ function generateStepCode(L, step, label, si, i, baseUrl) {
       const navUrl = /^https?:\/\//i.test(step.url || '') ? step.url : (baseUrl || '') + (step.url || '');
       L(`  await gotoAndWait(${JSON.stringify(navUrl)});`);
       L(`  await waitForLoad();`);
+      // 导航后拦截池可能被 addScriptToEvaluateOnNewDocument 重置，主动对齐 Node 侧偏移
+      L(`  await refreshResponses();`);
+      L(`  __apiWatermark = __lastResponses.length;`);
       break;
     }
 
@@ -437,8 +449,12 @@ function generateStepCode(L, step, label, si, i, baseUrl) {
       // 在页面上下文执行 JavaScript（CDP Runtime.evaluate），用于调用 Vue 方法等 DOM 点击无法触发的操作
       // step.code: JavaScript 代码字符串（可访问 window/document/Vue 实例等）
       // step.desc: 人类可读描述（可选）
+      // step.markApi（默认 true）：执行前打水位线，便于随后 assertApi 只认本动作触发的新响应
       if (!step.code) {
         throw new Error('js 动作需要 code 字段：' + JSON.stringify(step.desc || 'js'));
+      }
+      if (step.markApi !== false) {
+        L(`  await markApiWatermark();`);
       }
       L(`  {`);
       L(`    const __jsExpr = ${JSON.stringify(step.code)};`);
@@ -1029,6 +1045,22 @@ function validatePlan(plan) {
       const hasUrlAssert = steps.some(st => ['waitForUrl', 'assertUrl'].includes(st.action));
       if (!hasUrlAssert) {
         errors.push(`场景「${sc.name}」是登录场景但无确定性 URL 判据，必须含 waitForUrl/assertUrl（如 waitForUrl notContains /login；aiAssert/可见性断言不能作为登录成功的判据）`);
+      }
+    }
+
+    // ⑤ 已知坑机械化（known-pits.md）：OMP/YKC 列表「筛选」按钮禁止 click/clickCdp（横幅遮挡静默点空）
+    for (const st of steps) {
+      const sel = String(st.selector || '');
+      const mt = String(st.matchText || '');
+      const desc = String(st.desc || '');
+      const blob = sel + ' ' + mt + ' ' + desc;
+      const isFilterBtn = /筛选|查询(?!接口)|搜索按钮/.test(blob) || /matchText["']?\s*[:=]\s*["']筛选/.test(JSON.stringify(st));
+      const looksFilter = mt === '筛选' || /筛选/.test(desc) || ( /ykc-searc|search-btn|bg-main/.test(sel) && /筛选|查询/.test(blob) );
+      if (looksFilter && (st.action === 'click' || st.action === 'clickCdp')) {
+        errors.push(`场景「${sc.name}」筛选/查询按钮用了 ${st.action}——OMP 顶栏横幅会挡点击（known-pits），必须改用 dispatchClick`);
+      }
+      if (/协议|agreement|checkbox__inner/.test(blob) && /登录|login/i.test(sc.name||'') && st.action === 'click') {
+        errors.push(`场景「${sc.name}」登录协议勾选用了 click——YKC 自定义 checkbox 必须 clickCdp（known-pits）`);
       }
     }
 
