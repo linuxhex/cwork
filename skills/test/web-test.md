@@ -109,9 +109,11 @@ Web 测试采用 **"AI 生成计划 → 执行器单遍执行 → AI 跑后判�
 **性能模型（小程序侧同款优化，已内置）**：
 
 - **接口响应增量懒拉**：动作步骤（click/fill/navigate）后**不再**全量回拉接口响应；`assertApi`/`assertDataConsistency`/`exportApi`/aiAssert(apiResponses) 等消费点才拉，且只拉上次偏移之后的新增段——长会话不再每步传大 payload
-- **条件等待替代固定 sleep**：click 后仅 200ms 事件缓冲，跳转/渲染同步靠后续步骤的 `waitForUrl`/`waitForElement`/`waitForNetworkIdle` 确定性等待；openDatePicker 面板已轮询校验真实打开，不再固定长睡
-- **阶段耗时埋点**：每场景结束输出耗时（`场景结果: ✓ 通过，耗时 3.2s`），慢场景直接看日志定位
-- plan 写法配套：click 后紧跟的断言若依赖异步渲染，**必须**显式加 `waitForElement`/`waitForUrl` 同步步骤，不要靠"再多睡一会"
+- **条件等待替代固定 sleep**：click 后仅 200ms 事件缓冲，跳转/渲染同步靠后续步骤的 `waitForUrl`/`waitForElement` 确定性等待；`waitForNetworkIdle` 仅辅助且有 30s 硬超时 warnOnly；openDatePicker 面板已轮询校验真实打开，不再固定长睡
+- **阶段/步骤耗时埋点**：每步骤与每场景结束输出耗时（`✓ 点筛选 (1.2s)` / `场景结果: ✓ 通过，耗时 3.2s`），慢步骤日志直读
+- **assertApi 短轮询**：默认 8s 等匹配响应出现再断言，操作后直接 assertApi，不必再堆 idle（OMJF-19967 导出假失败根因）
+- **等待类硬超时**：ego 原生 timeout 对「条件永不满足」可能永不 resolve；执行器 `withHardCap` 兜底 click/fill/waitForElement/waitForNetworkIdle
+- plan 写法配套：click 后紧跟的断言若依赖异步渲染，**必须**显式加 `waitForElement`/`waitForUrl`；单场景 `waitForNetworkIdle` ≤2
 
 | 命令 | 用途 |
 |------|------|
@@ -441,14 +443,18 @@ plan.json 是 UI 层声明式计划，以下场景**不在 plan 内硬造**，�
 
 ### AI 生成 plan.json 的原则
 
-1. **确定性断言优先**：能用 `assertText`/`assertCount`/`assertApi`/`assertDataConsistency` 的，不用 `aiAssert`（三原则 3）
-2. **aiAssert 只兜底视觉/语义判断**：布局是否美观、颜色是否协调、文案是否合适等主观判断；aiAssert 的 prompt 必须写成**可判定的判据**（"URL 已离开 /login 且主界面可见"），不写模糊描述（"页面正常"）
+1. **确定性断言优先**：能用 `assertText`/`assertCount`/`assertApi`/`assertDataConsistency` 的，不用 `aiAssert`（三原则 3）。**菜单删除 / 下线路由 / 文案回链消失**等「不应出现」类改动，一律用 `assertText expectNotContains`，禁止只靠 aiAssert 截图判断（OMJF-19967：9 个 aiAssert 里有 7 个本可确定性）
+2. **aiAssert 只兜底视觉/语义判断**：布局是否美观、颜色是否协调、文案是否合适等主观判断；aiAssert 的 prompt 必须写成**可判定的判据**（"URL 已离开 /login 且主界面可见"），不写模糊描述（"页面正常"）。点一级菜单后再截二级菜单前，必须先 `waitForElement` 等二级容器可见——否则证据虚（展开竞态）
 3. **选择器先实测后生成（强制）**：生成 plan.json 前必须 `--snapshot` 拿真实页面结构（含接口响应），基于实测结构写选择器，含登录场景的真实选择器与协议勾选步骤
-4. **场景间通过登录态关联、通过导航独立**：场景 1 登录后，其余场景各自 `navigate` 到目标页，不依赖前一场景留下的页面状态
-5. **选择器优先级**：`[data-testid]` > `id` > 稳定业务 class > **文本定位** > XPath。注意两类步骤语法不同：
+4. **场景间通过登录态关联、通过导航独立**：场景 1 登录后，其余场景各自 `navigate` 到目标页，不依赖前一场景留下的页面状态。能合并的检查（同页多个断言）合并进同一场景，少一次整页重载
+5. **等待策略（性能硬约束，OMJF-19967 慢点）**：
+   - 跳转/渲染同步点优先 `waitForUrl` / `waitForElement`；`waitForNetworkIdle` **只作辅助，单场景 ≤2 个**（validatePlan 机械拦截 ≥3）
+   - navigate 后禁止紧跟断言——中间必须有同步点（validatePlan 已拦）
+   - `assertApi` 已内置短轮询，操作后直接 assertApi，**不必**再堆 idle/sleep 等接口
+6. **选择器优先级**：`[data-testid]` > `id` > 稳定业务 class > **文本定位** > XPath。注意两类步骤语法不同：
    - **操作类（click/clickCdp）**：selector 原样透传给 ego 定位引擎，支持 ego 定位表达式——`text=登录`、`.ykc-table :text("清单处理")`（容器限定的文本定位，推荐用于列表/表格按钮，文本比编译产物 class 稳定，YKC 系 class 常是混淆名）。`text=` 仅用于唯一精确文本节点，歧义时改用容器限定或 ref。
    - **断言类（assertVisible/assertText/assertCount/assertStyle/assertLayout）**：走 `querySelector`，**只支持 CSS 选择器**，不支持 `text=`。
-6. **接口断言跟着操作走**：提交/查询类操作后紧跟对应 `assertApi`（验证请求真的发出且成功），不只看页面提示（铁律 8）
+7. **接口断言跟着操作走**：提交/查询类操作后紧跟对应 `assertApi`（验证请求真的发出且成功），不只看页面提示（铁律 8）；执行器短轮询等响应，plan 不必再堆 sleep/idle
 
 ### plan 确认（测试规划完成后）
 

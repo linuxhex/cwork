@@ -285,21 +285,25 @@ function generateHeredoc(plan, ctxDir, keep = false, resultPath = null) {
     for (let i = 0; i < steps.length; i++) {
       const step = steps[i];
       const stepLabel = `场景${si + 1} 步骤${i + 1}`;
+      L(`let __stepT0 = Date.now();`);
       L(`try {`);
       L(`  __stepIdx = ${i};`);
       L(`  __aiPendingCtx = null;`);
+      L(`  __stepT0 = Date.now();`);
       generateStepCode(L, step, stepLabel, si, i, baseUrl);
+      L(`  const __stepMs = Date.now() - __stepT0;`);
       L(`  if (__aiPendingCtx) {`);
-      L(`    __result_${si}.steps.push({ action: 'aiAssert', ok: null, pending: true, desc: ${JSON.stringify(step.desc || 'AI断言')}, ctx: __aiPendingCtx });`);
+      L(`    __result_${si}.steps.push({ action: 'aiAssert', ok: null, pending: true, desc: ${JSON.stringify(step.desc || 'AI断言')}, ctx: __aiPendingCtx, ms: __stepMs });`);
       L(`    __aiPendingList.push(__aiPendingCtx);`);
-      L(`    log('  ◌ AI证据已采集: ' + __aiPendingCtx);`);
+      L(`    log('  ◌ AI证据已采集: ' + __aiPendingCtx + ' (' + (__stepMs / 1000).toFixed(1) + 's)');`);
       L(`  } else {`);
-      L(`    __result_${si}.steps.push({ action: ${JSON.stringify(step.action)}, ok: true, desc: ${JSON.stringify(step.desc || step.action)} });`);
-      L(`    log('  ✓ ' + ${JSON.stringify(step.desc || step.action)});`);
+      L(`    __result_${si}.steps.push({ action: ${JSON.stringify(step.action)}, ok: true, desc: ${JSON.stringify(step.desc || step.action)}, ms: __stepMs });`);
+      L(`    log('  ✓ ' + ${JSON.stringify(step.desc || step.action)} + ' (' + (__stepMs / 1000).toFixed(1) + 's)');`);
       L(`  }`);
       L(`} catch (err) {`);
-      L(`  __result_${si}.steps.push({ action: ${JSON.stringify(step.action)}, ok: false, desc: ${JSON.stringify(step.desc || step.action)}, error: err.message });`);
-      L(`  log('  ✗ ' + ${JSON.stringify(step.desc || step.action)} + ': ' + err.message);`);
+      L(`  const __stepMsFail = (typeof __stepT0 !== 'undefined') ? (Date.now() - __stepT0) : undefined;`);
+      L(`  __result_${si}.steps.push({ action: ${JSON.stringify(step.action)}, ok: false, desc: ${JSON.stringify(step.desc || step.action)}, error: err.message, ms: __stepMsFail });`);
+      L(`  log('  ✗ ' + ${JSON.stringify(step.desc || step.action)} + ': ' + err.message + (__stepMsFail != null ? ' (' + (__stepMsFail / 1000).toFixed(1) + 's)' : ''));`);
       L(`  __result_${si}.ok = false;`);
       // 首败即停 + 失败截图归档到 result.json 同目录 screenshots/（ego 临时目录被清理后仍可回溯证据）
       L(`  try {`);
@@ -524,9 +528,17 @@ function generateStepCode(L, step, label, si, i, baseUrl) {
       L(`  {`);
       // 表单元素（input/textarea/select）textContent 恒为空串，必须读 .value（OMJF 实战伪断言根因）
       L(`    const __text = await js(\`(() => { const el = document.querySelector(${tmplSel(step.selector)}); if (!el) return ''; const tag = el.tagName; return (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') ? String(el.value || '') : String(el.textContent || ''); })()\`) || '';`);
+      // expectContains / expectNotContains / expect 三选一（菜单/下线路由用反向断言替代 aiAssert，OMJF-19967）
+      if (!step.expectContains && !step.expectNotContains && step.expect === undefined) {
+        throw new Error('assertText 需要 expectContains/expectNotContains/expect 至少其一: ' + JSON.stringify(step.desc || step.selector));
+      }
+      if (step.expectNotContains) {
+        L(`    if (__text.includes(${JSON.stringify(step.expectNotContains)})) throw new Error(${JSON.stringify(step.desc || '文本不应出现')} + ': "' + __text.trim().slice(0, 120) + '" 不应包含 "' + ${JSON.stringify(step.expectNotContains)} + '"');`);
+      }
       if (step.expectContains) {
         L(`    if (!__text.includes(${JSON.stringify(step.expectContains)})) throw new Error(${JSON.stringify(step.desc || '文本不匹配')} + ': "' + __text.trim() + '" 不包含 "' + ${JSON.stringify(step.expectContains)} + '"');`);
-      } else {
+      }
+      if (step.expect !== undefined && !step.expectContains && !step.expectNotContains) {
         L(`    const __trimmed = __text.trim();`);
         L(`    if (__trimmed !== ${JSON.stringify(step.expect)}) throw new Error(${JSON.stringify(step.desc || '文本不匹配')} + ': 期望 "' + ${JSON.stringify(step.expect)} + '", 实际 "' + __trimmed + '"');`);
       }
@@ -986,8 +998,9 @@ function validatePlan(plan) {
     }
     if (maxStreak >= 3) {
       errors.push(`场景「${sc.name}」连续 ${maxStreak} 个 waitForNetworkIdle（凑数等待），改用 waitForUrl/assertVisible/assertApi 等确定性判据`);
-    } else if (idleTotal >= 4) {
-      errors.push(`场景「${sc.name}」共 ${idleTotal} 个 waitForNetworkIdle（隔步堆等待绕过连续性检查），跳转/渲染同步点改用 waitForUrl/waitForElement`);
+    } else if (idleTotal >= 3) {
+      // OMJF-19967：7 场景几乎每场景都堆 idle，占大半耗时——阈值从 4 收到 3，逼 plan 改用 waitForUrl/waitForElement
+      errors.push(`场景「${sc.name}」共 ${idleTotal} 个 waitForNetworkIdle（过多），跳转/渲染同步点改用 waitForUrl/waitForElement；idle 只作辅助最多 2 个/场景`);
     }
 
     // ③ 登录场景必须有确定性 URL 判据（waitForUrl/assertUrl）——URL 离开登录页是唯一可信判据；
@@ -996,6 +1009,17 @@ function validatePlan(plan) {
       const hasUrlAssert = steps.some(st => ['waitForUrl', 'assertUrl'].includes(st.action));
       if (!hasUrlAssert) {
         errors.push(`场景「${sc.name}」是登录场景但无确定性 URL 判据，必须含 waitForUrl/assertUrl（如 waitForUrl notContains /login；aiAssert/可见性断言不能作为登录成功的判据）`);
+      }
+    }
+
+    // ④ navigate 后紧跟断言类步骤且中间无同步点 → 瞬态失败高发（登录跳转竞态同理）
+    const assertActs = new Set(['assertVisible','assertText','assertCount','assertStyle','assertLayout','assertApi','assertDataConsistency','assertUrl','aiAssert']);
+    const syncActs = new Set(['waitForUrl','waitForElement','waitForNetworkIdle','waitForLoad','waitForNavigation']);
+    for (let i = 0; i < steps.length - 1; i++) {
+      if (steps[i].action !== 'navigate') continue;
+      const next = steps[i + 1];
+      if (assertActs.has(next.action) && !syncActs.has(next.action)) {
+        errors.push(`场景「${sc.name}」navigate 后紧跟 ${next.action}（无 waitForUrl/waitForElement 同步点），易瞬态失败——中间加 waitForUrl 或 waitForElement`);
       }
     }
   }

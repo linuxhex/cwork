@@ -15,11 +15,11 @@
 - [2026-11-01] [test] 新增 android-run.cjs，BlueStacks5+ADB 驱动，对齐官方 Skill 能力 | 待实测 uiautomator dump 解析稳定性
 - [2026-11-01] [test] 小程序快照批量化+条件等待+多页合并+耗时埋点 | 实测前后对比耗时
 - [2026-11-01] [implement] 借鉴 impeccable/ponytail 思想增强前端设计与编码（7支柱/反slop/分模式/critique/三问/意图优先/最小改动） | 实测验证审查流程是否被正确触发
-- [2026-11-02] [test] Web 同款加速：接口响应增量懒拉+条件等待替代固定 sleep+场景耗时埋点 | 实测前后对比耗时
-- [2026-11-02] [test] OMJF-19967 实测过程（慢+假失败）：① ego waitForElement/click/fill 原生 timeout 对条件永不满足不生效→withHardCap；② assertText 读 input.textContent 恒空→改 .value；③ assertApi 点确认后 200ms 即断言捕不到异步接口→短轮询；④ 菜单 aiAssert 点一级后未等二级展开就截图（证据虚）；⑤ 7 场景约 2–3min，waitForNetworkIdle 占大半 | 详见 docs/requirements/OMJF-19967/test-process-notes.md
 
 ## 经验沉淀（≤ 20 条，只留可长期借鉴的）
 
+- [test] ego 原生等待 timeout 对「条件永不满足」可能永不 resolve（waitForElement/click/fill）——执行器必须 withHardCap；assertApi 须短轮询等响应；表单元素断言读 .value 非 textContent
+- [test] plan 性能：单场景 waitForNetworkIdle≤2、navigate 后禁紧跟断言、菜单/下线/回链消失用 assertText expectNotContains 替代 aiAssert（OMJF-19967）
 - [test] 登录/路由跳转判据必须确定性 URL 断言（waitForUrl/assertUrl），waitForNetworkIdle 永不作跳转完成判据；assertVisible 在登录页误判高发
 - [test] 「断言必须可证伪」比「断言存在」更重要——凑数等待/凑数断言会盖住完整失败证据链产生假通过
 - [test] 异步渲染组件（element-ui nextTick 面板等）禁止同步 count，必须轮询可见性；三个「瞬态失败」常共用一条根因链，机械校验收紧比文档约束可靠
@@ -38,11 +38,3 @@
 - [log] prod 业务专属库大面积空，主链路 `all`+spring.name；查 all 库必须带关键字
 - [log] 时间戳禁止心算，命令驱动；搜索关键字单号优先
 - [data] Doris 跨 catalog JOIN 大表关联易 OOM（外表全量拉 coordinator），分别查小结果集本地关联；无 WHERE 全表扫描机械拦截
-- [code] clone 禁 --single-branch（后续分支上游异常）
-- [article] keyboard.paste 走 macOS 原生 cmd+v，浏览器非 OS 前台时静默失败，脚本前先 osascript 置前台；发表类按钮禁 JS click，按全文本精确匹配+坐标点击
-- [通用] bash 变量名后紧跟全角字符被吞进变量名，一律 `${var}`；成功返回 list 的 API 对它调 .get 会崩
-- [通用] 分发链四端（claude/qoder/cursor/trae）+ 全局副本各走各的命令，漏一端就分叉；改完源立即 commit 防工作区被外部恢复
-- [article] 免费按关键词找真实配图的图源已全死（source.unsplash 废弃/loremflickr 死），fetch 只剩 picsum 随机图；技术文正解=gen_illustration 自绘示意图为主
-- [article] Pillow 画 ✗/✓ 在 PingFang 下是豆腐块，用 ×/√；cover 布局尺寸勿写死横版值，竖版（小红书 1242x1660）会溢出，字号/色块按画布自适应
-- [article] 小红书：标题是普通 input（page.fill）、正文是 tiptap（click+insertText）；「暂存离开」仅浏览器本地不同步 App，要 App 可见必须点「发布」；发布按钮优先 snapshot 找 button[ref]+text"发布"再  点（坐标793,706仅兜底）；成功看 URL publish/success 或「发布成功」；切tab/上传/填写/点击必须同一 ego 脚本完成
-- [article] 小红书默认停在「上传视频」tab，须 JS click「上传图文」；上传图后底部按钮才出现；# 触发话题下拉需 Escape；ref 跨脚本过期，每轮先 snapshot
