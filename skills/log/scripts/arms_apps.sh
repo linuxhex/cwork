@@ -17,7 +17,7 @@ KEYWORD="${2:-}"
 TMPJSON="$(mktemp)"
 trap 'rm -f "$TMPJSON"' EXIT
 
-echo ">>> ARMS ListTraceApps (region=$REGION${KEYWORD:+, 过滤: $KEYWORD})"
+echo ">>> ARMS ListTraceApps (region=$REGION${KEYWORD:+, 过滤: $KEYWORD})" >&2
 arms_call ListTraceApps RegionId="$REGION" > "$TMPJSON" 2>/dev/null || true
 python3 - "$TMPJSON" "$KEYWORD" <<'PY'
 import sys, json, re

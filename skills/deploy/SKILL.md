@@ -105,7 +105,13 @@ API base: `https://{YX_DOMAIN}/oapi/v1/appstack/organizations/{YX_ORG_ID}`
 
 ## 脚本调用说明（关键）
 
-脚本位于 `scripts/`（与本 SKILL.md 同级）。**已内置 Jenkins 基本认证 + 云效 token 认证，直接 `bash` 调用即可。** 调用前先 `cd scripts`。
+脚本位于 `scripts/`（与本 SKILL.md 同级）。**已内置 Jenkins 基本认证 + 云效 token 认证，直接 `bash` 调用即可。**
+
+**调用路径（强制）**：必须用脚本绝对路径或先 `cd` 到 `scripts/`——裸跑 `bash "$CWORK_HOME/skills/deploy/scripts/deploy.sh"` 会 `No such file or directory`（exit 127）。推荐任意 cwd：
+```bash
+bash "$CWORK_HOME/skills/deploy/scripts/deploy.sh" deploy <appName> <env> <branch>
+# 或：cd "$CWORK_HOME/skills/deploy/scripts" && bash "$CWORK_HOME/skills/deploy/scripts/deploy.sh" deploy <appName> <env> <branch>
+```
 
 | 命令 | 用途 | 用法 |
 |---|---|---|
@@ -147,10 +153,10 @@ API base: `https://{YX_DOMAIN}/oapi/v1/appstack/organizations/{YX_ORG_ID}`
 
 1. **先 auto-sync 收录**（直接做，不问）：
    ```bash
-   cd scripts && bash deploy.sh sync <appName>
+   bash "$CWORK_HOME/skills/deploy/scripts/deploy.sh" sync <appName>
    ```
    自动从 AppStack 拉该应用的发布工作流，解析 test/uat/dev 的 `workflowSn|stageSn` 合并进 service-map.json。**生产（production）环境不收录**——生产部署走人工确认的正式链路。
-2. **收录成功 → 直接部署**：`bash deploy.sh deploy <appName> <env> <branch>`。
+2. **收录成功 → 直接部署**：`bash "$CWORK_HOME/skills/deploy/scripts/deploy.sh" deploy <appName> <env> <branch>`。
 3. **sync 收录不到**（应用无发布工作流 / 返回空）→ 如实说，提示 `list` 查可用服务或确认服务名，不臆造。
 
 **手工探索兜底（仅 sync 不可用时）**：
@@ -172,47 +178,54 @@ API base: `https://{YX_DOMAIN}/oapi/v1/appstack/organizations/{YX_ORG_ID}`
 ## 阶段 2：触发构建部署
 
 ```bash
-cd scripts
-# 完整部署（构建 + 等待 + 部署，最常用，自动路由平台）
-bash deploy.sh deploy order-server test feature/20260901_add_export
-# 仅触发构建
-bash deploy.sh build charge-server feature/20260901_fix_bug
-# 仅触发部署（需先构建）
-bash deploy.sh execute order-server test feature/20260901_add_export
-# 查询构建状态（Jenkins）
-bash deploy.sh status order-server_k8s-test 456
-# 列出可用服务（含平台标识）
-bash deploy.sh list order
-# 查看服务的作业名
-bash deploy.sh jobs finance-server
-# 查看构建控制台日志（Jenkins）
-bash deploy.sh console order-server_3.0_dev 123
+D="$CWORK_HOME/skills/deploy/scripts/deploy.sh"
+
+# 构建+部署（最常用；任意 cwd）
+bash "$D" deploy order-server test feature/20260901_add_export
+
+# 仅构建
+bash "$D" build charge-server feature/20260901_fix_bug
+
+# 仅部署（需先构建）
+bash "$D" execute order-server test feature/20260901_add_export
+
+# 查状态
+bash "$D" status order-server_k8s-test 456
+
+# 列服务
+bash "$D" list order
+
+# 查作业名
+bash "$D" jobs finance-server
+
+# 看控制台日志
+bash "$D" console order-server_3.0_dev 123
 ```
 
 **平台路由示例**：
 ```bash
 # service-map.json 中 platform=yunxiao 的服务，自动走云效 API
-bash deploy.sh deploy order-foundation test feature/20260901_add_export
+bash "$CWORK_HOME/skills/deploy/scripts/deploy.sh" deploy order-foundation test feature/20260901_add_export
 # 输出: 平台=yunxiao, 触发云效工作流执行...
 
 # service-map.json 中 platform=jenkins 标记的服务，走 Jenkins
-bash deploy.sh deploy device-hubble-server test feature/20260901_add_export
+bash "$CWORK_HOME/skills/deploy/scripts/deploy.sh" deploy device-hubble-server test feature/20260901_add_export
 # 输出: 平台=jenkins, 触发 Jenkins 构建...
 
 # 前端单 job 部署（singleJob=true，构建即发布，走独立 Jenkins 实例）
-bash deploy.sh deploy omp-shop test test        # 分支参数 test / origin/test / feature/xxx 均可
+bash "$CWORK_HOME/skills/deploy/scripts/deploy.sh" deploy omp-shop test test        # 分支参数 test / origin/test / feature/xxx 均可
 # 输出: 平台=jenkins, 作业=测试环境/OMP, 触发 BRANCH_TAG=origin/test...
 
 # 状态查询/控制台日志（直接传服务名，自动路由独立实例与文件夹作业路径）
-bash deploy.sh status omp-shop
-bash deploy.sh console omp-shop 2487
+bash "$CWORK_HOME/skills/deploy/scripts/deploy.sh" status omp-shop
+bash "$CWORK_HOME/skills/deploy/scripts/deploy.sh" console omp-shop 2487
 ```
 
 **鉴权失败排查**：
 - **Jenkins**（返回 401/403）：① `JENKINS_USER`/`JENKINS_PASS` 是否填对；② Jenkins 地址是否可达；③ 凭证是否过期；④ **POST 403 但 GET 正常 = crumb 缺失/不匹配**——crumb 与 session cookie 绑定，必须同一会话先 GET crumb（存 cookie）再 POST（同时带 crumb header + cookie），`jenkins_post` 已内置此逻辑
 - **云效**（返回 401/403）：① `YX_TOKEN` 是否正确且未过期；② `YX_ORG_ID` 是否正确；③ `YX_DOMAIN` 是否正确
 
-**服务名不在映射中**：① 先跑 `bash deploy.sh sync <appName>` 自动收录（见「未收录服务 SOP」）；② 收录不到再 `list <关键字>` 搜可用服务、确认服务名拼写；③ 仍找不到则手动编辑 `service-map.json`（记得回写源仓库）。
+**服务名不在映射中**：① 先跑 `bash "$CWORK_HOME/skills/deploy/scripts/deploy.sh" sync <appName>` 自动收录（见「未收录服务 SOP」）；② 收录不到再 `list <关键字>` 搜可用服务、确认服务名拼写；③ 仍找不到则手动编辑 `service-map.json`（记得回写源仓库）。
 
 ---
 
@@ -361,7 +374,7 @@ Jenkins 控制台：
 | `yxBuild` | 云效 | 构建工作流标识，格式 `workflowSn|stageSn` |
 | `serviceName` | 全部 | 服务中文名（仅展示）；`sync` 自动收录的条目标记为 `[auto-sync]`，可随手改回真实中文名 |
 
-**映射过期处理**：`bash deploy.sh sync` 全量重拉（AppStack 全部应用的 test/uat/dev 映射，默认只补缺失键、`--force` 让 API 值优先覆盖同名键）；`platform=jenkins` 条目跳过不覆盖（保护手工维护的 Jenkins 作业名）。
+**映射过期处理**：`bash "$CWORK_HOME/skills/deploy/scripts/deploy.sh" sync` 全量重拉（AppStack 全部应用的 test/uat/dev 映射，默认只补缺失键、`--force` 让 API 值优先覆盖同名键）；`platform=jenkins` 条目跳过不覆盖（保护手工维护的 Jenkins 作业名）。
 
 ---
 

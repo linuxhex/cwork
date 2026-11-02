@@ -19,7 +19,7 @@ PROJECT=$(get_sls_project "$ENV")
 
 case "$ACTION" in
   list)
-    echo ">>> SLS ListLogstores (env=$ENV project=$PROJECT)"
+    echo ">>> SLS ListLogstores (env=$ENV project=$PROJECT)" >&2
     sls_call "$PROJECT" GET "/logstores"
     ;;
 
@@ -28,7 +28,7 @@ case "$ACTION" in
     FROM="${4:-$(($(now_s)-600))}"; TO="${5:-$(now_s)}"
     QE=$(urlenc_sls "$QUERY"); LE=$(urlenc_sls "$LOGSTORE")
     resource="/logstores/${LE}?from=${FROM}&line=${LINE}&offset=0&query=${QE}&to=${TO}&type=log"
-    echo ">>> SLS GetLogs (env=$ENV logstore=$LOGSTORE query=$QUERY line=$LINE from=$FROM to=$TO)"
+    echo ">>> SLS GetLogs (env=$ENV logstore=$LOGSTORE query=$QUERY line=$LINE from=$FROM to=$TO)" >&2
     sls_call "$PROJECT" GET "$resource"
     ;;
 
@@ -37,7 +37,7 @@ case "$ACTION" in
     FROM="${3:-$(($(now_s)-600))}"; TO="${4:-$(now_s)}"
     QE=$(urlenc_sls "$QUERY"); LE=$(urlenc_sls "$LOGSTORE")
     resource="/logstores/${LE}?from=${FROM}&query=${QE}&to=${TO}&type=histogram"
-    echo ">>> SLS GetHistograms (env=$ENV logstore=$LOGSTORE query=$QUERY from=$FROM to=$TO)"
+    echo ">>> SLS GetHistograms (env=$ENV logstore=$LOGSTORE query=$QUERY from=$FROM to=$TO)" >&2
     sls_call "$PROJECT" GET "$resource" \
       | python3 -c '
 import sys, json

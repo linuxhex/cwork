@@ -10,7 +10,7 @@ set -euo pipefail
 DIR="$(cd "$(dirname "$0")" && pwd)"
 OUT="$DIR/../ARMS_PID_CACHE.md"
 export OUT
-echo ">>> 重建索引: 取 ARMS 应用 + prod/uat logstore ..."
+echo ">>> 重建索引: 取 ARMS 应用 + prod/uat logstore ..." >&2
 export APPS=$(bash "$DIR/arms_apps.sh" cn-hangzhou 2>&1 | grep 'pid=' | sed -E 's/^ +//' | awk '{p=$2; sub("pid=","",p); print $1"|"p}')
 export PROD_LOGS=$(bash "$DIR/sls_query.sh" prod list 2>&1 | grep '^{' | python3 -c 'import sys,json,re;print("\n".join(json.loads(re.search(r"\{.*",sys.stdin.read(),re.S).group(0))["logstores"]))')
 export UAT_LOGS=$(bash "$DIR/sls_query.sh" uat list 2>&1 | grep '^{' | python3 -c 'import sys,json,re;print("\n".join(json.loads(re.search(r"\{.*",sys.stdin.read(),re.S).group(0))["logstores"]))')

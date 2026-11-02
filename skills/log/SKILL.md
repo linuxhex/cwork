@@ -70,6 +70,11 @@ description: 找日志分析问题。查 SLS 日志 + ARMS 链路，定位问题
 
 本 skill 的脚本位于 `scripts/` 子目录（与本 SKILL.md 同级）。调用时用 skill 根目录的相对路径，或解析出绝对路径。**所有脚本已内置阿里云签名，直接 `bash` 调用即可，无需额外鉴权。**
 
+**输出协议（强制，解析必守）**：
+- **stdout = 机器可读结果**（`sls_query.sh logs/list` 为纯 JSON；`count` 为人读摘要）。进度头 `>>> ...` 一律打 **stderr**，禁止混进 stdout。
+- AI/脚本二次解析时：`json.loads` **只喂 stdout**；若历史副本仍把 `>>>` 打到 stdout，先丢掉非 `{`/`[` 开头的行再 parse（兼容旧安装）。
+- 推荐调用：`bash "$CWORK_HOME/skills/log/scripts/sls_query.sh" ...`（任意 cwd；勿依赖先 cd）。
+
 | 脚本 | 用途 | 用法 |
 |---|---|---|
 | `sls_query.sh` | 查 SLS 日志 | `<env> list` / `<env> logs <logstore> [query] [line] [from_s] [to_s]` / `<env> count <logstore> [query] [from_s] [to_s]` |

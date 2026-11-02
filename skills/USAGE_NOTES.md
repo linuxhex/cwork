@@ -12,6 +12,7 @@
 
 ## 未分析
 
+- [2026-11-02] [log/deploy] SLS stdout 混入 >>> 致 json.loads 炸；裸 bash deploy.sh 任意 cwd 127 | >>> 改 stderr + deploy 强制绝对路径示例
 - [2026-11-01] [test] 新增 android-run.cjs，BlueStacks5+ADB 驱动，对齐官方 Skill 能力 | 待实测 uiautomator dump 解析稳定性
 - [2026-11-01] [test] 小程序快照批量化+条件等待+多页合并+耗时埋点 | 实测前后对比耗时
 - [2026-11-01] [implement] 借鉴 impeccable/ponytail 思想增强前端设计与编码（7支柱/反slop/分模式/critique/三问/意图优先/最小改动） | 实测验证审查流程是否被正确触发
