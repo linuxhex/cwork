@@ -174,6 +174,23 @@ function generateHeredoc(plan, ctxDir, keep = false, resultPath = null) {
   L(``);
   L(`function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }`);
   L(``);
+  // 硬超时兜底：ego 原生等待类 API 的 timeout 参数对「条件永不满足」场景不生效（promise 永不 resolve，
+  // OMJF-19967 实战 waitForElement 卡死烧光看门狗）。外包 Promise.race 到点强制返回：
+  // 动作类（click/fill）超时抛错走首败即停；辅助类（waitForNetworkIdle）超时告警继续不阻塞流程
+  L(`async function withHardCap(promiseFn, ms, label, opts) {`);
+  L(`  const __failOnTimeout = !(opts && opts.warnOnly);`);
+  L(`  let __timedOut = false;`);
+  L(`  await Promise.race([`);
+  L(`    Promise.resolve().then(promiseFn).catch(e => { throw e; }),`);
+  L(`    sleep(ms).then(() => { __timedOut = true; }),`);
+  L(`  ]);`);
+  L(`  if (__timedOut) {`);
+  L(`    const __msg = label + ' 硬超时 ' + ms + 'ms（原生 API 无超时兜底）';`);
+  L(`    if (__failOnTimeout) throw new Error(__msg);`);
+  L(`    log('  ⚠ ' + __msg + '，继续后续步骤');`);
+  L(`  }`);
+  L(`}`);
+  L(``);
 
   // 取最新一条匹配响应——同一接口可能被多次调用，取旧的会断言到过期数据
   L(`function findResponse(urlPattern) {`);
@@ -350,7 +367,8 @@ function generateStepCode(L, step, label, si, i, baseUrl) {
     }
 
     case 'waitForNetworkIdle':
-      L(`  await waitForNetworkIdle();`);
+      // 长轮询/SSE 页面可能永不空闲，warnOnly 兜底防挂死（确定性同步仍靠 waitForUrl/waitForElement）
+      L(`  await withHardCap(() => waitForNetworkIdle(), 30000, 'waitForNetworkIdle', { warnOnly: true });`);
       break;
 
     case 'waitForLoad':
@@ -361,13 +379,19 @@ function generateStepCode(L, step, label, si, i, baseUrl) {
     case 'waitForElement': {
       // 等待元素出现再采集——根治动态渲染导致的选择器乱跑
       // 直接委托 ego-browser 原生 waitForElement()，支持 CSS/text=/role 等原生选择器
-      // 超时后标记 BLOCKED 继续后续步骤，不报错（避免一个元素卡死整个场景）
+      // ⚠ ego 原生 timeout 参数对「元素不存在」场景不生效（promise 永不 resolve，2026-11-02 OMJF 实战
+      //   看门狗 10 分钟烧在一步）。外包 Promise.race 硬超时兜底：到点放弃等待，标记 BLOCKED 继续后续步骤
       const timeout = Number(step.timeout || 10) * 1000;
       L(`  {`);
-      L(`    try {`);
-      L(`      await waitForElement(${JSON.stringify(step.selector)}, { timeout: ${timeout} });`);
-      L(`    } catch (e) {`);
-      L(`      log('  ⚠ waitForElement 超时（${step.timeout || 10}s）: ' + ${JSON.stringify(step.selector)} + ' → 标记 BLOCKED 继续后续步骤');`);
+      L(`    const __weTimeout = ${timeout};`);
+      L(`    const __waitP = waitForElement(${JSON.stringify(step.selector)}, { timeout: __weTimeout }).catch(e => { throw e; });`);
+      L(`    let __timedOut = false;`);
+      L(`    await Promise.race([`);
+      L(`      __waitP,`);
+      L(`      sleep(__weTimeout + 2000).then(() => { __timedOut = true; }),`);
+      L(`    ]);`);
+      L(`    if (__timedOut) {`);
+      L(`      log('  ⚠ waitForElement 超时（${step.timeout || 10}s + 硬超时兜底）: ' + ${JSON.stringify(step.selector)} + ' → 标记 BLOCKED 继续后续步骤');`);
       L(`    }`);
       L(`  }`);
       break;
@@ -474,14 +498,16 @@ function generateStepCode(L, step, label, si, i, baseUrl) {
     case 'click':
       // 直接委托 ego-browser 原生 click()，支持 CSS/text=/role/>>nth=N 等原生选择器
       // 多匹配时 ego 自动列出候选（Candidates: 1. xxx 2. yyy），无需 fallback
-      L(`  await click(${JSON.stringify(step.selector)}, { label: ${JSON.stringify(step.desc || '点击')} });`);
+      L(`  const __clickP = click(${JSON.stringify(step.selector)}, { label: ${JSON.stringify(step.desc || '点击')} });`);
+      L(`  await withHardCap(() => __clickP, 12000, 'click ' + ${JSON.stringify(step.selector)});`);
       L(`  await sleep(200);`);
       break;
 
     case 'fill':
       // 直接委托 ego-browser 原生 fillInput()，支持 CSS/text=/role 等原生选择器
       // 多匹配时 ego 自动列出候选（Candidates: 1. xxx 2. yyy），无需 fallback
-      L(`  await fillInput(${JSON.stringify(step.selector)}, ${JSON.stringify(step.value)});`);
+      L(`  const __fillP = fillInput(${JSON.stringify(step.selector)}, ${JSON.stringify(step.value)});`);
+      L(`  await withHardCap(() => __fillP, 12000, 'fill ' + ${JSON.stringify(step.selector)});`);
       L(`  await sleep(100);`);
       break;
 
@@ -496,7 +522,8 @@ function generateStepCode(L, step, label, si, i, baseUrl) {
 
     case 'assertText':
       L(`  {`);
-      L(`    const __text = await js(\`(document.querySelector(${tmplSel(step.selector)}) || {}).textContent\`) || '';`);
+      // 表单元素（input/textarea/select）textContent 恒为空串，必须读 .value（OMJF 实战伪断言根因）
+      L(`    const __text = await js(\`(() => { const el = document.querySelector(${tmplSel(step.selector)}); if (!el) return ''; const tag = el.tagName; return (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') ? String(el.value || '') : String(el.textContent || ''); })()\`) || '';`);
       if (step.expectContains) {
         L(`    if (!__text.includes(${JSON.stringify(step.expectContains)})) throw new Error(${JSON.stringify(step.desc || '文本不匹配')} + ': "' + __text.trim() + '" 不包含 "' + ${JSON.stringify(step.expectContains)} + '"');`);
       } else {
@@ -641,7 +668,8 @@ function generateStepCode(L, step, label, si, i, baseUrl) {
       }
       L(`  {`);
       // 页面值求值走 cdp Runtime.evaluate returnByValue：js() 对复杂 JSON 表达式返回 null（同 assertLayout 坑）
-      L(`    const __expr = "(function(){ var els = document.querySelectorAll(" + ${JSON.stringify(JSON.stringify(step.selector))} + "); var arr = []; for (var i = 0; i < els.length; i++) { arr.push(String(els[i].textContent || '').trim()); } return JSON.stringify(arr); })()";`);
+      // 表单元素读 .value（textContent 恒空串，同 assertText 的伪断言坑）
+      L(`    const __expr = "(function(){ var els = document.querySelectorAll(" + ${JSON.stringify(JSON.stringify(step.selector))} + "); var arr = []; for (var i = 0; i < els.length; i++) { var tag = els[i].tagName; var v = (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') ? String(els[i].value || '') : String(els[i].textContent || ''); arr.push(v.trim()); } return JSON.stringify(arr); })()";`);
       L(`    const __ev = await cdp('Runtime.evaluate', { expression: __expr, returnByValue: true });`);
       L(`    const __raw = (__ev && __ev.result && typeof __ev.result.value !== 'undefined') ? __ev.result.value : null;`);
       L(`    let __vals = null; if (typeof __raw === 'string') { try { __vals = JSON.parse(__raw); } catch (e) {} }`);
