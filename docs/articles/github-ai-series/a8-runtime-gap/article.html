@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>别人的 Agent 用得飞起，你的还在踩坑，差距到底在哪</title>
+<style>
+  body { max-width: 750px; margin: 0 auto; padding: 24px 16px; background: #fff;
+         font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+         font-size: 16px; line-height: 1.75; color: #333; letter-spacing: 0.5px; }
+  img { max-width: 100%; }
+</style>
+</head>
+<body>
+<section style="margin-bottom: 30px;">
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">你们用的是同一个模型，同一个客户端，甚至同一份需求文档。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">同事的 Agent 一次跑完，测试通过，提交干净。你的 Agent 改了六轮，最后你接手重写。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">你会怀疑是不是人家用了更贵的模型。多数情况下不是。<strong style="color: #333;">差距在模型外面那一圈。</strong></p>
+  <div style="background: #fff3cd; padding: 14px 18px; border-radius: 4px; color: #856404; margin: 20px 0; line-height: 1.75;">
+    <p style="margin: 4px 0;">⚠️ 一个简单的事实：<strong>模型是你们共用的，运行时是各自搭的。</strong>共用部分拉不开差距，拉开差距的一定是各自搭的那部分。</p>
+  </div>
+</section>
+
+<hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+
+<section style="margin-bottom: 30px;">
+  <h2 style="font-size: 18px; font-weight: bold; color: #333; border-left: 4px solid #1890FF; padding-left: 12px; margin: 20px 0;">一、运行时到底指什么</h2>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">一句话：<strong style="color: #333;">除了模型权重之外，让 Agent 跑起来的所有东西。</strong></p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">具体是五层：<strong style="color: #333;">上下文怎么给、工具怎么接、权限怎么限、结果怎么验证、环境跑在哪。</strong></p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">模型只负责"给定这些输入，下一步最可能是什么"。至于输入给得对不对、工具能不能用、结果有没有人检查，模型一概不管——那是运行时的事。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">所以"Agent 不好用"这句话，大多数时候应该翻译成"<strong style="color: #333;">我的运行时没搭好</strong>"。</p>
+
+  <p style="text-align: center; margin: 24px 0;">
+  <img src="images/01-runtime-layers.png" style="max-width: 100%; border-radius: 8px; display: block; margin: 0 auto;" alt="">
+</p>
+</section>
+
+<hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+
+<section style="margin-bottom: 30px;">
+  <h2 style="font-size: 18px; font-weight: bold; color: #333; border-left: 4px solid #1890FF; padding-left: 12px; margin: 20px 0;">二、差距一：上下文不是越多越好</h2>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">新手最常见的做法：把整个仓库、整个文档库塞进上下文，以为给得越多它越懂。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">结果是<strong style="color: #333;">关键信息被稀释</strong>。真正约束这次修改的那三条规则，混在几千行无关代码里，权重被摊薄，模型自然会漏。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">高手的上下文是<strong style="color: #333;">可检索、可裁剪</strong>的：需要哪份规范就取哪份，改哪个模块就加载哪个模块的约束，历史结论能复用，过期内容能剔除。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">判断标准很简单：<strong style="color: #333;">你能不能说出这次任务的关键约束在哪一段。</strong>说不出来，说明你自己都没管住上下文。</p>
+</section>
+
+<hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+
+<section style="margin-bottom: 30px;">
+  <h2 style="font-size: 18px; font-weight: bold; color: #333; border-left: 4px solid #1890FF; padding-left: 12px; margin: 20px 0;">三、差距二：工具是接出来的，不是猜出来的</h2>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">没有工具时，模型只能靠记忆编命令：参数对不对、版本支不支持、执行完怎么判断成败，全靠猜。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">GitHub 上的趋势是把已有能力包成标准工具接口。比如 <strong style="color: #1890FF;">ansible-mcp-server</strong> 把 Ansible 的自动化能力接到 MCP 上，让 Agent 调用现成的 playbook，而不是每次现写一段 Shell。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">这个方向的真正价值不是"多了个工具"，是<strong style="color: #333;">把不确定的自由发挥换成了确定的已验证能力</strong>。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">你自己落地时也一样：凡是团队里已经被反复验证的操作——构建、部署、查日志、查配置——优先做成工具，别让模型每次重新发明。</p>
+</section>
+
+<hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+
+<section style="margin-bottom: 30px;">
+  <h2 style="font-size: 18px; font-weight: bold; color: #333; border-left: 4px solid #1890FF; padding-left: 12px; margin: 20px 0;">四、差距三：环境跑在哪，决定了你敢让它干什么</h2>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">很多人不是不想放权，是不敢：怕数据出去、怕误操作、怕出了事没法复现。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">所以本地优先的运行时被关注不是偶然。<strong style="color: #1890FF;">alter ego</strong>、<strong style="color: #1890FF;">ego-browser</strong> 这类项目的思路是把 Agent 跑在本机、权限边界画在本机、状态留在本机；<strong style="color: #1890FF;">DroidMind</strong> 在 2026 年 10 月 26 日周榜快照里一周新增约 6,975 star，也是同一个方向的信号。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">注意这里的关键不是"本地"两个字，是<strong style="color: #333;">你敢授权的范围</strong>。环境可控，你才敢让它自动跑完整流程；环境不可控，你只能让它写两行就停下来问你一次。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">效率差距很多时候就是这么来的：<strong style="color: #333;">不是对方模型快，是对方不用每一步都等你确认。</strong></p>
+
+  <p style="text-align: center; margin: 24px 0;">
+  <img src="images/02-two-configs.png" style="max-width: 100%; border-radius: 8px; display: block; margin: 0 auto;" alt="">
+</p>
+</section>
+
+<hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+
+<section style="margin-bottom: 30px;">
+  <h2 style="font-size: 18px; font-weight: bold; color: #333; border-left: 4px solid #1890FF; padding-left: 12px; margin: 20px 0;">五、差距四：有没有验证回路</h2>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">这是最容易被跳过、又最值钱的一层。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">没有验证回路的 Agent，交付标准是"我说我改完了"。有验证回路的 Agent，交付标准是"构建过了、测试过了、截图对上了"。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">前者你每次都要人工复核，后者你只需要抽查。<strong style="color: #333;">长期看，复核成本才是 Agent 使用成本的大头。</strong></p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">验证不必一开始就很大：能编译就先编译，有 lint 就先 lint，有最小用例就先跑最小用例。关键是<strong style="color: #333;">让"完成"这个词有客观含义</strong>。</p>
+</section>
+
+<hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+
+<section style="margin-bottom: 30px;">
+  <h2 style="font-size: 18px; font-weight: bold; color: #333; border-left: 4px solid #1890FF; padding-left: 12px; margin: 20px 0;">六、同一个模型，两种配置</h2>
+  <table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px;">
+    <tbody>
+      <tr>
+        <th style="background: #1890FF; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;">层</th>
+        <th style="background: #1890FF; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;">踩坑配置</th>
+        <th style="background: #1890FF; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;">顺手配置</th>
+      </tr>
+      <tr>
+        <td style="padding: 10px; border: 1px solid #ddd; color: #333; font-weight: bold;">上下文</td>
+        <td style="padding: 10px; border: 1px solid #ddd; color: #555;">整仓塞入，靠模型自己找</td>
+        <td style="padding: 10px; border: 1px solid #ddd; color: #555;">按需检索，关键约束置顶</td>
+      </tr>
+      <tr>
+        <td style="padding: 10px; border: 1px solid #ddd; color: #333; font-weight: bold; background: #f9f9f9;">工具</td>
+        <td style="padding: 10px; border: 1px solid #ddd; color: #555; background: #f9f9f9;">现写命令，参数靠猜</td>
+        <td style="padding: 10px; border: 1px solid #ddd; color: #555; background: #f9f9f9;">复用已验证的工具接口</td>
+      </tr>
+      <tr>
+        <td style="padding: 10px; border: 1px solid #ddd; color: #333; font-weight: bold;">权限</td>
+        <td style="padding: 10px; border: 1px solid #ddd; color: #555;">要么全开，要么每步确认</td>
+        <td style="padding: 10px; border: 1px solid #ddd; color: #555;">按操作风险分级授权</td>
+      </tr>
+      <tr>
+        <td style="padding: 10px; border: 1px solid #ddd; color: #333; font-weight: bold; background: #f9f9f9;">验证</td>
+        <td style="padding: 10px; border: 1px solid #ddd; color: #555; background: #f9f9f9;">以"改完了"为终点</td>
+        <td style="padding: 10px; border: 1px solid #ddd; color: #555; background: #f9f9f9;">以可复现的检查为终点</td>
+      </tr>
+      <tr>
+        <td style="padding: 10px; border: 1px solid #ddd; color: #333; font-weight: bold;">环境</td>
+        <td style="padding: 10px; border: 1px solid #ddd; color: #555;">状态散落，无法复现</td>
+        <td style="padding: 10px; border: 1px solid #ddd; color: #555;">状态可留、过程可回放</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+
+<section style="margin-bottom: 30px;">
+  <h2 style="font-size: 18px; font-weight: bold; color: #333; border-left: 4px solid #1890FF; padding-left: 12px; margin: 20px 0;">七、如果要改，按这个顺序</h2>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">✅ <strong style="color: #333;">先补验证。</strong>投入最小，立刻减少你的复核时间，而且后面每一步改造都靠它兜底。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">✅ <strong style="color: #333;">再收工具。</strong>把团队里反复执行、已经验证过的操作包成工具，优先做最高频的三五个。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">✅ <strong style="color: #333;">然后治理上下文。</strong>删掉长期没人维护的说明文档，给关键约束一个固定位置，让历史结论可检索。</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">✅ <strong style="color: #333;">最后才谈并行和多 Agent。</strong>前三层没搭好就上并行，只是把混乱复制几份。</p>
+  <div style="background: #e8f5e9; padding: 14px 18px; border-radius: 4px; color: #1b5e20; margin: 20px 0; line-height: 1.75;">
+    <p style="margin: 4px 0;">🌱 不建议的动作：一觉得不好用就换模型。模型换掉，运行时原样，结果通常也原样。</p>
+  </div>
+  <div style="background: linear-gradient(135deg, #1890FF 0%, #0B5FCC 100%); padding: 22px 20px; border-radius: 8px; margin: 24px 0; color: white; text-align: center;">
+    <p style="margin: 0; font-size: 17px; font-weight: bold; line-height: 1.7;">你用的从来不只是模型，<br>是模型外面那一圈。</p>
+  </div>
+</section>
+
+<hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+
+<section style="margin-bottom: 30px;">
+  <h2 style="font-size: 18px; font-weight: bold; color: #333; border-left: 4px solid #1890FF; padding-left: 12px; margin: 20px 0;">参考信息来源</h2>
+  <p style="line-height: 1.75; color: #666; margin: 10px 0; font-size: 14px;">📚 仓库（Ansible 能力接入 MCP）：github.com/ansible/ansible-mcp-server</p>
+  <p style="line-height: 1.75; color: #666; margin: 10px 0; font-size: 14px;">📚 仓库（本地优先 Agent 运行时）：github.com/alterego-ai/alter-ego、github.com/ego-browser/ego-browser</p>
+  <p style="line-height: 1.75; color: #666; margin: 10px 0; font-size: 14px;">📚 仓库（本地优先方向的受关注样本）：github.com/DroidMind/DroidMind</p>
+  <p style="line-height: 1.75; color: #666; margin: 10px 0; font-size: 14px;">📊 榜单：GitHub Trending 周榜（github.com/trending?since=weekly），快照时间 2026-10-08 与 2026-10-26</p>
+  <p style="line-height: 1.75; color: #999; margin: 12px 0; font-size: 13px;">说明：star 数为快照值，会随时间变化；仓库定位以各自 README 自述为准。文中"五层"是本文的归纳框架，并非某仓库的官方定义。</p>
+</section>
+
+<hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+
+<section style="margin-bottom: 30px;">
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">如果这篇对你有用：</p>
+  <p style="line-height: 1.75; color: #555; margin: 12px 0;">👍 <strong style="color: #333;">点个赞</strong>，给正在搭运行时的你<br>💬 <strong style="color: #333;">留言说说</strong>：这五层里，你目前最缺哪一层？<br>🔄 <strong style="color: #333;">转发</strong>给那个准备"换个贵模型试试"的同事</p>
+</section>
+
+</body>
+</html>

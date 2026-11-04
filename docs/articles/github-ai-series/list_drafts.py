@@ -18,7 +18,7 @@ with sync_playwright() as p:
         args=["--disable-blink-features=AutomationControlled"],
     )
     page = ctx.pages[0] if ctx.pages else ctx.new_page()
-    page.goto("https://mp.weixin.qq.com/", wait_until="domcontentloaded")
+    page.goto("https://mp.weixin.qq.com/", wait_until="domcontentloaded", timeout=90000)
     token = ""
     for _ in range(40):
         m = re.search(r"token=(\d+)", page.url)
@@ -31,7 +31,7 @@ with sync_playwright() as p:
         ctx.close()
         sys.exit(2)
     page.goto(f"https://mp.weixin.qq.com/cgi-bin/draftbox?lang=zh_CN&token={token}",
-              wait_until="domcontentloaded")
+              wait_until="domcontentloaded", timeout=90000)
     time.sleep(8)
     scraped = page.evaluate("""() => Array.from(document.querySelectorAll('a[href*="appmsgid="]'))
         .map(a => ({href: a.href, text: (a.innerText || '').trim().slice(0, 60)}))

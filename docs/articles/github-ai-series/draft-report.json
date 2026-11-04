@@ -85,5 +85,93 @@
       "head": "你把一个需求拆成五份，开了五个 Agent 并行跑。理论上五倍速度。\n\n两个小时"
     },
     "token": "1542083504"
+  },
+  {
+    "dir": "a8-runtime-gap",
+    "title": "别人的 Agent 用得飞起，你的还在踩坑，差距到底在哪",
+    "ok": true,
+    "inject": {
+      "ok": true,
+      "usedFallback": false,
+      "h2": 8,
+      "table": 1,
+      "img": 0,
+      "chars": 2677,
+      "head": "\n  \n\n你们用的是同一个模型，同一个客户端，甚至同一份需求文档。\n\n\n  \n\n同事的 Agent 一次跑完，测试通过，",
+      "info": [
+        {
+          "tag": "DIV",
+          "len": 28,
+          "hasPlaceholder": false
+        },
+        {
+          "tag": "DIV",
+          "len": 0,
+          "hasPlaceholder": false
+        },
+        {
+          "tag": "DIV",
+          "len": 10,
+          "hasPlaceholder": true
+        }
+      ]
+    },
+    "save_clicked": true,
+    "appmsgid": "",
+    "verify": {
+      "h2": 8,
+      "table": 1,
+      "img": 0,
+      "chars": 2378,
+      "markers": 2,
+      "pageHasTitle": true,
+      "title": "",
+      "head": "你们用的是同一个模型，同一个客户端，甚至同一份需求文档。\n\n同事的 Agent "
+    },
+    "token": "1542083504"
+  },
+  {
+    "dir": "a6-mcp-reverse-ops",
+    "title": "用 MCP 逆向任意外部系统，Agent 运维的另一种可能",
+    "ok": true,
+    "inject": {
+      "ok": true,
+      "usedFallback": false,
+      "h2": 8,
+      "table": 1,
+      "img": 0,
+      "chars": 2741,
+      "head": "\n  \n\n每个公司都有那么几套系统：没有 API，没有文档，只有一个能点的界面。\n\n\n  \n\n每次巡检，都得有人登上去，",
+      "info": [
+        {
+          "tag": "DIV",
+          "len": 29,
+          "hasPlaceholder": false
+        },
+        {
+          "tag": "DIV",
+          "len": 0,
+          "hasPlaceholder": false
+        },
+        {
+          "tag": "DIV",
+          "len": 10,
+          "hasPlaceholder": true
+        }
+      ]
+    },
+    "save_clicked": true,
+    "appmsgid": "",
+    "verify": {
+      "h2": 8,
+      "table": 1,
+      "img": 0,
+      "chars": 2423,
+      "markers": 0,
+      "pageHasTitle": true,
+      "title": "",
+      "head": "每个公司都有那么几套系统：没有 API，没有文档，只有一个能点的界面。\n\n每次巡"
+    },
+    "token": "1542083504"
   }
 ]

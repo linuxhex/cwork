@@ -1,14 +1,14 @@
 ---
 name: cwork-article
 lazy: true
-description: 微信公众号文章写作助手。自动识别文章类型，补充必要信息（开源地址/GitHub star/系统地址等），生成吸引人的标题，提供精美排版（含 CSS 样式模板），用 ImageGen 强制生成封面图，为文章生成配图（系统真实截图 或 设计图）并嵌入正文，直接写入公众号编辑器。适用于：技术分享、开源项目介绍、产品推广、教程指南、行业观察、故事/小说（武侠）。内容创作按文章类型自动调用人格 skill（cwork-tech-writer 技术布道者 / cwork-wuxia-writer 金庸式武侠）。
+description: 微信公众号与今日头条文章写作助手。自动识别文章类型，补充必要信息（开源地址/GitHub star/系统地址等），生成吸引人的标题，提供精美排版（含 CSS 样式模板），用 ImageGen 强制生成封面图，为文章生成配图（系统真实截图 或 设计图）并嵌入正文，直接写入公众号编辑器，支持同时发布到今日头条。适用于：技术分享、开源项目介绍、产品推广、教程指南、行业观察、故事/小说（武侠）。内容创作按文章类型自动调用人格 skill（cwork-tech-writer 技术布道者 / cwork-wuxia-writer 金庸式武侠）。
 ---
 
-# 微信公众号文章写作助手
+# 微信公众号与今日头条文章写作助手
 
 ## 概述
 
-`cwork-article` 是专门用于撰写微信公众号文章的 skill，能够自动识别文章类型，补充必要信息，生成吸引人的标题，提供精美排版（含 CSS 样式模板），**为文章生成配图（系统真实截图 或 设计图）并嵌入正文**，并直接写入公众号编辑器。
+`cwork-article` 是专门用于撰写微信公众号和今日头条文章的 skill，能够自动识别文章类型，补充必要信息，生成吸引人的标题，提供精美排版（含 CSS 样式模板），**为文章生成配图（系统真实截图 或 设计图）并嵌入正文**，并直接写入公众号编辑器，支持同时发布到今日头条。
 
 **核心能力**：
 1. **文章类型识别** — 自动识别技术分享/开源项目/产品推广/教程指南
@@ -19,10 +19,11 @@ description: 微信公众号文章写作助手。自动识别文章类型，补�
 6. **封面图生成（强制）** — 必须用 ImageGen 工具实际生成封面图（2560x1080），禁止只用文字建议
 7. **文中配图生成（强制）** — 有可访问系统则截取真实页面截图；无系统则生成设计图，禁止纯文字无图文章
 8. **直接写入编辑器** — 通过 ego-browser 直接写入公众号编辑器并保存草稿
+9. **多平台发布** — 支持同时发布到微信公众号和今日头条（可选）
 
 **工作流程**：
 ```
-文章类型识别 → 必要信息追问（含系统地址） → 标题生成 → 封面图生成（ImageGen 强制） → 文中配图生成（系统截图 或 设计图） → 内容撰写（含排版+嵌入配图） → 写入编辑器 → 保存草稿
+文章类型识别 → 必要信息追问（含系统地址） → 标题生成 → 封面图生成（ImageGen 强制） → 文中配图生成（系统截图 或 设计图） → 内容撰写（含排版+嵌入配图） → 写入编辑器 → 保存草稿 → [可选] 发布到头条
 ```
 
 ## 语言约束（强制）
@@ -410,6 +411,71 @@ Mood: insightful, forward-looking, authoritative.
 - **升华价值**：上升到更高维度（行业、趋势）
 - **引导互动**：点赞、在看、转发、留言
 - **行动号召**：点击阅读原文、扫码添加、立即试用
+
+### 底部吸粉文案（强制，每篇必须）
+
+**每篇文章末尾必须包含底部吸粉模块，用于引导用户关注和投稿。**
+
+#### 文案模板
+
+```html
+<!-- 分隔线 -->
+<hr style="border:none;border-top:1px solid #E5DED0;margin:30px 0;">
+
+<!-- 吸粉卡片 -->
+<div style="background:#F5F0E4;border-radius:8px;padding:24px 20px;margin:0 0 20px;text-align:center;">
+  <p style="margin:0 0 14px;font-size:17px;font-weight:bold;color:#6B5122;letter-spacing:1px;">关注我，讲故事给你听！</p>
+  <p style="margin:0 0 14px;font-size:15px;color:#6B6055;line-height:1.7;">待到时机成熟时，漫山遍野的粉丝福利！</p>
+  <p style="margin:0 0 14px;font-size:16px;font-weight:bold;color:#8C6A2F;">我有酒，你有故事吗？</p>
+  <p style="margin:0;font-size:14px;color:#6B6055;line-height:1.8;">欢迎投稿：<br>邮箱 1<br>邮箱 2</p>
+</div>
+
+<!-- 二维码（居中） -->
+<div style="text-align:center;margin:20px 0;">
+  <p style="font-size:14px;color:#888888;margin:0 0 10px;">扫码关注，听更多故事</p>
+  <img src="公众号二维码图片路径" alt="公众号二维码" style="width:200px;height:200px;">
+</div>
+
+<!-- 在看引导 -->
+<p style="margin:0;text-align:center;font-size:13px;color:#AAAAAA;line-height:1.9;">觉得有用，点个「在看」<br>转给那个正在做事的朋友</p>
+```
+
+#### 文案要素说明
+
+| 要素 | 内容 | 作用 |
+|------|------|------|
+| 关注引导 | "关注我，讲故事给你听！" | 明确账号定位 |
+| 福利预告 | "待到时机成熟时，漫山遍野的粉丝福利！" | 给用户关注理由 |
+| 互动邀请 | "我有酒，你有故事吗？" | 激发用户参与感 |
+| 投稿邮箱 | 2 个邮箱地址 | 接收用户投稿 |
+| 二维码 | 公众号关注二维码 | 扫码直接关注 |
+| 在看引导 | "点个「在看」转给那个正在做事的朋友" | 促进传播 |
+
+#### 二维码获取方式
+
+```
+1. 用户提供二维码图片（推荐）
+2. 从微信后台下载：
+   - 登录 mp.weixin.qq.com
+   - 设置与开发 → 公众号设置 → 账号详情
+   - 下载二维码图片
+3. 保存到文章目录：docs/articles/{文章主题}/images/qr-code.jpg
+4. 写入编辑器时插入到吸粉文案下方
+```
+
+#### 文案位置
+
+```
+文章正文
+  ↓
+分隔线
+  ↓
+吸粉卡片（关注引导 + 福利预告 + 互动邀请 + 投稿邮箱）
+  ↓
+二维码（扫码关注）
+  ↓
+在看引导
+```
 
 ### 文章结构模板
 
@@ -866,6 +932,166 @@ await new Promise(r => setTimeout(r, 3000));
 
 ---
 
+## 阶段 9：发布到头条（可选）
+
+**当用户要求同时发布到今日头条时，执行此阶段。**
+
+### 头条发布流程
+
+```
+1. 登录头条创作者后台
+   URL: https://mp.toutiao.com/profile_v4/graphic/publish
+   登录方式：扫码登录（用今日头条 App 扫码）
+   
+2. 填写标题
+   - 标题输入框：textarea[placeholder="请输入文章标题（2～30个字）"]
+   - 标题长度：2-30 字（比公众号标题短）
+   - 设置值后需触发 input 事件：
+     ```javascript
+     const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+     nativeInputValueSetter.call(titleInput, '标题内容');
+     titleInput.dispatchEvent(new Event('input', { bubbles: true }));
+     ```
+
+3. 填写正文
+   - 正文编辑器：contenteditable=true 的 div
+   - 支持 HTML 格式（与公众号相同的 inline CSS）
+   - 设置 innerHTML 后触发 input 事件
+
+4. 上传封面图（强制）
+   - 头条要求必须上传封面图才能发布
+   - 封面图选项：单图 / 三图 / 无封面
+   - 推荐选择"单图"
+   - 上传区域：.article-cover-add 按钮
+   - ⚠️ 浏览器安全限制：无法自动上传文件，需用户手动操作
+     - 点击"单图"选项
+     - 点击上传按钮
+     - 选择本地封面图文件上传
+
+5. 发布
+   - 点击"预览并发布"按钮
+   - 确认发布成功（页面跳转到文章详情页）
+```
+
+### 头条与公众号的差异
+
+| 项目 | 公众号 | 头条 |
+|------|--------|------|
+| 标题长度 | 最多 64 字 | 最多 30 字 |
+| 封面图 | 可选（建议上传） | 强制（必须上传） |
+| 正文格式 | HTML + inline CSS | HTML + inline CSS（相同） |
+| 编辑器 | ProseMirror | contenteditable div |
+| 发布方式 | 保存草稿 / 群发 | 预览并发布 |
+| 错别字检测 | 无 | 有（自动检测） |
+| 首发声明 | 无 | 有（头条首发，72小时独占） |
+| 广告投放 | 无 | 有（投放广告赚收益） |
+| 赞赏功能 | 无 | 有（每日限额） |
+
+### 头条特有设置
+
+```
+1. 投放广告
+   - 投放广告赚收益（推荐开启）
+   - 不投放广告
+
+2. 声明首发
+   - 头条首发：72小时内仅在头条发布，可享额外激励分成
+   - 授权平台自动维权
+
+3. 合集
+   - 可添加至已有合集
+
+4. 发文特权
+   - 允许赞赏（每日限额）
+   - 同时发布微头条（发布得更多收益）
+
+5. 作品声明
+   - 取材网络
+   - 引用站内
+   - 个人观点，仅供参考
+   - 引用AI
+   - 虚构演绎，故事经历
+   - 投资观点，仅供参考
+   - 健康医疗分享，仅供参考
+```
+
+### 头条封面图规格
+
+| 属性 | 值 |
+|------|-----|
+| 尺寸 | 16:9（推荐 1280x720 或 1920x1080） |
+| 格式 | JPEG / PNG |
+| 大小 | 不超过 5MB |
+| 风格 | 与公众号封面图相同（可复用） |
+
+### 头条发布代码示例
+
+```javascript
+// 导航到头条创作者后台
+await page.goto('https://mp.toutiao.com/profile_v4/graphic/publish');
+await page.waitForLoadState('load');
+
+// 填写标题
+await page.evaluate(() => {
+  const titleInput = document.querySelector('textarea[placeholder="请输入文章标题（2～30个字）"]');
+  if (!titleInput) return { error: 'no title input' };
+  const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+  nativeInputValueSetter.call(titleInput, '文章标题');
+  titleInput.dispatchEvent(new Event('input', { bubbles: true }));
+  titleInput.dispatchEvent(new Event('change', { bubbles: true }));
+});
+
+// 填写正文
+await page.evaluate(() => {
+  const editor = [...document.querySelectorAll('[contenteditable=true]')].find(el => el.textContent.includes('请输入正文'));
+  if (!editor) return { error: 'no editor' };
+  editor.focus();
+  editor.innerHTML = '<p>正文内容...</p>';
+  editor.dispatchEvent(new Event('input', { bubbles: true }));
+});
+
+// ⚠️ 封面图上传需用户手动操作
+// 提示用户：
+// 1. 点击"单图"选项
+// 2. 点击上传按钮
+// 3. 选择本地封面图文件
+
+// 发布
+await page.evaluate(() => {
+  const publishBtn = [...document.querySelectorAll('button')].find(el => el.textContent.trim() === '预览并发布');
+  if (!publishBtn) return { error: 'no publish button' };
+  publishBtn.click();
+});
+```
+
+### 头条发布注意事项
+
+```
+1. 登录态保持
+   - 头条登录态有效期较短，建议每次发布前重新登录
+   - 扫码登录后立即发布，避免登录过期
+
+2. 封面图强制要求
+   - 头条必须上传封面图才能发布
+   - 浏览器安全限制无法自动上传，需用户手动操作
+   - 可复用公众号封面图（调整尺寸为 16:9）
+
+3. 错别字检测
+   - 头条有自动错别字检测功能
+   - 发布前检查并修正检测到的错别字
+   - 常见错别字：即是→既是、还走→还有 等
+
+4. 首发声明
+   - 如选择"头条首发"，72小时内不能在其他平台发布
+   - 如需多平台同步发布，不要选择首发声明
+
+5. 发布时间
+   - 头条推荐算法对发布时间敏感
+   - 推荐发布时间：早 7-9 点、午 12-14 点、晚 18-22 点
+```
+
+---
+
 ## 完整示例
 
 ### 示例 1：开源项目介绍
@@ -1003,15 +1229,19 @@ AI：[自动生成文章，含精美排版 CSS]
 - 人格口吻与排版同时满足（口吻≠交付格式）
 - 封面图已上传到公众号编辑器封面图位置
 - 文中配图已嵌入文章对应位置（非占位标记）
+- **底部吸粉文案已插入**（关注引导 + 福利预告 + 互动邀请 + 投稿邮箱 + 二维码 + 在看引导）
 - 文章已写入公众号编辑器
 - 文章已保存为草稿
+- **头条发布（如用户要求）**：标题/正文已填写、封面图已上传（用户手动）、文章已发布
 
 **失败停止**：
 - 必要信息缺失（如开源项目没有 GitHub 地址）
 - 封面图未生成（未调用 ImageGen 或生成失败）
 - 文章无配图或配图数量不足
 - 用户未确认标题
+- **底部吸粉文案未插入**（关注引导 + 福利预告 + 互动邀请 + 投稿邮箱 + 二维码 + 在看引导缺失）
 - 写入编辑器失败
+- **头条发布失败（如用户要求）**：登录失败、封面图未上传、发布按钮点击无响应
 
 ---
 
