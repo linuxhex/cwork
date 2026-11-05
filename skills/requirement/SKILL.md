@@ -1,7 +1,7 @@
 ---
 name: cwork-requirement
 lazy: true
-description: 云效需求只读查询，对话式查云效 Projex 项目需求列表/详情/按日期筛选，实现前核对需求范围、关联变更
+description: 用户要查云效需求列表/详情、按日期筛需求，或实现前核对需求范围/关联变更时使用。只读 Projex；不要用本技能直接开工写代码（开工走 implement/do）。
 ---
 
 # 云效需求只读查询

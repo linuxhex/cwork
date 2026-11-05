@@ -1,7 +1,7 @@
 ---
 name: cwork-deploy
 lazy: true
-description: Jenkins + 云效构建部署触发，通过 curl 直连 Jenkins REST API 或云效 AppStack OpenAPI 触发服务构建和部署，支持 dev/test/uat/prod 多环境，自带服务名→作业映射（服务映射见 service-map.json，持续 sync 更新）+ 双平台自动路由 + 独立 Jenkins 实例路由 + 单 job 前端部署模式，排查问题时快速部署验证修复
+description: 用户要触发构建部署、发版到 test/uat/prod、验证修复是否已上环境，或说「部署一下」「发到测试环境」时使用。走 Jenkins/云效服务映射；未确认生产目标时不要直接部署 prod。
 ---
 # Jenkins + 云效 构建部署
 
@@ -127,6 +127,23 @@ bash "$CWORK_HOME/skills/deploy/scripts/deploy.sh" deploy <appName> <env> <branc
 > cwork-deploy **不依赖 MCP 注册**——`deploy.sh` 经 `curl` 直连 Jenkins REST API / 云效 AppStack OpenAPI，与 cwork-log 用 bash 直连阿里云同一性质。
 >
 > **平台自动路由**：`deploy.sh` 根据 `service-map.json` 中服务的 `platform` 字段（或 `DEPLOY_DEFAULT_PLATFORM` 环境变量）自动选择走 Jenkins 还是云效，调用方无需关心。
+
+---
+
+## 执行模式（强制）
+
+**本技能采用 Agent 自主执行模式**：
+
+### 主 agent 禁止行为
+- ❌ **禁止手动操作**：主 agent 不得直接调用 bash/grep/read 等工具执行本技能的核心功能
+- ❌ **禁止中途介入**：主 agent 不得在子 agent 执行过程中手动干预
+- ❌ **禁止自行解析**：主 agent 不得自行解析查询结果或数据
+
+### 子 agent 职责
+- ✅ **自主执行完整流程**：按照技能定义的步骤自主完成
+- ✅ **自己能定的直接做**：默认值、参数选择、发查询——不问
+- ✅ **决策点才问**：口径歧义、时间范围、字段含义——简短问一次
+- ✅ **输出结构化结论**：按技能要求的格式输出完整结果
 
 ---
 

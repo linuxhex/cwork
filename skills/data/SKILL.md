@@ -1,7 +1,7 @@
 ---
 name: cwork-data
 lazy: true
-description: 数仓数据查询，对话式查 Doris 数仓（internal/hive/JDBC catalog）跑只读 SQL 查业务数据/表结构/指标/数据量，自带 SQL 前置校验，排查问题时核对订单/金额/库存/数据量佐证根因
+description: 用户要查数仓/Doris 业务数据（订单/金额/库存/指标/表结构/数据量），或排查「值不对」「数据对不上」需要上游数据佐证时使用。只读 SQL；不要用本技能写数仓任务或改表。
 ---
 
 # 数仓数据查询
@@ -78,6 +78,23 @@ description: 数仓数据查询，对话式查 Doris 数仓（internal/hive/JDBC
 | `export-status` | 查导出任务状态 | `python3 mcp_client.py export-status --task-id xxx` |
 
 > cwork-data **不依赖 Claude 的 MCP 注册**——`mcp_client.py` 是 HTTP 直连 query-server 服务（地址在 `.mcp_config.json` 的 `base_url` 或环境变量 `MCP_BASE_URL` 配置），与 cwork-log 用 bash 直连阿里云同一性质。
+
+---
+
+## 执行模式（强制）
+
+**本技能采用 Agent 自主执行模式**：
+
+### 主 agent 禁止行为
+- ❌ **禁止手动操作**：主 agent 不得直接调用 bash/grep/read 等工具执行本技能的核心功能
+- ❌ **禁止中途介入**：主 agent 不得在子 agent 执行过程中手动干预
+- ❌ **禁止自行解析**：主 agent 不得自行解析查询结果或数据
+
+### 子 agent 职责
+- ✅ **自主执行完整流程**：按照技能定义的步骤自主完成
+- ✅ **自己能定的直接做**：默认值、参数选择、发查询——不问
+- ✅ **决策点才问**：口径歧义、时间范围、字段含义——简短问一次
+- ✅ **输出结构化结论**：按技能要求的格式输出完整结果
 
 ---
 

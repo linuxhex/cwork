@@ -1,6 +1,6 @@
 ---
 name: cwork-commit
-description: 推演收敛后自动提交所有服务工程，不确认
+description: 实现或修 bug 推演收敛后要提交代码，或用户说「提交」「commit」「帮我 commit」时使用；多服务工程一并提交。需求未收敛、或测试 P0 失败且用户未确认时不要触发。
 ---
 
 # 提交

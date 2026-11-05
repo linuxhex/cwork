@@ -1,7 +1,7 @@
 ---
 name: cwork-article
 lazy: true
-description: 公众号/小红书文章写作助手。先确认发布平台（默认公众号），自动识别文章类型，补充必要信息，生成标题；公众号走简洁技术风主题库排版（theme-tech-minimal + platform-redlines），小红书走 theme-xhs（纯文本+emoji，竖版封面）；本地 Python 脚本生成封面与配图，查草稿复用后直接写入对应平台编辑器。技术类口吻对标美团技术/阿里技术实战风。适用于技术分享/开源/产品/教程/行业观察/武侠故事。
+description: 用户要写公众号或小红书文章、技术分享推文、开源/产品/教程种草文，或说「写篇推文」「发小红书」「公众号稿」时使用。技术口吻由 tech-writer、武侠故事由 wuxia-writer 承接，均经本技能调度；不要跳过本技能直接当主入口调人格。
 ---
 
 # cwork-article

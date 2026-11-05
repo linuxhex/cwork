@@ -1,7 +1,7 @@
 ---
 name: cwork-graf
 lazy: true
-description: Grafana 监控数据只读查询，对话式查 K8S 节点/容器/应用/JVM/数据库/业务监控面板，支持 64 个仪表盘按分类检索、面板数据查询、PromQL 即时查询，排查问题时核对资源使用率/性能指标/业务数据佐证根因
+description: 用户要看监控大盘、查 CPU/内存/JVM/QPS/错误率/延迟，或问「机器是不是打满了」「有没有报警/尖峰」时使用。Grafana/PromQL 只读；根因仍需结合 log/data，不要只凭监控下结论改代码。
 ---
 
 # Grafana 监控数据查询
@@ -168,6 +168,23 @@ description: Grafana 监控数据只读查询，对话式查 K8S 节点/容器/�
 参数说明：`时间`=1h/3h/6h/12h/24h/7d（默认 3h）；`节点`=K8S 节点名（如 `k8s-prod-201005-prod`）；`命名空间`=K8S namespace（默认 `default`）；`ds_uid`=Prometheus 数据源 UID（默认 `6A__NzsMk`）。
 
 > cwork-graf **不依赖 MCP 注册**——`graf_query.sh` 经 `curl` 直连 Grafana HTTP API（登录拿 cookie + 查询），与 cwork-log 用 bash 直连阿里云同一性质。
+
+---
+
+## 执行模式（强制）
+
+**本技能采用 Agent 自主执行模式**：
+
+### 主 agent 禁止行为
+- ❌ **禁止手动操作**：主 agent 不得直接调用 bash/grep/read 等工具执行本技能的核心功能
+- ❌ **禁止中途介入**：主 agent 不得在子 agent 执行过程中手动干预
+- ❌ **禁止自行解析**：主 agent 不得自行解析查询结果或数据
+
+### 子 agent 职责
+- ✅ **自主执行完整流程**：按照技能定义的步骤自主完成
+- ✅ **自己能定的直接做**：默认值、参数选择、发查询——不问
+- ✅ **决策点才问**：口径歧义、时间范围、字段含义——简短问一次
+- ✅ **输出结构化结论**：按技能要求的格式输出完整结果
 
 ---
 

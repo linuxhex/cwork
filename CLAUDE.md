@@ -39,39 +39,39 @@ cwork 内置了决策树式追问机制，分两种模式：
 
 ## 技能清单
 
-- /cwork-article — 公众号/小红书文章写作助手。先确认发布平台（默认公众号），自动识别文章类型，补充必要信息，生成标题；公众号走简洁技术风主题库排版（theme-tech-minimal + platform-redlines），小红书走 theme-xhs（纯文本+emoji，竖版封面）；本地 Python 脚本生成封面与配图，查草稿复用后直接写入对应平台编辑器。技术类口吻对标美团技术/阿里技术实战风。适用于技术分享/开源/产品/教程/行业观察/武侠故事。
+- /cwork-article — 用户要写公众号或小红书文章、技术分享推文、开源/产品/教程种草文，或说「写篇推文」「发小红书」「公众号稿」时使用。技术口吻由 tech-writer、武侠故事由 wuxia-writer 承接，均经本技能调度；不要跳过本技能直接当主入口调人格。
   （按需加载：需要时 Read `.cwork/refs/cwork-article/SKILL.md` 获取完整指令，不常驻上下文）
-- /cwork-bug — 快速修复 bug。问题明确时直接修复，问题不明确时先沟通定位（可调用 cwork-log 查日志），然后修复 + 验证 + 提交。适用于：修复线上 bug、修复测试问题、修复代码缺陷。
+- /cwork-bug — 用户说修 bug、修缺陷、线上故障、测试挂了，或描述「期望 X 实际 Y」「这个接口/页面不对」且需要改代码时使用。问题没说清也先走本技能定位；不要当成新需求直接开 implement。
   （按需加载：需要时 Read `.cwork/refs/cwork-bug/SKILL.md` 获取完整指令，不常驻上下文）
-- /cwork-code — 代码仓库只读查询 + clone/pull + codegraph 触发，支持 CodeUp（主平台）+ GitLab（前端 fallback），优先使用 codegraph 索引查找代码
+- /cwork-code — 用户要查某服务源码、clone/pull 仓库、搜接口/类/配置落点，或问「代码在哪」「这个接口怎么实现的」时使用。优先 codegraph；CodeUp 为主、前端可走 GitLab。只读查询与拉仓，不要用本技能改业务代码（改代码走 implement/bug）。
   （按需加载：需要时 Read `.cwork/refs/cwork-code/SKILL.md` 获取完整指令，不常驻上下文）
-- /cwork-commit — 推演收敛后自动提交所有服务工程，不确认
+- /cwork-commit — 实现或修 bug 推演收敛后要提交代码，或用户说「提交」「commit」「帮我 commit」时使用；多服务工程一并提交。需求未收敛、或测试 P0 失败且用户未确认时不要触发。
   （按需加载：需要时 Read `.cwork/refs/cwork-commit/SKILL.md` 获取完整指令，不常驻上下文）
-- /cwork-config — Nacos 配置只读查询，对话式查多环境(dev/test/uat/prod)的 Nacos 配置内容/清单/差异，排查问题时核对某服务某环境的配置真值（开关/阈值/地址/参数）
+- /cwork-config — 用户要核对 Nacos 配置真值（开关/阈值/地址/参数）、对比多环境配置差异，或怀疑「配置没生效/配错了」时使用。覆盖 dev/test/uat/prod 只读查询；改配置不在本技能范围。
   （按需加载：需要时 Read `.cwork/refs/cwork-config/SKILL.md` 获取完整指令，不常驻上下文）
-- /cwork-data — 数仓数据查询，对话式查 Doris 数仓（internal/hive/JDBC catalog）跑只读 SQL 查业务数据/表结构/指标/数据量，自带 SQL 前置校验，排查问题时核对订单/金额/库存/数据量佐证根因
+- /cwork-data — 用户要查数仓/Doris 业务数据（订单/金额/库存/指标/表结构/数据量），或排查「值不对」「数据对不上」需要上游数据佐证时使用。只读 SQL；不要用本技能写数仓任务或改表。
   （按需加载：需要时 Read `.cwork/refs/cwork-data/SKILL.md` 获取完整指令，不常驻上下文）
-- /cwork-deploy — Jenkins + 云效构建部署触发，通过 curl 直连 Jenkins REST API 或云效 AppStack OpenAPI 触发服务构建和部署，支持 dev/test/uat/prod 多环境，自带服务名→作业映射（服务映射见 service-map.json，持续 sync 更新）+ 双平台自动路由 + 独立 Jenkins 实例路由 + 单 job 前端部署模式，排查问题时快速部署验证修复
+- /cwork-deploy — 用户要触发构建部署、发版到 test/uat/prod、验证修复是否已上环境，或说「部署一下」「发到测试环境」时使用。走 Jenkins/云效服务映射；未确认生产目标时不要直接部署 prod。
   （按需加载：需要时 Read `.cwork/refs/cwork-deploy/SKILL.md` 获取完整指令，不常驻上下文）
-- /cwork-do — cwork 全技能的调度入口 + 目标性 loop。任何目标（做需求/修 bug/排查/优化…）都从这进：深度追问固化验收标准后，迭代「执行 → 部署 → 实测验证 → 收敛评估」不断逼近目标，双证据收敛才算完成。新需求：查需求 → cwork-doc 技术方案 → brook-content 留档 → 特性分支实现 → 合并测试分支部署；修 bug：cwork-bug 当前分支修；其他目标按需调度对应技能。
+- /cwork-do — 用户给出要达成的目标（做需求/修 bug/排查/优化/验证上线），需要「固化验收 → 执行 → 部署 → 实测 → 收敛」闭环，或说「帮我搞定」「做到能验证」「闭环到上线」时使用。单次查日志/配置/数据用对应排查技能；明确只要写方案或只要提交时不要用本技能包办。
   （按需加载：需要时 Read `.cwork/refs/cwork-do/SKILL.md` 获取完整指令，不常驻上下文）
-- /cwork-doc — 根据代码改动生成技术方案文档（两种模式：已有需求文档 / 对话式需求分析）
+- /cwork-doc — 用户要根据需求或代码改动写技术方案、设计文档、评审材料，或说「出个方案」「写技术设计」时使用。有需求文档或对话式需求均可；不要用本技能代替 implement 写代码。
   （按需加载：需要时 Read `.cwork/refs/cwork-doc/SKILL.md` 获取完整指令，不常驻上下文）
-- /cwork-graf — Grafana 监控数据只读查询，对话式查 K8S 节点/容器/应用/JVM/数据库/业务监控面板，支持 64 个仪表盘按分类检索、面板数据查询、PromQL 即时查询，排查问题时核对资源使用率/性能指标/业务数据佐证根因
+- /cwork-graf — 用户要看监控大盘、查 CPU/内存/JVM/QPS/错误率/延迟，或问「机器是不是打满了」「有没有报警/尖峰」时使用。Grafana/PromQL 只读；根因仍需结合 log/data，不要只凭监控下结论改代码。
   （按需加载：需要时 Read `.cwork/refs/cwork-graf/SKILL.md` 获取完整指令，不常驻上下文）
-- /cwork-image — 本地工程/jar 打包 Docker 镜像 + push registry + 服务端拉起运行
+- /cwork-image — 用户要本地打 Docker 镜像、push 到 registry、或在服务端拉起容器跑起来时使用。常规测试/生产发布优先用 cwork-deploy；本技能偏本地镜像构建与手动拉起。
   （按需加载：需要时 Read `.cwork/refs/cwork-image/SKILL.md` 获取完整指令，不常驻上下文）
-- /cwork-implement — 需求分析（对话式）+ 编写计划 + 执行计划 + 推演收敛
+- /cwork-implement — 用户要做新需求、加功能、改业务逻辑、实现某能力，或说「做一下」「实现」「开发」且不是单纯修已有缺陷时使用。纯修 bug 用 cwork-bug；端到端目标收敛（部署+实测闭环）用 cwork-do；只查日志/配置/数据不要触发本技能。
   （按需加载：需要时 Read `.cwork/refs/cwork-implement/SKILL.md` 获取完整指令，不常驻上下文）
-- /cwork-log — 找日志分析问题。查 SLS 日志 + ARMS 链路，定位问题根因。适用于：问题排查、性能分析、流量分析、链路追踪。
+- /cwork-log — 用户要查日志、看链路、排查报错/超时/接口失败/慢请求/流量异常，或问「为什么挂了」「trace 哪断了」「这个错误从哪来」时使用。覆盖 SLS 与 ARMS 排查；拿证据优先，不要空猜根因。
   （按需加载：需要时 Read `.cwork/refs/cwork-log/SKILL.md` 获取完整指令，不常驻上下文）
-- /cwork-requirement — 云效需求只读查询，对话式查云效 Projex 项目需求列表/详情/按日期筛选，实现前核对需求范围、关联变更
+- /cwork-requirement — 用户要查云效需求列表/详情、按日期筛需求，或实现前核对需求范围/关联变更时使用。只读 Projex；不要用本技能直接开工写代码（开工走 implement/do）。
   （按需加载：需要时 Read `.cwork/refs/cwork-requirement/SKILL.md` 获取完整指令，不常驻上下文）
-- /cwork-tech-writer — 科技技术分享高手人格。承接 cwork-article 流程层，用资深技术布道者的思维框架、语言风格、写作套路创作技术分享/开源项目/产品推广/教程/行业观察类内容。适用于：技术原理、架构设计、最佳实践、开源介绍、产品解读。
+- /cwork-tech-writer — 由 cwork-article 在技术分享/开源/产品/教程/行业观察类内容时内部调用；用户直接点名「用技术布道者口吻写」「美团技术风」时也可触发。不要用于武侠小说或非技术软文。
   （按需加载：需要时 Read `.cwork/refs/cwork-tech-writer/SKILL.md` 获取完整指令，不常驻上下文）
-- /cwork-test — 页面自动化测试，自动识别 Web/小程序/安卓项目，分别走 ego-browser / miniprogram-automator / BlueStacks5+ADB 链路
+- /cwork-test — 用户要对页面/小程序/安卓做自动化回归、验收交互、验证改动是否生效，或说「跑一下测试」「测一下这个页面/流程」时使用。纯后端/纯配置改动、纯样式微调通常不触发；implement 结束后满足前端核心交互条件再评估是否进入。
   （按需加载：需要时 Read `.cwork/refs/cwork-test/SKILL.md` 获取完整指令，不常驻上下文）
-- /cwork-wuxia-writer — 金庸式武侠写作人格。承接 cwork-article 流程层，用承金庸一脉的思维框架、语言风格、写作套路创作章回体、半文半白、侠义精神的武侠故事/小说。适用于：武侠小说、江湖短篇、章回体叙事。
+- /cwork-wuxia-writer — 由 cwork-article 在武侠故事/章回体小说时内部调用；用户直接点名「金庸风」「章回体」「写个武侠故事」时也可触发。不要用于技术分享正文。
   （按需加载：需要时 Read `.cwork/refs/cwork-wuxia-writer/SKILL.md` 获取完整指令，不常驻上下文）
 
 ## 技能文件位置

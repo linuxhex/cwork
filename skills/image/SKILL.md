@@ -1,7 +1,7 @@
 ---
 name: cwork-image
 lazy: true
-description: 本地工程/jar 打包 Docker 镜像 + push registry + 服务端拉起运行
+description: 用户要本地打 Docker 镜像、push 到 registry、或在服务端拉起容器跑起来时使用。常规测试/生产发布优先用 cwork-deploy；本技能偏本地镜像构建与手动拉起。
 ---
 
 # cwork-image

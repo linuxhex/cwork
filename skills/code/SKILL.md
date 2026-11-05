@@ -1,7 +1,7 @@
 ---
 name: cwork-code
 lazy: true
-description: 代码仓库只读查询 + clone/pull + codegraph 触发，支持 CodeUp（主平台）+ GitLab（前端 fallback），优先使用 codegraph 索引查找代码
+description: 用户要查某服务源码、clone/pull 仓库、搜接口/类/配置落点，或问「代码在哪」「这个接口怎么实现的」时使用。优先 codegraph；CodeUp 为主、前端可走 GitLab。只读查询与拉仓，不要用本技能改业务代码（改代码走 implement/bug）。
 ---
 
 # 代码仓库只读查询 + clone/pull + codegraph 触发
@@ -100,6 +100,23 @@ description: 代码仓库只读查询 + clone/pull + codegraph 触发，支持 C
 | `sync` | 触发 codegraph 增量同步 | `code_query.sh sync [路径]` |
 
 > cwork-code **不依赖 MCP 注册**——`code_query.sh` 经 `curl` + 双平台鉴权（CodeUp ROA 签名 / GitLab Private Token）直连 API，clone/pull 走本地 `git` 命令，codegraph sync 走本地 `codegraph` CLI。
+
+---
+
+## 执行模式（强制）
+
+**本技能采用 Agent 自主执行模式**：
+
+### 主 agent 禁止行为
+- ❌ **禁止手动操作**：主 agent 不得直接调用 bash/grep/read 等工具执行本技能的核心功能
+- ❌ **禁止中途介入**：主 agent 不得在子 agent 执行过程中手动干预
+- ❌ **禁止自行解析**：主 agent 不得自行解析查询结果或数据
+
+### 子 agent 职责
+- ✅ **自主执行完整流程**：按照技能定义的步骤自主完成
+- ✅ **自己能定的直接做**：默认值、参数选择、发查询——不问
+- ✅ **决策点才问**：口径歧义、时间范围、字段含义——简短问一次
+- ✅ **输出结构化结论**：按技能要求的格式输出完整结果
 
 ---
 
