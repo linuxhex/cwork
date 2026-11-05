@@ -55,3 +55,5 @@
 - [未分析][2026-11-02] web-run.cjs：场景内每步 `let __stepT0` 重复声明导致 SyntaxError；改为场景级一次声明、步骤内重赋值（OMJF-19967 UAT 重跑）
 
 - [未分析][2026-11-02] web-run.cjs：navigate 后 __capturedResponses 重置但 __pulledCount 未清导致 assertApi 水位线假失败；refreshResponses 检测 len<__pulledCount 时重置，navigate 后对齐，js 默认 markApiWatermark（OMJF-19967）
+
+- [2026-11-05] [do] cwork-do 收敛报告实测证据可被编造：对不存在的桩编成功率仍标「实测 ✓」，且「本地运行」冒充部署态 | 已加实测证据溯源硬约束（工具来源标注+数字须真实返回+幻觉判✗）+ 部署态如实字段 + 两条反模式
