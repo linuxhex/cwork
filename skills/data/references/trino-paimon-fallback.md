@@ -29,9 +29,22 @@ cwork-data 的 MCP（`mcp_client.py` → query-server）**写死走 Doris 引擎
 - 禁止 Playwright / Puppeteer / `playwright install` / 自装 Chromium
 - 所有浏览器 JS 包在 `ego-browser nodejs <<'EOF' ... EOF` 内，禁止另存独立脚本用系统 Node 跑
 
+### 钉钉登录 SOP（uqp 平台，强制采用）
+
+> 实战确认的登录路径，**直接采用，不重新试错**：
+
+1. 若页面是**账号密码登录页**（有登录按钮）→ **直接点页面登录按钮**（无需填账号密码，钉钉 SSO 会跳转授权）
+2. 若页面是**二维码登录页**：
+   - **点击二维码本身** → 弹出钉钉头像
+   - **点击头像** → 完成登录
+3. 登录成功判据：URL 离开 `/login` 回到平台主页/查询页（用 `waitForUrl notContains /login` 判定，与 cwork-test 登录判据一致）
+4. 登录态在 ego profile 里，同 task space 内后续导航无需重登
+
+**禁止**：瞎填账号密码、原地反复点、把登录页当卡死处理。点登录按钮 / 点二维码→点头像是确定性路径。
+
 ### 步骤
 
-1. **进平台 + 选 Trino 引擎**：导航到 `https://uqp.ykccn.net/`；若 302 到登录页，停下让用户登录（登录态在 ego profile 里）。进查询页后**把引擎切到 Trino**（默认可能是 Doris）。
+1. **进平台 + 选 Trino 引擎**：导航到 `https://uqp.ykccn.net/`；若已登录态（未跳 /login），进查询页后**把引擎切到 Trino**（默认可能是 Doris）。若 302 到钉钉登录页，按下方「钉钉登录 SOP」自动完成登录后再切引擎。
 2. **贴 SQL + 执行**：把 SQL 填进编辑器，点执行/运行。
 3. **取结果**：结果区出表后，用 `page.evaluate` 把表格 DOM 转成行（`textContent` 按 `\t` 或列拆分），或直接 `page.screenshot` 存 `/tmp/uqp-result-N.png` 后 `Read` 该路径。大结果集用平台的导出/翻页。
 4. **回填到阶段 3 结果输出**：把页面跑出的数按本技能阶段 3 模板整理输出（查询目标/表/结果/结论），标注「数据来源：uqp 页面 Trino 引擎（MCP 不支持）」。
@@ -45,14 +58,28 @@ const page = task.page("p1");
 await page.goto("https://uqp.ykccn.net/", { timeout: 30000 });
 await page.waitForTimeout(3000);
 
-// 登录态检查
+// 登录态检查 + 钉钉登录 SOP
 if ((await page.url()).includes("/login")) {
-  console.log("需要登录，请用户在 ego-lite 里登录后重跑");
-  await task.finish({ keep: ["p1"] });
-} else {
-  // 切引擎到 Trino（选择器按页面实际调整，先 snapshot 定位）
+  // 钉钉登录：先试点页面登录按钮（账号密码页）→ 或点二维码→点头像
+  // 选择器按实际页面调整，先 snapshot 定位真实元素
   const snap = await page.snapshot({ scope: "full_page" });
-  // 例：找引擎下拉/Tab，点 Trino
+  // 路径1：账号密码页有「登录」按钮 → 直接点
+  // 路径2：二维码页 → 点二维码 → 等头像出现 → 点头像
+  // 用 waitForUrl notContains /login 判登录成功
+  try {
+    await page.click('text=登录', { label: '钉钉登录按钮' });
+  } catch (e) {
+    // 二维码路径：点二维码 → 点弹出头像
+    await page.click('.qrcode, [class*="qr"]', { label: '点二维码' });
+    await page.waitForElement('img[class*="avatar"], [class*="avatar"]', { timeout: 8000 });
+    await page.click('img[class*="avatar"], [class*="avatar"]', { label: '点头像' });
+  }
+  await page.waitForUrl({ notContains: "/login" }, { timeout: 15000 });
+}
+// 到此已登录，切引擎到 Trino
+{
+  const snap = await page.snapshot({ scope: "full_page" });
+  // 找引擎下拉/Tab，点 Trino
   // await page.click('text=Trino');
   // 填 SQL（编辑器可能是 textarea 或 contenteditable）
   const sql = `SELECT event_date, mod_id, event_type, count(*) AS cnt
