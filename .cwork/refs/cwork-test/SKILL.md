@@ -20,7 +20,7 @@
 1. **项目识别**：自动检测项目类型，选择对应测试链路
 2. **环境准备**：按项目类型启动对应环境
 3. **测试规划**：结合需求改动生成 plan.json（声明式测试计划），按测试三原则设计（场景可追溯、正反面覆盖、断言准确），自问自答质询测试设计
-4. **测试执行**：Web 走 web-run.cjs 执行器（读取 plan.json → 生成 ego-browser heredoc → 执行）；小程序走 mini-run.cjs 执行器
+4. **测试执行**：Web 走 web-run.cjs 执行器（读取 plan.json → 生成 ego-browser heredoc → 执行）；小程序走 mini-run.cjs 执行器；**诊断/ad-hoc 验证**直接走 ego-browser 快路径（详见 web-test.md「诊断/探索」）
 5. **结果报告**：记录测试结果（含截图证据），发现问题自动修复并重测，自问自答质询结果
 
 ### 在 cwork 流程中的位置
@@ -306,6 +306,8 @@ if 测试失败:
 - **Web 链路必须使用 web-run.cjs 执行器**，禁止 AI 手写执行类 heredoc（执行器内部已保证单 heredoc 约束）；页面观察/诊断统一走 `--snapshot` 标准通道，--snapshot 表达不了的多步观察允许一次性只读 heredoc（单 heredoc 内完成、只读、不产生测试结论，观察后修正 plan 重跑）
 - **写 plan / 点失败排障前必须先 Read `known-pits.md`**（与本 SKILL 同目录；按需加载时优先于整份 web-test.md）。命中表内场景（OMP 筛选=`dispatchClick`、YKC 协议勾选=`clickCdp` 等）直接采用，**禁止**用浏览器连试重新发现已知结论
 - **操作卡死防线（Web/小程序通用，轮次硬止损）**：页面操作不生效时必须走「探索套路」——每轮「观察 → 操作 → 验证」；第 1 次失败只允许一次 snapshot/截图后对照 `known-pits.md` 换通道；第 2 次仍无效必须查组件源码或收窄假设；**第 3 次无效必须 BLOCKED 并继续后续场景**，禁止再开完整 plan/长 timeout 浏览器探针（实战：OMP 横幅挡筛选盲试 46 分钟）。详见 web-test.md「探索套路与止损极值」+ `known-pits.md`
+- **小程序挂起自动恢复（实战最高频痛点）**：automator `Connection.send` 无超时，回包丢失即永久挂起。三联症状（mini-run 超时报错 / 小程序一直加载中 / **手动点击无反应**）任一命中 → **立即自动跑 `mini-recover.sh` 恢复**，禁止原地重试、禁止等用户提示。恢复后从挂起场景首步重跑；同位置二次挂起记失败跳过；单会话累计挂起 ≥3 次整体停止。详见 mini-test.md「挂起检测与自动恢复」
+- **诊断/ad-hoc 验证走 ego-browser 快路径**：单点验证、失败诊断、选选择器、探登录页结构——直接 `ego-browser nodejs` 一轮 heredoc 做「动作+等结果+再观察」，不强制走 plan+executor 重型管线（正式回归才走 plan）。遵守 cwork-article 浏览器 HARD GATE（禁 Playwright/装 Chromium）。详见 web-test.md「诊断/探索：ego-browser 直连快路径」
 - **每个测试场景必须真实点击/交互执行，无例外**：plan 里的所有场景都要在真实浏览器中实际操作并验证，禁止模拟执行、跳过执行、复用历史执行结果充当本次结果
 - **回归测试禁止复用历史 plan.json**：每次测试必须重新快照生成 plan（防页面变更后选择器软失效漏报）；选择器失效时整场景 plan 重新生成
 - **登录成功判据必须是确定性 URL 断言**：登录场景必须含 `waitForUrl`/`assertUrl`（URL 离开登录页），禁止以 aiAssert/按钮状态/凑数等待作为登录成功的唯一判据（执行器 validatePlan 已机械拦截；实战根因：选择器点错隐藏弹窗 → 校验接口从未发出 → 登录灰死 → 凑数断言跑出假通过）
