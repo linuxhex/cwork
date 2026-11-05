@@ -45,7 +45,7 @@ description: 用户要查数仓/Doris 业务数据（订单/金额/库存/指标
 - **禁止无 WHERE 全表扫描**：每条 SELECT 必须带 WHERE 过滤（precheck 已机械拦截 `full_table_scan`，LIMIT 不豁免）；先 DESC 确认表结构，再补分区列/业务键条件 + LIMIT
 - 查询无结果，提示用户调整时间范围/表/条件，**不臆造数据**
 - 数据结论必须基于真实查询结果，**不猜**
-- **paimon/Trino 表走 ego-lite 兜底，禁止在 Doris MCP 上硬试**：表全路径含 `oss_paimon`/`paimon` 或 query-server 报「请使用 Trino 引擎」/`Unknown catalog 'oss_paimon'` → 立刻切 `references/trino-paimon-fallback.md`，不要反复重试 MCP（实测必报 Unknown catalog，浪费轮次）
+- **paimon/Trino 表走 ego-lite 兜底，禁止在 Doris MCP 上硬试**：表全路径含 `oss_paimon`/`paimon` 或 query-server 报「请使用 Trino 引擎」/`Unknown catalog 'oss_paimon'` → **立刻切 `references/trino-paimon-fallback.md` 走 ego-lite 操作 uqp 页面**。命中后 **MCP 全部 7 个 tool 一律禁用**（`query_doris`/`get_query_count`/`specific_query`/`export_*`）——包括「探 specific_query 有没有 paimon 预定义模板」「试 get_query_count 看能不能绕」「换 tool 再试」等**伪探索**，这些全是换皮重试，浪费轮次。判定 paimon/Trino 一次即定，不翻案
 - **浏览器兜底一律遵守 ego-browser 硬约束**：唯一引擎 ego-browser，动手前 `Skill("ego-browser")`；禁止 Playwright/Puppeteer/装 Chromium；JS 包在 `ego-browser nodejs <<'EOF'` 内
 
 ## Catalog 体系 + 选表（关键）
@@ -165,8 +165,11 @@ JDBC/ODS 点查耗时 **>1s** 必须诊断，**不靠调大超时绕过**：① 
 - 表全路径含 `oss_paimon` / `paimon`，或表名 `_paimon` 结尾
 - `mcp_client.py query` 报「请使用 Trino 引擎」/ `Unknown catalog 'oss_paimon'` / `paimon 表请使用 Trino`
 - 用户明说「这表是 paimon / 要 Trino」或给了 `https://uqp.ykccn.net/` 链接
+- **用户已提示「走 ego-lite / 去 uqp 页面查」** → 不必再判定，直接走兜底，禁止回 MCP 探
 
 走法：Read `references/trino-paimon-fallback.md` → `Skill("ego-browser")` → 在 `https://uqp.ykccn.net/` 选 Trino 引擎贴 SQL 跑 → 取结果回填阶段 3。**paimon 表的 `event_date` 是分区字段，SQL 必须带 `event_date` 过滤**（与 2.1 分区规则一致）。
+
+**禁止换皮重试**（实战踩坑：判定 paimon 后仍去「探 specific_query 有没有 paimon 模板」）：命中即只走 ego-lite，MCP 的 `query_doris`/`get_query_count`/`specific_query`/`export_*` 全禁；「探模板」「试 count」「换 tool」都是换皮，不省轮次。
 
 ---
 
@@ -230,7 +233,8 @@ JDBC/ODS 点查耗时 **>1s** 必须诊断，**不靠调大超时绕过**：① 
 - 大结果集直接 `query` 拉（先 `count` 分级，>1000 走异步导出）
 - 查询无结果臆造数据（如实说，换条件）
 - 只看一行数据下结论（注意口径：结算 vs 下单 vs 实时）
-- **paimon/Trino 表在 Doris MCP 上反复重试**（报 Unknown catalog 就立刻切 ego-lite 兜底，别硬试）
+- **paimon/Trino 表在 Doris MCP 上反复重试或换皮重试**（报 Unknown catalog 就立刻切 ego-lite 兜底；「探 specific_query 模板」「试 get_query_count」「换 tool」全是换皮，禁）
+- **判定 paimon/Trino 后仍回 MCP 探路径**（用户已提示走 ego-lite/uqp 页面时，禁止回 MCP 探任何 tool）
 - **浏览器兜底用 Playwright/puppeteer**（一律 ego-browser，遵守 cwork-article 浏览器 HARD GATE）
 
 ## 完成定义

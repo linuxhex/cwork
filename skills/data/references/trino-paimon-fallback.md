@@ -15,6 +15,9 @@ cwork-data 的 MCP（`mcp_client.py` → query-server）**写死走 Doris 引擎
 1. 表全路径含 `oss_paimon` / `paimon`，或表名以 `_paimon` 结尾
 2. query-server 返回「请使用 Trino 引擎」/ `Unknown catalog 'oss_paimon'` / `paimon 表请使用 Trino`
 3. 用户明确说「这表是 paimon / 要 Trino」或给了 `https://uqp.ykccn.net/` 页面链接
+4. **用户已提示「走 ego-lite / 去 uqp 页面查」** → 直接走本兜底，禁止回 MCP 探
+
+**命中后 MCP 全部 7 个 tool 一律禁用**（`query_doris`/`get_query_count`/`specific_query`/`export_*`）。「探 specific_query 有没有 paimon 模板」「试 get_query_count 看能不能绕」「换 tool 再试」全是换皮重试——实测必失败，浪费轮次。判定 paimon/Trino 一次即定，不翻案。
 
 **不要**：在 Doris MCP 上反复试 `oss_paimon.*`（实测必报 Unknown catalog，浪费轮次）。
 
