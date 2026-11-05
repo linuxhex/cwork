@@ -133,8 +133,8 @@ if ((await page.url()).includes("/login")) {
   }
 
   // 6) 自检右侧预览后发布（默认）
-  //    优先：本轮 snapshot 找 button[ref] 且下一行 text "发布"（排除「发布笔记」「定时发布」）
-  //    兜底：<xhs-publish-btn> 区域右 1/3 坐标点击（约 793,706）；暂存离开用左 1/3（约 566,706）
+  //    发布按钮宿主 <xhs-publish-btn> 是 Vue 自定义组件，标准 DOM click() 可能无效
+  //    通道优先级：@ref 点 > btn._onPublish() 内部方法直调 > 坐标兜底（约 793,706）
   const snap2 = await page.snapshot({ scope: "full_page" });
   const ls = snap2.split("\n");
   let publishRef = null, draftRef = null;
@@ -144,8 +144,20 @@ if ((await page.url()).includes("/login")) {
     if (/text "发布"/.test(ls[i + 1])) publishRef = m[1];
     if (/text "暂存离开"/.test(ls[i + 1])) draftRef = m[1];
   }
-  if (publishRef) await page.click("@" + publishRef, { label: "发布" });
-  else await page.mouse.click(793, 706, { label: "发布兜底坐标" });
+  if (publishRef) {
+    await page.click("@" + publishRef, { label: "发布@ref" });
+  } else {
+    // 兜底1：直调内部方法（标准 DOM click 对该组件无效时的关键突破）
+    const ok = await page.evaluate(() => {
+      const btn = document.querySelector('xhs-publish-btn');
+      if (btn && typeof btn._onPublish === 'function') { btn._onPublish(); return true; }
+      return false;
+    });
+    if (!ok) {
+      // 兜底2：坐标点击
+      await page.mouse.click(793, 706, { label: "发布兜底坐标" });
+    }
+  }
   await page.waitForTimeout(4000);
   // 7) 成功判定
   const ok = (await page.url()).includes("publish/success")
@@ -164,7 +176,7 @@ if ((await page.url()).includes("/login")) {
 | 图片上传 | `input[type=file][accept*=jpg][multiple]` | `setInputFiles`（一次多张） |
 | 标题 | `input[placeholder="填写标题会有更多赞哦"]` | `page.fill` |
 | 正文 | tiptap `contenteditable` / snapshot `textfield` | click 聚焦 + `keyboard.insertText` |
-| 暂存离开 / 发布 | snapshot 里 `button [ref=N]` + 下一行 `text "发布"`/`"暂存离开"`；宿主是 `<xhs-publish-btn>` | **优先 `@ref` 点击**；ref 拿不到再用坐标（发布约 793,706 / 暂存约 566,706） |
+| 暂存离开 / 发布 | snapshot 里 `button [ref=N]` + 下一行 `text "发布"`/`"暂存离开"`；宿主是 `<xhs-publish-btn>`（Vue 自定义组件，标准 DOM click 无效） | **优先 `@ref` 点击**；ref 拿不到 → 直调 `btn._onPublish()` 内部方法 → 坐标兜底（发布约 793,706 / 暂存约 566,706） |
 | 草稿箱入口 | 顶部「草稿箱(N)」 | 暂存后会自动弹出；也可从此入口回看 |
 
 ### 关键坑（三轮实测）
@@ -173,14 +185,15 @@ if ((await page.url()).includes("/login")) {
 - **标题是普通 input**：`page.fill` 可用；旧文档误写 contenteditable
 - **正文是 tiptap**：click + `insertText`，无需 dispatch input
 - **# 触发话题下拉**：输完按 Escape，否则遮住底部按钮
-- **发布按钮**：宿主 `<xhs-publish-btn>` 的 light DOM/`querySelector('button')` 常为空，但 **ego snapshot 能扫到** `button [ref]` + `text "发布"`——优先 `@ref` 点；点不到再用坐标兜底。成功看 URL `publish/success` 或文案「发布成功」
+- **发布按钮**：宿主 `<xhs-publish-btn>` 是 **Vue 自定义组件**，标准 DOM `click()` 可能无效。三层通道：`@ref` 点 > **直调 `btn._onPublish()` 内部方法**（`document.querySelector('xhs-publish-btn')._onPublish()`）> 坐标兜底。成功看 URL `publish/success` 或文案「发布成功」
+- **标题超 20 字静默阻止发布**：标题 >20 字时前端校验**静默阻止**（不报错、按钮点了没反应）。发布前必须确认标题 ≤20 字（含 emoji），否则发布按钮点不动且无提示，会被误判为按钮失效
 - **上传后按钮才出现**：没上传图时底部没有「暂存离开/发布」
 - **ref 跨脚本过期**：每轮脚本内先 snapshot 取新 ref
 - **ego 会话**：同一写入动作一个脚本做完；跨进程用 `claimTaskSpace` + `tabs()`，managed 用 `task.page(label)`，untracked 才 `adopt`
 - **Web 草稿不同步 App**：见上方硬规则表——这是产品机制，不是 bug
 
 ### 发布前自检
-- 标题 ≤20 字（含 emoji），必带 1-2 emoji
+- 标题 ≤20 字（含 emoji），必带 1-2 emoji——**超 20 字会静默阻止发布**（按钮点不动无提示），发布前必须确认字数
 - 正文 ≤1000 字（含 emoji 和标签）
 - 图片已上传（首图=封面），3-18 张
 - #话题 3-8 个
