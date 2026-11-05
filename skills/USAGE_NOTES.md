@@ -12,6 +12,7 @@
 
 ## 未分析
 
+- [2026-11-05] [data] MCP 只查 Doris，paimon/Trino 表查不了（报 Unknown catalog 'oss_paimon'）反复硬试浪费轮次 | 新增 references/trino-paimon-fallback.md：判定条件+ego-lite 操作 uqp 平台（选 Trino）兜底；SKILL 概述/HARD GATE/阶段2.5/反模式/完成定义全挂引用
 - [2026-11-05] [deploy/log/data/config/graf/code/requirement/image] 结果输出空壳（一句话交差） | 各阶段 3 加空壳禁令+必填字段自检+完成定义收口；缺字段禁止结束
 - [2026-11-05] [do] 阶段 4 只发横幅正文空壳 | HARD GATE+自检表：同条回复必须有完整报告；禁缩写示例；缺字段禁止结束
 - [2026-11-05] [article] 写入阶段裸 JS 示例被当成 Playwright，agent 去装 chromium | 已加 HARD GATE：唯一引擎 ego-browser + 禁止 playwright/puppeteer + 示例标明 heredoc 包装；检测用 command -v ego-browser

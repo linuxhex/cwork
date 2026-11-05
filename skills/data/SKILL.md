@@ -10,6 +10,8 @@ description: 用户要查数仓/Doris 业务数据（订单/金额/库存/指标
 
 `data` 是数仓数据查询技能，通过内部 **query-server** 服务跑 Doris 只读 SQL，查业务数据、表结构、指标、数据量，给排查问题/对账提供数据佐证。
 
+> **MCP 只覆盖 Doris 引擎**：paimon 表（`oss_paimon.*` / 表名 `_paimon` 结尾）或必须 Trino 引擎的查询，`mcp_client.py` 查不了（Doris 侧 `oss_paimon` catalog 已禁用）。命中即走 **ego-lite 页面兜底**（统一自助查询平台 `https://uqp.ykccn.net/` 选 Trino），详见 `references/trino-paimon-fallback.md`。
+
 **主动查为主，决策点才对话**：自己能定的（选 catalog/选表、补默认值、从问题推断查询目标、发 SQL）直接做；只有需要用户拍板的地方（查哪个口径、时间范围、字段歧义）才简短对话一次。
 
 3 步走（AI 内部推进，决策点才停）：
@@ -43,6 +45,8 @@ description: 用户要查数仓/Doris 业务数据（订单/金额/库存/指标
 - **禁止无 WHERE 全表扫描**：每条 SELECT 必须带 WHERE 过滤（precheck 已机械拦截 `full_table_scan`，LIMIT 不豁免）；先 DESC 确认表结构，再补分区列/业务键条件 + LIMIT
 - 查询无结果，提示用户调整时间范围/表/条件，**不臆造数据**
 - 数据结论必须基于真实查询结果，**不猜**
+- **paimon/Trino 表走 ego-lite 兜底，禁止在 Doris MCP 上硬试**：表全路径含 `oss_paimon`/`paimon` 或 query-server 报「请使用 Trino 引擎」/`Unknown catalog 'oss_paimon'` → 立刻切 `references/trino-paimon-fallback.md`，不要反复重试 MCP（实测必报 Unknown catalog，浪费轮次）
+- **浏览器兜底一律遵守 ego-browser 硬约束**：唯一引擎 ego-browser，动手前 `Skill("ego-browser")`；禁止 Playwright/Puppeteer/装 Chromium；JS 包在 `ego-browser nodejs <<'EOF'` 内
 
 ## Catalog 体系 + 选表（关键）
 
@@ -78,6 +82,8 @@ description: 用户要查数仓/Doris 业务数据（订单/金额/库存/指标
 | `export-status` | 查导出任务状态 | `python3 mcp_client.py export-status --task-id xxx` |
 
 > cwork-data **不依赖 Claude 的 MCP 注册**——`mcp_client.py` 是 HTTP 直连 query-server 服务（地址在 `.mcp_config.json` 的 `base_url` 或环境变量 `MCP_BASE_URL` 配置），与 cwork-log 用 bash 直连阿里云同一性质。
+>
+> **MCP 只能查 Doris**。paimon 表 / Trino 引擎走 `references/trino-paimon-fallback.md` 的 ego-lite 页面兜底（`https://uqp.ykccn.net/` 选 Trino）。
 
 ---
 
@@ -153,6 +159,15 @@ python3 mcp_client.py count --sql "<SQL>"     # 先看总量
 
 JDBC/ODS 点查耗时 **>1s** 必须诊断，**不靠调大超时绕过**：① `EXPLAIN`+`SHOW CREATE TABLE` 查索引命中；② 探查 internal/hive 等价表替代；详见 `references/ods-query-optimization.md`。
 
+### 2.5 paimon/Trino 表 → ego-lite 兜底（MCP 不支持）
+
+判定命中（任一即走，别在 MCP 上硬试）：
+- 表全路径含 `oss_paimon` / `paimon`，或表名 `_paimon` 结尾
+- `mcp_client.py query` 报「请使用 Trino 引擎」/ `Unknown catalog 'oss_paimon'` / `paimon 表请使用 Trino`
+- 用户明说「这表是 paimon / 要 Trino」或给了 `https://uqp.ykccn.net/` 链接
+
+走法：Read `references/trino-paimon-fallback.md` → `Skill("ego-browser")` → 在 `https://uqp.ykccn.net/` 选 Trino 引擎贴 SQL 跑 → 取结果回填阶段 3。**paimon 表的 `event_date` 是分区字段，SQL 必须带 `event_date` 过滤**（与 2.1 分区规则一致）。
+
 ---
 
 ## 阶段 3：结果输出
@@ -202,6 +217,7 @@ JDBC/ODS 点查耗时 **>1s** 必须诊断，**不靠调大超时绕过**：① 
 | `partition-rules.md` | 分区字段日期格式规范 |
 | `ods-query-optimization.md` | ODS/点查慢查询优化 |
 | `pitfalls.md` | 常见坑（漏分区/格式错/大结果集） |
+| `trino-paimon-fallback.md` | paimon/Trino 表查不了 MCP 时，ego-lite 操作 uqp 平台兜底 |
 | `query-templates.md` | 命令行模板速查 |
 
 ## 反模式
@@ -214,14 +230,16 @@ JDBC/ODS 点查耗时 **>1s** 必须诊断，**不靠调大超时绕过**：① 
 - 大结果集直接 `query` 拉（先 `count` 分级，>1000 走异步导出）
 - 查询无结果臆造数据（如实说，换条件）
 - 只看一行数据下结论（注意口径：结算 vs 下单 vs 实时）
+- **paimon/Trino 表在 Doris MCP 上反复重试**（报 Unknown catalog 就立刻切 ego-lite 兜底，别硬试）
+- **浏览器兜底用 Playwright/puppeteer**（一律 ego-browser，遵守 cwork-article 浏览器 HARD GATE）
 
 ## 完成定义
 
 - 能自己定的已直接做（选表、构造 SQL、发查询），决策点已与用户简短确认
 - 凭证已就绪（`setup-check` 通过）
-- SQL 通过前置校验（分区/反引号/只读/日期范围），按目标拿到数据
+- SQL 通过前置校验（分区/反引号/只读/日期范围），按目标拿到数据；或 paimon/Trino 表走 ego-lite 兜底拿到数据
 - 结果与问题对应，结论带数据证据
-- 阶段 3 完整结果块已输出（查询目标/表/结果/结论全非空）；只说「查到 N 行」一句话 = 未完成
+- 阶段 3 完整结果块已输出（查询目标/表/结果/结论全非空，标注数据来源 MCP/页面）；只说「查到 N 行」一句话 = 未完成
 
 ## 自动衔接
 
