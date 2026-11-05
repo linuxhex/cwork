@@ -12,6 +12,7 @@
 
 ## 未分析
 
+- [2026-11-05] [article] 小红书正文写太简单（用户反馈「压缩太短」） | theme-xhs 正文结构加深度硬要求：字数下限 600 字、每要点带具体做法+数据、小标题 3-5 个、禁内容空洞；发布前自检加字数下限核对
 - [2026-11-05] [article] 小红书发布按钮 xhs-publish-btn 是 Vue 自定义组件，标准 DOM click 无效 | theme-xhs 加三层通道：@ref > btn._onPublish() 内部方法直调 > 坐标兜底；标题超 20 字静默阻止发布（按钮点不动无提示）
 - [2026-11-05] [data] 判定 paimon/Trino 后仍去「探 specific_query 有没有 paimon 模板」换皮重试 | HARD GATE+兜底文件：命中即 MCP 全 7 tool 禁用，点名「探模板/试 count/换 tool」为换皮；用户已提示走 ego-lite 时禁止回 MCP
 - [2026-11-05] [test] ①诊断/ad-hoc 验证被强制走 plan+executor 重型管线太慢 | web-test.md 加「ego-browser 直连快路径」：一轮 heredoc 做动作+等结果+再观察，正式回归才走 plan
