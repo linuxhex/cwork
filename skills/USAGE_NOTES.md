@@ -12,6 +12,8 @@
 
 ## 未分析
 
+- [2026-11-05] [test] ①诊断/ad-hoc 验证被强制走 plan+executor 重型管线太慢 | web-test.md 加「ego-browser 直连快路径」：一轮 heredoc 做动作+等结果+再观察，正式回归才走 plan
+- [2026-11-05] [test] ②小程序手动点击无反应时（挂起伴随症状）AI 不主动恢复 | mini-test.md 挂起恢复从「提示用户」改「自动跑 mini-recover.sh + 重跑当前场景」；SKILL HARD GATE 加挂起自动恢复+快路径两条
 - [2026-11-05] [data] MCP 只查 Doris，paimon/Trino 表查不了（报 Unknown catalog 'oss_paimon'）反复硬试浪费轮次 | 新增 references/trino-paimon-fallback.md：判定条件+ego-lite 操作 uqp 平台（选 Trino）兜底；SKILL 概述/HARD GATE/阶段2.5/反模式/完成定义全挂引用
 - [2026-11-05] [deploy/log/data/config/graf/code/requirement/image] 结果输出空壳（一句话交差） | 各阶段 3 加空壳禁令+必填字段自检+完成定义收口；缺字段禁止结束
 - [2026-11-05] [do] 阶段 4 只发横幅正文空壳 | HARD GATE+自检表：同条回复必须有完整报告；禁缩写示例；缺字段禁止结束

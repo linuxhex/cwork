@@ -571,7 +571,43 @@ node web-run.cjs --snapshot --url "http://localhost:3000/login" --out /tmp/snap-
 
 适用：写 plan 前采集选择器、登录页结构实测、失败后重新观察页面状态。
 
-**观察类 heredoc 的边界**：`--snapshot` 已覆盖单页观察需求；确需 --snapshot 表达不了的多步交互观察（如"点开筛选再截图"），允许手写**一次性观察 heredoc**，但必须满足：单 heredoc 内完成、只读不产生测试结论、观察后按铁律 3 修正 plan 重跑。测试执行本身永远走 plan + 执行器，禁止手写执行类 heredoc。
+### 诊断/探索：ego-browser 直连快路径（ad-hoc 验证首选）
+
+> **为什么有这条**：plan+executor 是需求级回归的重型管线（snapshot→生成 plan→跑执行器→aiAssert 合入）。但很多场景只是「点一下看改的按钮在不在」「这个接口返回啥」「换个通道试试点不动」——强制走 plan 太重、太慢。对齐 ego-lite 原生快路径：**一轮 heredoc 做完「动作 + 等结果 + 再观察」**。
+
+**何时走快路径**（命中即走，不必先走 plan）：
+- ad-hoc 验证：单点/单页/单交互看改动是否生效（不是完整回归）
+- 失败诊断：plan 跑挂后，想直接观察页面真实状态、抓目标 DOM、换通道试点
+- 选选择器/探登录页结构：单页观察
+
+**快路径规则**（与执行器同等约束，不破坏单 heredoc）：
+1. 动手前先 `Skill("ego-browser")` + `ego-browser skill`（cwork-article 浏览器 HARD GATE：禁 Playwright/装 Chromium，JS 包在 `ego-browser nodejs <<'EOF'`）
+2. **一个观察目标 = 一个 heredoc**：动作 + 等待 + 截图/DOM 抓取在同一个 heredoc 内做完，禁止「拍快照→finish→下一轮再操作」的探索循环
+3. 只读/诊断不产生测试结论；观察后要回归的，按铁律 3 修正 plan 重跑（快路径不替代正式回归）
+4. 操作不生效按 known-pits.md 换通道（`dispatchClick`/`clickCdp`/`openDatePicker`），**禁止无观察连试**（探索止损铁律）
+5. 诊断结果要回填到测试报告（标注「ad-hoc 验证」），不空口下结论
+
+**快路径模板**（单 heredoc：导航 + 操作 + 抓 DOM + 截图）：
+
+```js
+// 在 ego-browser nodejs heredoc 内执行（非 Playwright）
+const task = await taskSpace("diag");
+const page = task.page("p1");
+await page.goto("http://localhost:3000/orders", { timeout: 30000 });
+await page.waitForTimeout(3000);
+// 抓目标 DOM 看真实结构（选选择器/诊断失败）
+const dom = await page.evaluate(() => {
+  const el = document.querySelector('.filter-btn');
+  return el ? { html: el.outerHTML, rect: el.getBoundingClientRect() } : null;
+});
+console.log(JSON.stringify(dom));
+await page.screenshot({ path: "/tmp/diag-1.png" });
+await task.finish({ keep: ["p1"] });
+```
+
+> **与执行器的边界**：正式回归（多场景、要 result.json、要断言归档）走 plan+executor；单点验证/诊断/选选择器走本快路径。两条路同源（都是 ego-browser），不冲突。
+
+**观察类 heredoc 的边界**：`--snapshot` 已覆盖单页观察需求；确需 --snapshot 表达不了的多步交互观察（如"点开筛选再截图"），用上面快路径模板（单 heredoc）。禁止手写执行类 heredoc 代替 plan 跑正式测试场景。
 
 ### 失败处理
 
