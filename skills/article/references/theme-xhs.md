@@ -81,8 +81,11 @@
 ### ego-browser 一轮脚本模板（禁止拆成多轮探索）
 
 > **性能硬约束**：切 tab / 上传 / 填标题 / 填正文 / 点按钮 **必须在同一个 `ego-browser nodejs` 脚本内完成**。禁止「拍快照→finish→下一轮再操作」的探索循环（实测浪费 15+ 轮）。每轮脚本开头先 `snapshot` 取本轮 ref，末尾再 `finish`。
+>
+> **启动方式（强制）**：下面是 heredoc 正文，必须这样跑——`ego-browser nodejs <<'EOF' ... EOF`。禁止 Playwright / `python3 -m playwright install` / 另存独立脚本用系统 Node 跑。动手前 `Skill("ego-browser")`。检测：`command -v ego-browser`（不要搜 `ego`/`ego-lite`/`~/.qoder/bin`）。
 
 ```js
+// 在 ego-browser nodejs heredoc 内执行（非 Playwright）
 const task = await taskSpace("小红书写入");
 const page = await task.newPage();
 await page.goto("https://creator.xiaohongshu.com/publish/publish?source=official", { timeout: 30000 });

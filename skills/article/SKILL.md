@@ -48,6 +48,16 @@ description: 用户要写公众号或小红书文章、技术分享推文、开�
 阶段 6-8（串行）: 内容撰写 → 配图嵌入 → 写入编辑器 → 保存草稿
 ```
 
+## HARD GATE（浏览器 / 唯一引擎）
+
+> 实战踩坑：agent 看见阶段 8 的裸 JS 示例（`taskSpace`/`page.goto`/`page.$`）就当成 Playwright，去跑 `python3 -m playwright install chromium`，完全绕开本机已装的 ego-lite。
+
+- **浏览器操作唯一引擎 = ego-browser（ego-lite）**。截图、打开系统、写入公众号/小红书编辑器，一律走 ego-browser。
+- **动手前必须先 `Skill("ego-browser")`**，再按它的输出跑 `ego-browser skill`；禁止跳过技能直接手搓浏览器脚本。
+- **禁止 Playwright / Puppeteer / Selenium / `playwright install` / `chromium` 安装 / 自写 Python/Node 浏览器驱动** 作为替代或兜底。ego-browser 找不到时：按 ego-browser 技能的 `references/install.md` 装 ego lite，**不要**装别的浏览器引擎。
+- **检测命令**：`command -v ego-browser`（通常在 `~/.local/bin/ego-browser`）。不要用 `which ego` / `which ego-lite` / 只搜 `~/.qoder/bin`——这些路径会误报「未安装」。
+- **执行形态硬约束**：所有浏览器 JS 必须包在 `ego-browser nodejs <<'EOF' ... EOF`（或 `ego-browser nodejs -e`）里跑；本 SKILL / theme-xhs 里的 JS 片段是 **heredoc 正文**，不是可直接 `python`/`node` 跑的独立脚本。
+
 **并行执行优化**：阶段 3（标题生成）、阶段 4（封面图生成）、阶段 5（文中配图生成）互不依赖，信息追问（阶段 2）完成后可**同时启动**，减少等待时间。
 
 ## 语言约束（强制）
@@ -676,7 +686,18 @@ description: 用户要写公众号或小红书文章、技术分享推文、开�
 
 ### 写入代码示例
 
+> **启动方式（强制）**：下面这段是 `ego-browser nodejs` 的 heredoc 正文，**禁止**另存为 `.py`/`.js` 用 Playwright/系统 Node 跑。
+>
+> ```bash
+> ego-browser nodejs <<'EOF'
+> // ↓↓↓ 以下为 heredoc 正文 ↓↓↓
+> EOF
+> ```
+>
+> 动手前先 `Skill("ego-browser")` + `ego-browser skill`；找不到命令见上方 HARD GATE。
+
 ```javascript
+// 在 ego-browser nodejs heredoc 内执行（非 Playwright）
 const task = await taskSpace("公众号文章写作");
 const page = task.page("p1");
 
@@ -884,6 +905,8 @@ AI：[自动生成文章，含精美排版 CSS]
 - **不上传封面图到编辑器**：封面图生成了但没有上传到编辑器的封面图位置，草稿里没有封面图，等于白做
 - **不确认就写入**：必须用户确认后才写入编辑器
 - **不用视觉元素**：必须使用 emoji、色块、分隔线等视觉元素（每篇至少 3 种）
+- **绕开 ego-browser 去装/用 Playwright**：禁止 `playwright install`、禁止自写 Playwright/Puppeteer 脚本操作编辑器或截图；找不到 ego-browser 时按其 install.md 装 ego lite，不要装 Chromium 兜底
+- **把本技能 JS 示例当独立脚本跑**：示例必须包在 `ego-browser nodejs <<'EOF'` 里；禁止另存 `/tmp/*.py`/`/tmp/*.js` 用系统解释器执行
 
 ---
 
@@ -912,6 +935,7 @@ AI：[自动生成文章，含精美排版 CSS]
 - 生成本地 `.html` 半成品文件而非直接写编辑器
 - 用户未确认标题
 - 写入编辑器失败
+- 用 Playwright/Puppeteer/其它浏览器引擎替代 ego-browser（或去安装 Chromium 作为兜底）
 
 ---
 

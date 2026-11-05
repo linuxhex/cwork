@@ -12,6 +12,9 @@
 
 ## 未分析
 
+- [2026-11-05] [deploy/log/data/config/graf/code/requirement/image] 结果输出空壳（一句话交差） | 各阶段 3 加空壳禁令+必填字段自检+完成定义收口；缺字段禁止结束
+- [2026-11-05] [do] 阶段 4 只发横幅正文空壳 | HARD GATE+自检表：同条回复必须有完整报告；禁缩写示例；缺字段禁止结束
+- [2026-11-05] [article] 写入阶段裸 JS 示例被当成 Playwright，agent 去装 chromium | 已加 HARD GATE：唯一引擎 ego-browser + 禁止 playwright/puppeteer + 示例标明 heredoc 包装；检测用 command -v ego-browser
 - [2026-11-02] [test] 反复试错慢因：已知坑是软文档+探索无硬止损（OMP 横幅 46min）| known-pits.md 常驻速查 + validatePlan 强制筛选 dispatchClick + HARD GATE 3 次 BLOCKED
 - [2026-11-02] [test] exportApi 缺 filename 生成期硬抛打断探针 | 缺省自动生成 export-api-s{i}-i{j}.json + 水位线优先
 - [2026-11-02] [test] assertApi 命中进页旧响应（反面竞态）+ heredoc `let __stepT0` 每场景重复声明炸 SyntaxError | 水位线只认动作后新响应；__stepT0 改顶层单次 let
