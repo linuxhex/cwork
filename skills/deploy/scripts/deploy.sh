@@ -764,6 +764,189 @@ elif isinstance(yx, dict):
   info "执行结果: ${result#OK:}"
 }
 
+# ============================================================
+# 云效 Flow 流水线部署函数（platform=flow）
+# ============================================================
+
+# ── 触发 Flow 流水线运行 ──
+# POST /pipelines/{pipelineId}/runs（注意是 /runs，官方文档的 /run 端点在本组织返回 404）
+# body 实测接受扁平格式 {"<envKey>":"<env>"}；params 数组格式报 InvalidParams
+# ⚠️ 实测结论：body 传参不改变流水线实际 env（run 8 传 env=test，job 实际 env 仍为流水线默认 prod）
+#    —— Flow 触发实际按流水线全局参数默认值执行。因此 flowEnvKey 仅在目标环境=流水线默认值时可靠；
+#    sre-agent 流水线默认 env=prod，直接部署生产（用户已确认）。
+# 返回: stdout="OK:<pipelineRunId>" 或 "ERROR:<msg>"；触发失败 return 1
+flow_trigger_run() {
+  local pipelineId="$1"
+  local env="$2"
+  local envKey="${3:-env}"
+
+  local body
+  body=$(python3 -c "
+import json
+print(json.dumps({'${envKey}': '${env}'}))
+")
+
+  local resp
+  # 不用 2>&1 捕获 stderr：外部 shell 开 xtrace 时 trace 会混进响应污染解析
+  resp=$(flow_post "/pipelines/${pipelineId}/runs" -d "$body" 2>/dev/null || true)
+
+  # Flow 触发成功返回数字 pipelineRunId；失败返回 {"errorCode":...} 或错误文本
+  local result
+  result=$(echo "$resp" | python3 -c "
+import json, sys
+raw = sys.stdin.read()
+try:
+    d = json.loads(raw)
+    if isinstance(d, (int, float)):
+        print('OK:' + str(int(d)))
+    elif isinstance(d, dict) and 'errorCode' in d:
+        print('ERROR:' + str(d.get('errorMessage', d.get('errorCode')))
+    elif isinstance(d, dict) and 'pipelineRunId' in d:
+        print('OK:' + str(d['pipelineRunId']))
+    else:
+        print('ERROR: ' + raw[:200])
+except Exception:
+    print('ERROR: ' + raw[:200])
+" 2>/dev/null || echo "ERROR: 请求失败")
+
+  echo "$result"
+}
+
+# ── 查询 Flow 流水线运行状态 ──
+# GET /pipelines/{pipelineId}/runs?maxResults=5 → 取 startTime 最新的 run 的 status
+# 输出: RUNNING / SUCCESS / FAIL / UNKNOWN
+flow_get_run_status() {
+  local pipelineId="$1"
+  local runId="$2"
+
+  local resp
+  resp=$(flow_get "/pipelines/${pipelineId}/runs?maxResults=20" 2>/dev/null || echo "")
+
+  echo "$resp" | python3 -c "
+import json, sys
+try:
+    runs = json.load(sys.stdin)
+    if not isinstance(runs, list):
+        print('UNKNOWN'); raise SystemExit
+    if ${runId:-0} > 0:
+        run = next((r for r in runs if r.get('pipelineRunId') == ${runId}), None)
+    else:
+        run = max(runs, key=lambda r: r.get('startTime') or 0) if runs else None
+    print((run or {}).get('status', 'UNKNOWN').upper())
+except SystemExit:
+    pass
+except:
+    print('UNKNOWN')
+" 2>/dev/null || echo "UNKNOWN"
+}
+
+# ── 轮询等待 Flow 流水线完成 ──
+# 用法: wait_flow_run_complete <pipelineId> <runId> [label]
+wait_flow_run_complete() {
+  local pipelineId="$1"
+  local runId="$2"
+  local label="${3:-部署}"
+
+  local poll_interval="${DEPLOY_POLL_INTERVAL:-5}"
+  local timeout="${DEPLOY_TIMEOUT:-1800}"
+  local elapsed=0
+  local status="RUNNING"
+
+  while [[ "$status" == "RUNNING" || "$status" == "UNKNOWN" ]] && [[ $elapsed -lt $timeout ]]; do
+    sleep "$poll_interval"
+    elapsed=$((elapsed + poll_interval))
+    status=$(flow_get_run_status "$pipelineId" "$runId")
+    local mins=$((elapsed / 60))
+    local secs=$((elapsed % 60))
+    echo -ne "\r  ${label}状态: $status (已等待 ${mins}m${secs}s)    " >&2
+  done
+  echo "" >&2
+  echo "$status"
+}
+
+# ── 报告 Flow 流水线结果并按需退出 ──
+report_flow_result() {
+  local status="$1"
+  local appName="$2"
+  local env="$3"
+  local pipelineId="$4"
+  local runId="$5"
+
+  local consoleUrl="https://flow.aliyun.com/pipelines/${pipelineId}/current?log=run_${runId}"
+
+  case "$status" in
+    SUCCESS)
+      ok "Flow 流水线执行成功！运行 ID: #${runId}"
+      echo ""
+      info "流水线详情: $consoleUrl"
+      ;;
+    FAIL|CANCELED)
+      fail "Flow 流水线执行失败（${status}）！运行 ID: #${runId}"
+      echo ""
+      info "查看执行日志: $consoleUrl"
+      exit 1
+      ;;
+    *)
+      warn "Flow 流水线超时/状态未知（${status}），请手动检查:"
+      echo "  $consoleUrl"
+      ;;
+  esac
+}
+
+# ── Flow 完整部署流程 ──
+# Flow 流水线一条 run 内含构建+部署阶段（分支固定在流水线配置，环境由 runningConfig 参数控制）
+# service-map 条目: platform=flow, flowPipeline=<pipelineId>, [flowEnvKey=env]
+# 用法: flow_deploy <appName> <env> <branch> <svcJson>
+flow_deploy() {
+  local appName="$1"
+  local env="$2"
+  local branch="$3"
+  local svcJson="$4"
+
+  local pipelineId envKey
+  pipelineId=$(echo "$svcJson" | python3 -c "import json,sys; print(json.load(sys.stdin).get('flowPipeline',''))")
+  envKey=$(echo "$svcJson" | python3 -c "import json,sys; print(json.load(sys.stdin).get('flowEnvKey','env'))")
+
+  if [[ -z "$pipelineId" ]]; then
+    fail "服务 '$appName' 配置了 platform=flow 但缺少 flowPipeline（流水线 ID）"
+    exit 1
+  fi
+
+  echo ""
+  echo "═══════════════════════════════════════════════════════════════"
+  echo "  云效 Flow 流水线部署"
+  echo "═══════════════════════════════════════════════════════════════"
+  echo "  服务:       $appName"
+  echo "  环境:       ${env}（参数 ${envKey}）"
+  echo "  分支:       ${branch}（Flow 分支固定在流水线配置，此处仅展示/校验）"
+  echo "  流水线 ID:  $pipelineId"
+  echo "  平台:       云效 Flow (flow)"
+  echo "═══════════════════════════════════════════════════════════════"
+  echo ""
+
+  info "触发 Flow 流水线: $pipelineId (${envKey}=${env})"
+  local result
+  result=$(flow_trigger_run "$pipelineId" "$env" "$envKey")
+
+  if [[ "$result" == ERROR:* ]]; then
+    fail "Flow 流水线触发失败: ${result#ERROR:}"
+    exit 1
+  fi
+
+  local runId="${result#OK:}"
+  ok "流水线已触发，运行 ID: #${runId}"
+  echo ""
+
+  info "等待流水线执行完成..."
+  local finalStatus
+  finalStatus=$(wait_flow_run_complete "$pipelineId" "$runId" "部署")
+
+  echo ""
+  echo "═══════════════════════════════════════════════════════════════"
+  report_flow_result "$finalStatus" "$appName" "$env" "$pipelineId" "$runId"
+  echo "═══════════════════════════════════════════════════════════════"
+}
+
 # ── 命令: build ──
 cmd_build() {
   local appName="$1"
@@ -778,6 +961,11 @@ cmd_build() {
   if [[ "$platform" == "yunxiao" ]]; then
     yx_build "$appName" "$branch" "$svc"
     return
+  fi
+  if [[ "$platform" == "flow" ]]; then
+    warn "Flow 流水线构建与部署在同一条 run 内，无独立构建步骤"
+    echo "  请直接使用 deploy 命令: deploy.sh deploy $appName <env> $branch"
+    return 1
   fi
 
   # 默认走 Jenkins
@@ -854,6 +1042,10 @@ cmd_execute() {
   platform=$(get_platform "$svc")
   if [[ "$platform" == "yunxiao" ]]; then
     yx_deploy "$appName" "$env" "$branch" "$svc"
+    return
+  fi
+  if [[ "$platform" == "flow" ]]; then
+    flow_deploy "$appName" "$env" "$branch" "$svc"
     return
   fi
 
@@ -935,6 +1127,10 @@ cmd_deploy() {
   platform=$(get_platform "$svc")
   if [[ "$platform" == "yunxiao" ]]; then
     yx_deploy "$appName" "$env" "$branch" "$svc"
+    return
+  fi
+  if [[ "$platform" == "flow" ]]; then
+    flow_deploy "$appName" "$env" "$branch" "$svc"
     return
   fi
 
@@ -1295,6 +1491,39 @@ print(f"service-map.json 共 {len(services)} 个服务条目")
 PYEOF
 }
 
+# ── 命令: flow-pipelines ──
+# 列出云效 Flow 流水线（用于收录 platform=flow 服务时查 pipelineId）
+cmd_flow_pipelines() {
+  local keyword="${1:-}"
+  local resp
+  resp=$(flow_get "/pipelines?maxResults=100" 2>/dev/null || echo "")
+
+  echo ""
+  echo "═══════════════════════════════════════════════════════════════"
+  echo "  云效 Flow 流水线列表"
+  echo "═══════════════════════════════════════════════════════════════"
+  echo "$resp" | python3 -c "
+import json, sys
+try:
+    pips = json.load(sys.stdin)
+    if not isinstance(pips, list):
+        print('  拉取失败: ' + json.dumps(pips, ensure_ascii=False)[:200]); raise SystemExit
+    kw = '${keyword}'.lower()
+    for p in pips:
+        name = p.get('pipelineName', '')
+        if kw and kw not in name.lower():
+            continue
+        print(f\"  {p.get('pipelineId')}  {name}\")
+except SystemExit:
+    pass
+except:
+    print('  解析失败')
+" 2>/dev/null
+  echo "═══════════════════════════════════════════════════════════════"
+  echo ""
+  info "收录方法: 在 service-map.json 加 {\"appName\":..., \"platform\":\"flow\", \"flowPipeline\":<ID>, \"flowEnvKey\":\"env\"}"
+}
+
 # ── 主入口 ──
 usage() {
   cat << 'EOF'
@@ -1309,11 +1538,19 @@ cwork-deploy — Jenkins + 云效 构建部署工具（curl 封装）
   deploy.sh jobs     <appName>                 查看服务的 Jenkins 作业名
   deploy.sh console  <jobName> <buildNum>      查看构建控制台日志（Jenkins）
   deploy.sh sync [appName] [--force]           同步服务映射（全量或单应用，自动补 yxDeploy）
+  deploy.sh flow-pipelines [关键字]             列出云效 Flow 流水线（查 pipelineId）
 
 平台路由:
   service-map.json 中 platform=jenkins 的服务走 Jenkins REST API
+  platform=flow 的服务走云效 Flow 流水线 API（构建+部署一条 run）
   其余走云效 AppStack API（默认）
   也可设置环境变量 DEPLOY_DEFAULT_PLATFORM=jenkins 全局切换
+
+Flow 流水线模式（platform=flow，部署目标如函数计算 FC）:
+  service-map.json 条目配 platform=flow + flowPipeline=<流水线ID> [+ flowEnvKey=env]
+  分支固定在流水线配置中，环境由 runningConfig 参数（默认 key=env）控制
+  deploy 即触发完整 run（构建→部署），build/execute 不适用
+  收录新服务: deploy.sh flow-pipelines <关键字> 查 ID 后手工加条目
 
 单 job 模式（前端类服务，如 omp-shop）:
   service-map.json 条目配 singleJob=true + buildParam=BRANCH_TAG
@@ -1373,6 +1610,9 @@ main() {
       ;;
     sync)
       cmd_sync "$@"
+      ;;
+    flow-pipelines)
+      cmd_flow_pipelines "${1:-}"
       ;;
     ""|-h|--help|help)
       usage

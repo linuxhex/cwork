@@ -196,11 +196,46 @@ yx_post() {
 }
 
 # ============================================================
-# 平台路由（jenkins / yunxiao）
+# 云效 Flow OpenAPI 封装（x-yunxiao-token 认证，与 AppStack 同一令牌）
+# API base: https://{domain}/oapi/v1/flow/organizations/{orgId}
+# ============================================================
+
+# ── 云效 Flow API base URL ──
+flow_base_url() {
+  local domain="${YX_DOMAIN:-openapi-rdc.aliyuncs.com}"
+  local orgId="${YX_ORG_ID:-}"
+  echo "https://${domain}/oapi/v1/flow/organizations/${orgId}"
+}
+
+# ── Flow GET 请求 ──
+# 用法: flow_get "/pipelines?maxResults=50"
+flow_get() {
+  auto_load_config
+  yx_ensure_config
+  local path="$1"
+  shift
+  $CURL -s -H "x-yunxiao-token: ${YX_TOKEN}" "$(flow_base_url)${path}" "$@"
+}
+
+# ── Flow POST 请求 ──
+# 用法: flow_post "/pipelines/123/run" -d '{"params":[{"key":"env","value":"test"}]}'
+flow_post() {
+  auto_load_config
+  yx_ensure_config
+  local path="$1"
+  shift
+  $CURL -s -X POST -H "x-yunxiao-token: ${YX_TOKEN}" \
+    -H "Content-Type: application/json" \
+    "$(flow_base_url)${path}" "$@"
+}
+
+# ============================================================
+# 平台路由（jenkins / yunxiao / flow）
 # ============================================================
 
 # ── 获取服务的部署平台 ──
 # 优先级: service-map.json 的 platform 字段 > DEPLOY_DEFAULT_PLATFORM 环境变量 > yunxiao
+# platform 取值: jenkins / yunxiao（AppStack）/ flow（Flow 流水线）
 # 用法: get_platform <serviceNameJson>
 get_platform() {
   local svcJson="$1"

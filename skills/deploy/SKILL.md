@@ -1,17 +1,21 @@
 ---
 name: cwork-deploy
 lazy: true
-description: 用户要触发构建部署、发版到 test/uat/prod、验证修复是否已上环境，或说「部署一下」「发到测试环境」时使用。走 Jenkins/云效服务映射；未确认生产目标时不要直接部署 prod。
+description: 用户要触发构建部署、发版到 test/uat/prod、验证修复是否已上环境，或说「部署一下」「发到测试环境」时使用。走 Jenkins/云效/Flow 流水线服务映射；未确认生产目标时不要直接部署 prod。
 ---
+
+# cwork-deploy
+
 # Jenkins + 云效 构建部署
 
 ## 概述
 
 `deploy` 是构建部署触发技能，通过 curl 直连 **Jenkins REST API**（基本认证）或 **云效 AppStack OpenAPI**（`x-yunxiao-token` 认证），触发服务构建和部署，给开发/修复后验证提供部署能力。
 
-**双平台支持**：
+**三平台支持**：
 - **云效（yunxiao）**（默认）：大部分服务走云效 AppStack OpenAPI
 - **Jenkins**：`platform=jenkins` 明确标记的服务走 Jenkins REST API（如 device-hubble-server、omp-poly-center 等 omp 系服务）
+- **云效 Flow（flow）**：`platform=flow` 的服务走云效 Flow 流水线 OpenAPI（如 sre-agent：构建镜像 → 部署到函数计算 FC；构建+部署在同一条 run 内，分支固定在流水线配置，环境由 `runningConfig` 参数控制）
 - **平台路由**：`service-map.json` 中 `platform` 字段决定走哪个平台，未配置则走 `DEPLOY_DEFAULT_PLATFORM`（默认 yunxiao）
 
 **Jenkins 两种作业形态**：
@@ -90,7 +94,23 @@ API base: `https://{YX_DOMAIN}/oapi/v1/appstack/organizations/{YX_ORG_ID}`
 - `releaseWorkflowSn` + `releaseStageSn`：工作流阶段标识（配置在 `service-map.json` 的 `yxDeploy` 字段，格式 `workflowSn|stageSn`）
 - `sourceId`：分支名（传给 `params.sourceId`）
 
-**平台路由**：`service-map.json` 的 `platform` 字段 → `platform=jenkins` 走 Jenkins API，`yunxiao` 或未配置走云效 API
+**平台路由**：`service-map.json` 的 `platform` 字段 → `platform=jenkins` 走 Jenkins API，`platform=flow` 走 Flow 流水线 API，`yunxiao` 或未配置走云效 AppStack API
+
+### 云效 Flow OpenAPI（`x-yunxiao-token` 认证，与 AppStack 同一令牌）
+
+API base: `https://{YX_DOMAIN}/oapi/v1/flow/organizations/{YX_ORG_ID}`
+
+| API 端点 | 用途 | 关键参数 |
+|---|---|---|
+| `POST /pipelines/{pipelineId}/run` | 触发流水线运行 | `{"params":[{"key":"env","value":"test"}]}`（key 来自条目 `flowEnvKey`，默认 `env`） |
+| `GET /pipelines/{pipelineId}/runs?maxResults=20` | 查询运行状态（取目标 runId 的 `status`） | — |
+| `GET /pipelines?maxResults=100` | 列流水线（收录新服务查 ID） | — |
+
+**Flow 部署参数**：
+- `flowPipeline`：流水线 ID（数字，如 `5371489`）
+- `flowEnvKey`：环境参数名（默认 `env`，须是流水线 `runningConfig=true` 的全局参数）
+- 分支**固定在流水线配置**（`sources.repo_0.branch`），`deploy` 命令的 branch 参数仅展示/校验，不改流水线分支
+- `build`/`execute` 不适用（构建+部署在同一条 run 内），直接用 `deploy`
 
 **环境映射**（swimDeploy，Jenkins 专用）：
 
@@ -123,6 +143,7 @@ bash "$CWORK_HOME/skills/deploy/scripts/deploy.sh" deploy <appName> <env> <branc
 | `jobs` | 查看服务的作业名 | `deploy.sh jobs <appName>` |
 | `console` | 查看构建控制台日志（Jenkins，可传服务名） | `deploy.sh console <appName\|jobName> [buildNum]` |
 | `sync` | 从云效 AppStack 同步服务映射（全量或单应用，自动补 yxDeploy，**不含生产**） | `deploy.sh sync [appName] [--force]` |
+| `flow-pipelines` | 列出云效 Flow 流水线（收录 platform=flow 服务时查 pipelineId） | `deploy.sh flow-pipelines [关键字]` |
 
 > cwork-deploy **不依赖 MCP 注册**——`deploy.sh` 经 `curl` 直连 Jenkins REST API / 云效 AppStack OpenAPI，与 cwork-log 用 bash 直连阿里云同一性质。
 >
@@ -236,6 +257,13 @@ bash "$CWORK_HOME/skills/deploy/scripts/deploy.sh" deploy omp-shop test test    
 # 状态查询/控制台日志（直接传服务名，自动路由独立实例与文件夹作业路径）
 bash "$CWORK_HOME/skills/deploy/scripts/deploy.sh" status omp-shop
 bash "$CWORK_HOME/skills/deploy/scripts/deploy.sh" console omp-shop 2487
+
+# Flow 流水线部署（platform=flow，构建+部署一条 run，分支固定在流水线配置）
+bash "$CWORK_HOME/skills/deploy/scripts/deploy.sh" deploy sre-agent prod master
+# 输出: 平台=flow, 触发流水线 5371489 (env=prod)，轮询运行状态到终态
+
+# 列 Flow 流水线（收录新服务查 pipelineId）
+bash "$CWORK_HOME/skills/deploy/scripts/deploy.sh" flow-pipelines sre
 ```
 
 **鉴权失败排查**：
@@ -303,6 +331,28 @@ Jenkins 控制台：
 ```
 
 > 云效部署失败时输出 `执行结果：FAILURE`，脚本以非零退出码结束；超时提示到云效 AppStack 控制台手动检查。
+
+**Flow 输出**：
+```
+═══════════════════════════════════════════════════════════════
+【部署结果】
+═══════════════════════════════════════════════════════════════
+
+服务：sre-agent
+平台：flow（云效 Flow 流水线）
+环境：prod（参数 env）
+分支：master（固定在流水线配置）
+
+流水线：5371489，运行 ID：#5 (SUCCESS)
+
+流水线详情：
+  https://flow.aliyun.com/pipelines/5371489/current?log=run_5
+
+结论：
+- Flow 流水线执行成功，构建镜像 + 部署到函数计算 FC 完成
+- 可用 cwork-log 查 sre-agent 日志确认服务启动
+═══════════════════════════════════════════════════════════════
+```
 
 ---
 
@@ -374,6 +424,14 @@ Jenkins 控制台：
       "buildParam": "BRANCH_TAG",
       "jenkinsCred": "JENKINS_OMP",
       "serviceName": "OMP运营管理前端"
+    },
+    {
+      "appName": "sre-agent",
+      "gitProjectName": "sre-agent",
+      "platform": "flow",
+      "flowPipeline": "5371489",
+      "flowEnvKey": "env",
+      "serviceName": "SRE Agent（函数计算 FC）"
     }
   ]
 }
@@ -390,9 +448,11 @@ Jenkins 控制台：
 | `singleJob` | Jenkins | `true` = 单 job 模式（构建即发布），`deploy`/`build` 一步完成，`execute` 不适用 |
 | `buildParam` | Jenkins | 单 job 模式的分支参数名（默认 `BRANCH_TAG`，GitParameter） |
 | `jenkinsCred` | Jenkins | 独立 Jenkins 实例凭证前缀（如 `JENKINS_OMP`），对应 `.config.local.sh` 的 `<prefix>_URL/_USER/_PASS`；未配则用默认实例 |
-| `platform` | 全部 | 部署平台：`yunxiao`（默认）/ `jenkins` |
+| `platform` | 全部 | 部署平台：`yunxiao`（默认）/ `jenkins` / `flow`（Flow 流水线） |
 | `yxDeploy` | 云效 | 各环境工作流标识，格式 `workflowSn|stageSn` |
 | `yxBuild` | 云效 | 构建工作流标识，格式 `workflowSn|stageSn` |
+| `flowPipeline` | Flow | 云效 Flow 流水线 ID（数字）；收录方法：`deploy.sh flow-pipelines <关键字>` 查 ID 后手工加条目 |
+| `flowEnvKey` | Flow | 环境参数名（默认 `env`），须为流水线 `runningConfig=true` 的全局参数；分支固定在流水线配置，build/execute 不适用 |
 | `serviceName` | 全部 | 服务中文名（仅展示）；`sync` 自动收录的条目标记为 `[auto-sync]`，可随手改回真实中文名 |
 
 **映射过期处理**：`bash "$CWORK_HOME/skills/deploy/scripts/deploy.sh" sync` 全量重拉（AppStack 全部应用的 test/uat/dev 映射，默认只补缺失键、`--force` 让 API 值优先覆盖同名键）；`platform=jenkins` 条目跳过不覆盖（保护手工维护的 Jenkins 作业名）。
