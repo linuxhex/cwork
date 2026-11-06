@@ -65,6 +65,8 @@ cwork 内置了决策树式追问机制，分两种模式：
   （按需加载：需要时 Read `.cwork/refs/cwork-implement/SKILL.md` 获取完整指令，不常驻上下文）
 - /cwork-log — 用户要查日志、看链路、排查报错/超时/接口失败/慢请求/流量异常，或问「为什么挂了」「trace 哪断了」「这个错误从哪来」时使用。覆盖 SLS 与 ARMS 排查；拿证据优先，不要空猜根因。
   （按需加载：需要时 Read `.cwork/refs/cwork-log/SKILL.md` 获取完整指令，不常驻上下文）
+- /cwork-note — 个人工作台简报。Cute 启动或用户提到今日待办/资讯/知识沉淀/下班提醒/云效工时时使用。读取本地 Obsidian 知识库与 inbox 待办，输出终端样式今日简报；可把用户口述的知识与待办写入知识库；用户主动触发时检查云效需求/任务是否填写、今日预计工时是否满 8 小时。
+  （按需加载：需要时 Read `.cwork/refs/cwork-note/SKILL.md` 获取完整指令，不常驻上下文）
 - /cwork-requirement — 用户要查云效需求列表/详情、按日期筛需求，或实现前核对需求范围/关联变更时使用。只读 Projex；不要用本技能直接开工写代码（开工走 implement/do）。
   （按需加载：需要时 Read `.cwork/refs/cwork-requirement/SKILL.md` 获取完整指令，不常驻上下文）
 - /cwork-tech-writer — 由 cwork-article 在技术分享/开源/产品/教程/行业观察类内容时内部调用；用户直接点名「用技术布道者口吻写」「美团技术风」时也可触发。不要用于武侠小说或非技术软文。
