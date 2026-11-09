@@ -299,6 +299,7 @@ if 测试失败:
 ## HARD GATE
 
 - **执行器/脚本改动必须回源仓库双写**（`$CWORK_HOME/skills/test/`），禁止只 patch 安装副本——安装是整目录覆盖分发，副本 patch 下次分发即被冲掉；改完当场记一笔到 `skills/USAGE_NOTES.md`「未分析」区（静默，不打印）
+- **模式库引用（新增）**：遇到测试问题时，先查 `common/pattern-library.md` 反模式区（如 [P002] 盲试选择器），命中则直接采用解法，不重复踩坑
 - **Web**：环境未就绪（服务未启动）/ ego-browser 未安装，禁止执行测试
 - **小程序**：微信开发者工具未安装 / project.config.json 不存在 / miniprogram-automator 未安装，禁止执行
 - **安卓**：BlueStacks 5 未安装 / ADB 不可用 / `adb devices` 无在线设备 / 目标包未安装且无 APK 路径，禁止执行测试

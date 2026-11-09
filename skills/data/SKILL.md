@@ -45,6 +45,7 @@ description: 用户要查数仓/Doris 业务数据（订单/金额/库存/指标
 - **禁止无 WHERE 全表扫描**：每条 SELECT 必须带 WHERE 过滤（precheck 已机械拦截 `full_table_scan`，LIMIT 不豁免）；先 DESC 确认表结构，再补分区列/业务键条件 + LIMIT
 - 查询无结果，提示用户调整时间范围/表/条件，**不臆造数据**
 - 数据结论必须基于真实查询结果，**不猜**
+- **模式库引用（新增）**：遇到数据问题时，先查 `common/pattern-library.md` 反模式区，命中则直接采用解法，不重复踩坑
 - **paimon/Trino 表走 ego-lite 兜底，禁止在 Doris MCP 上硬试**：表全路径含 `oss_paimon`/`paimon` 或 query-server 报「请使用 Trino 引擎」/`Unknown catalog 'oss_paimon'` → **立刻切 `references/trino-paimon-fallback.md` 走 ego-lite 操作 uqp 页面**。命中后 **MCP 全部 7 个 tool 一律禁用**（`query_doris`/`get_query_count`/`specific_query`/`export_*`）——包括「探 specific_query 有没有 paimon 预定义模板」「试 get_query_count 看能不能绕」「换 tool 再试」等**伪探索**，这些全是换皮重试，浪费轮次。判定 paimon/Trino 一次即定，不翻案
 - **浏览器兜底一律遵守 ego-browser 硬约束**：唯一引擎 ego-browser，动手前 `Skill("ego-browser")`；禁止 Playwright/Puppeteer/装 Chromium；JS 包在 `ego-browser nodejs <<'EOF'` 内
 
