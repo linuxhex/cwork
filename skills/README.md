@@ -113,6 +113,13 @@ cwork-bug → cwork-commit
 - **implement**：逻辑推演为主；核心流程改动才跑单测
 - **bug**：修复必须写回归测试并跑通
 
+### 自改进机制（借鉴 Hermes Agent）
+
+- **任务结束自检**：implement/bug/do 收敛后自动输出「技能改进提议」（4 项自检：已知坑/重复动作/文档偏差/新反模式）
+- **模式库**：`common/pattern-library.md` 存储从实战提取的可复用模式/反模式
+- **学习循环**：`common/learning-loop.md` 定义完整的学习触发、知识提取、模式识别、记忆检索机制
+- **反馈闭环**：`common/feedback-loop.md` 每日分析时扫描模式库更新需求
+
 ---
 
 ## 四、安装与同步
@@ -138,7 +145,12 @@ node bin/cwork.js
 skills/
   <skill>/SKILL.md          # 技能主文档
   <skill>/scripts/          # 可执行脚本（若有）
-  common/                   # code-style / git-guard
+  common/                   # 共享规范
+    code-style.md           # 统一代码规范
+    git-guard.md            # 分支防护规则
+    feedback-loop.md        # 反馈闭环规范
+    learning-loop.md        # 自改进机制规范
+    pattern-library.md      # 模式库（反模式 + 可复用模式）
   README.md                 # 本文件
 AGENTS.md                   # Claude/Cursor 总述源
 bin/cwork.js                # 安装与分发

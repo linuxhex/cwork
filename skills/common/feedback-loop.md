@@ -6,6 +6,8 @@
 
 **问题背景（已实际发生）**：闭环静默化后，各 agent（Qoder/Claude/Cursor）实测会话中踩的坑不再自动回流 USAGE_NOTES——用户在 Qoder 里实测出的执行器缺陷、假通过、环境坑，源仓库毫不知情，直到用户手动说「看下反馈」才被发现。反馈必须主动收集，不能只等当场记录。
 
+**自改进机制（新增）**：任务结束时，implement/bug/do 技能会自动执行「技能改进自检」，输出改进提议。提议经用户确认后，当场改进或记入 USAGE_NOTES「未分析」区。详见 `common/learning-loop.md`。
+
 ## 记录（随时，静默）
 
 用任一 cwork 技能遇到值得优化/借鉴的问题（执行器缺陷/假通过/环境坑/可省步骤/索引过期），**当场**追加一行到 `skills/USAGE_NOTES.md`「未分析」区，格式 `- [YYYY-MM-DD] [skill] 现象 | 建议改法`，不向用户打印过程。能当场修的直接修源仓库文件。
@@ -24,6 +26,10 @@
    - 过滤：`rg -l -i 'cwork-|假通过|web-run|plan\.json|技能'` 命中的会话才细看
    - 提取：只抽**用户消息**中的反馈句（抱怨/质疑/「有问题」「慢」「不准」「优化下」），跳过技能内容粘贴、系统通知、会话续接摘要
    - 判定：能当场修的修技能源文件；确有长期价值的记入「经验沉淀」；一次性问题不记
-3. 改完在源仓库分发全局并提交（`node bin/cwork.js --project "$HOME" --tool claude --allow-home` + 各端分发命令），更新 `.last_analysis_date` 为今天。
+3. **模式库更新检查**（新增）：
+   - 扫描本次分析期间新增/修改的技能改进提议
+   - 有通用价值的模式 → 记入 `common/pattern-library.md`
+   - 已知坑的新变体 → 更新对应技能的 known-pits
+4. 改完在源仓库分发全局并提交（`node bin/cwork.js --project "$HOME" --tool claude --allow-home` + 各端分发命令），更新 `.last_analysis_date` 为今天。
 
 **一天只做一次**，避免反复打断。
