@@ -1,6 +1,6 @@
 ---
 name: cwork-bug
-version: 6cabbbe
+version: 7e8ed78
 description: 用户说修 bug、修缺陷、线上故障、测试挂了，或描述「期望 X 实际 Y」「这个接口/页面不对」且需要改代码时使用。问题没说清也先走本技能定位；不要当成新需求直接开 implement。
 ---
 
