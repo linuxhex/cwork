@@ -1,6 +1,6 @@
 ---
 name: cwork-implement
-version: 7e8ed78
+version: 9a77a5d
 description: 用户要做新需求、加功能、改业务逻辑、实现某能力，或说「做一下」「实现」「开发」且不是单纯修已有缺陷时使用。纯修 bug 用 cwork-bug；端到端目标收敛（部署+实测闭环）用 cwork-do；只查日志/配置/数据不要触发本技能。
 ---
 # cwork-implement
