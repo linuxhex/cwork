@@ -800,7 +800,7 @@ try:
     if isinstance(d, (int, float)):
         print('OK:' + str(int(d)))
     elif isinstance(d, dict) and 'errorCode' in d:
-        print('ERROR:' + str(d.get('errorMessage', d.get('errorCode')))
+        print('ERROR:' + str(d.get('errorMessage', d.get('errorCode'))))
     elif isinstance(d, dict) and 'pipelineRunId' in d:
         print('OK:' + str(d['pipelineRunId']))
     else:
