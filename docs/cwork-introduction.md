@@ -39,6 +39,14 @@ cwork 是一套面向多工程联动研发的自动化 workflow 技能体系，�
 - **cwork-image** — 本地工程/jar 打包 Docker 镜像 + push registry
 - **cwork-code** — 代码仓库只读查询 + clone/pull + codegraph 触发
 
+### 内容创作技能（产物不入仓库）
+
+- **cwork-article** — 公众号/头条文章写作：类型识别 → 信息补齐 → 标题 → 封面 → 配图 → inline-CSS 排版 → 直写编辑器草稿（按类型自动调用人格 skill）
+- **cwork-tech-express** — 科技速递：给定日期锚定 D/D-1/D-2 三日窗口 → 全球科技媒体检索 → 压缩分块（今日资讯/往日回顾）→ 趋势短评 + 速递观察 → 排版存公众号草稿
+- **cwork-tech-writer / cwork-wuxia-writer** — 内部人格 skill（技术布道者 / 金庸式武侠），由 cwork-article 调用，不单独对外暴露
+
+内容产物统一写入外置内容目录 `contentDir`（当前 `D:/zzz/articles`），规则见下文「内容产物目录」。
+
 ---
 
 ## 完整工作流程
@@ -227,6 +235,8 @@ node bin/cwork.js --uninstall --tool codex
 5. **每个工程独立记录**：从各自视角记录分析和改动
 6. **不需要编写测试用例**：用逻辑推演替代
 7. **implement 过程中禁止提交代码**：所有提交由 cwork-commit 统一处理
+8. **内容产物不入仓库**：文章/速递产物统一写外置 `contentDir`，不 `git add`、不提交；skill 文档与脚本不写死绝对路径
+9. **事实必须可溯源**：内容类技能禁止编造链接/数据/日期，未取得原文的条目标「据 xx 报道」，台账与成文一一对应
 
 ---
 
@@ -266,6 +276,24 @@ order-service 视角：主服务需要我提供订单数据，我需要新增 /o
 - `analysis.md` — 需求分析文档（从本工程视角），提交
 - `changes.md` — 改动简述，提交
 - `plan.md` — 实现计划，提交
+
+---
+
+## 内容产物目录（与仓库分离）
+
+内容型产物（文章档、科技速递期次档、正文 HTML、封面与配图、过程台账）**不落在仓库 `docs/` 下**，统一写入外置目录：
+
+| 项 | 值 |
+|------|------|
+| 工程级配置 | 仓库根 `cwork.content.json` 的 `contentDir`（当前 = `D:/zzz/articles`） |
+| 临时覆盖 | 环境变量 `CWORK_CONTENT_DIR` |
+| 解析优先级 | 用户当轮指定 > 环境变量 > 配置文件（工作区根，找不到回源 `$CWORK_HOME`）> 兜底 `<repo>/docs/articles`（兜底必须告知） |
+| 规则文件 | `skills/common/output-dir.md`（安装后为 `cwork-common/output-dir.md`） |
+| 目录结构 | `<contentDir>/<主题或系列>/[<子篇名或 YYYYMMDD>]/`，配图固定放其下 `images/` |
+
+速递期次档内容：`candidates.md`（核实台账）、`body.html`、`inject-fn.js`/`inject.js`、`images/00-cover.png|jpg`、`draft-report.json`。
+
+历史 `docs/articles/**`（124 个文件）已于 2026-11-13 整体迁至 `D:/zzz/articles/**`（逐文件 MD5 校验一致），并从 git 索引移除、`.gitignore` 排除 `/docs/articles/`。`docs/requirements/**` 属开发流程状态，仍留在仓库内。
 
 ---
 

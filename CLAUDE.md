@@ -41,43 +41,53 @@ cwork 内置了决策树式追问机制，分两种模式：
 2. 改动涉及**新页面或核心交互流程**（非纯样式微调、非纯数据字段增删、非纯后端接口对接）
 3. 用户确认需要跑测试（简短询问，回车跳过=不跑）
 
+
+## 全局内容产物目录（contentDir，对所有 skill 生效）
+- 所有**内容型产物**（公众号/头条文章档、科技速递期次档、正文 HTML、封面与配图、过程台账）统一写入外置目录，**不再落在仓库 `docs/` 下**；解析规则与目录结构见 `skills/common/output-dir.md`。
+- 工程级配置：仓库根 `cwork.content.json` 的 `contentDir`（当前 = `D:/zzz/articles`）；临时改指向用环境变量 `CWORK_CONTENT_DIR`。优先级：用户当轮指定 > 环境变量 > 配置文件 > 兜底 `<repo>/docs/articles`（兜底必须告知用户）。
+- 硬约束：**禁止在 skill 文档、脚本注释、命令示例里写死绝对路径**，一律用 `$CONTENT_DIR/...` 或 `<内容目录>/...` 占位；写入前回显一次实际落点；外置产物不入 git，不 `git add`、不提交。
+- 例外（不动）：`docs/requirements/**` 是开发流程状态（需求目录、`workflow-state.json`、测试 `plan.json/result.json`、`tech-design.md`），仍留在仓库内走原有相对路径；`docs/cwork-introduction.md` 是仓库文档，同样不动。
+- 历史迁移：`docs/articles/**` 已于 2026-11-13 整体迁至 `D:/zzz/articles/**` 并从 git 移除；任何旧文档、记忆、脚本注释里读到 `docs/articles/...` 都按新位置解析。
+
 ## 技能清单
 
-- /cwork-article — 微信公众号文章写作助手。自动识别文章类型，补充必要信息（开源地址/GitHub star/系统地址等），生成吸引人的标题，提供精美排版（含 CSS 样式模板），用 ImageGen 强制生成封面图，为文章生成配图（系统真实截图 或 设计图）并嵌入正文，直接写入公众号编辑器。适用于：技术分享、开源项目介绍、产品推广、教程指南、行业观察、故事/小说（武侠）。内容创作按文章类型自动调用人格 skill（cwork-tech-writer 技术布道者 / cwork-wuxia-writer 金庸式武侠）。
+- /cwork-article — article
   （按需加载：需要时 Read `.cwork/refs/cwork-article/SKILL.md` 获取完整指令，不常驻上下文）
-- /cwork-bug — 快速修复 bug。问题明确时直接修复，问题不明确时先沟通定位（可调用 cwork-log 查日志），然后修复 + 验证 + 提交。适用于：修复线上 bug、修复测试问题、修复代码缺陷。
+- /cwork-bug — bug
   （按需加载：需要时 Read `.cwork/refs/cwork-bug/SKILL.md` 获取完整指令，不常驻上下文）
-- /cwork-code — 代码仓库只读查询 + clone/pull + codegraph 触发，支持 CodeUp（主平台）+ GitLab（前端 fallback），优先使用 codegraph 索引查找代码
+- /cwork-code — code
   （按需加载：需要时 Read `.cwork/refs/cwork-code/SKILL.md` 获取完整指令，不常驻上下文）
-- /cwork-commit — 推演收敛后自动提交所有服务工程，不确认
+- /cwork-commit — commit
   （按需加载：需要时 Read `.cwork/refs/cwork-commit/SKILL.md` 获取完整指令，不常驻上下文）
-- /cwork-config — Nacos 配置只读查询，对话式查多环境(dev/test/uat/prod)的 Nacos 配置内容/清单/差异，排查问题时核对某服务某环境的配置真值（开关/阈值/地址/参数）
+- /cwork-config — config
   （按需加载：需要时 Read `.cwork/refs/cwork-config/SKILL.md` 获取完整指令，不常驻上下文）
-- /cwork-data — 数仓数据查询，对话式查 Doris 数仓（internal/hive/JDBC catalog）跑只读 SQL 查业务数据/表结构/指标/数据量，自带 SQL 前置校验，排查问题时核对订单/金额/库存/数据量佐证根因
+- /cwork-data — data
   （按需加载：需要时 Read `.cwork/refs/cwork-data/SKILL.md` 获取完整指令，不常驻上下文）
-- /cwork-deploy — Jenkins + 云效构建部署触发，通过 curl 直连 Jenkins REST API 或云效 AppStack OpenAPI 触发服务构建和部署，支持 dev/test/uat/prod 多环境，自带服务名→作业映射（168 个服务，持续 sync 更新）+ 双平台自动路由 + 独立 Jenkins 实例路由 + 单 job 前端部署模式，排查问题时快速部署验证修复
+- /cwork-deploy — deploy
   （按需加载：需要时 Read `.cwork/refs/cwork-deploy/SKILL.md` 获取完整指令，不常驻上下文）
-- /cwork-do — 目标驱动的自主工作流。深度追问确认目标并固化验收标准后，迭代循环「实现/修复 → 部署 → 实测验证 → 收敛评估」不断逼近目标，测试结果 + 理论评估双证据收敛后才提交代码。适用于：独立完成需求开发、bug 修复并部署验证收敛。
+- /cwork-do — do
   （按需加载：需要时 Read `.cwork/refs/cwork-do/SKILL.md` 获取完整指令，不常驻上下文）
-- /cwork-doc — 根据代码改动生成技术方案文档（两种模式：已有需求文档 / 对话式需求分析）
+- /cwork-doc — doc
   （按需加载：需要时 Read `.cwork/refs/cwork-doc/SKILL.md` 获取完整指令，不常驻上下文）
-- /cwork-graf — Grafana 监控数据只读查询，对话式查 K8S 节点/容器/应用/JVM/数据库/业务监控面板，支持 64 个仪表盘按分类检索、面板数据查询、PromQL 即时查询，排查问题时核对资源使用率/性能指标/业务数据佐证根因
+- /cwork-graf — graf
   （按需加载：需要时 Read `.cwork/refs/cwork-graf/SKILL.md` 获取完整指令，不常驻上下文）
-- /cwork-image — 本地工程/jar 打包 Docker 镜像 + push registry + 服务端拉起运行
+- /cwork-image — image
   （按需加载：需要时 Read `.cwork/refs/cwork-image/SKILL.md` 获取完整指令，不常驻上下文）
-- /cwork-implement — 需求分析（对话式）+ 编写计划 + 执行计划 + 推演收敛
+- /cwork-implement — implement
   （按需加载：需要时 Read `.cwork/refs/cwork-implement/SKILL.md` 获取完整指令，不常驻上下文）
-- /cwork-init — 对话式初始化，自动查找工程路径，多服务分支切换
+- /cwork-init — init
   （按需加载：需要时 Read `.cwork/refs/cwork-init/SKILL.md` 获取完整指令，不常驻上下文）
-- /cwork-log — 找日志分析问题。查 SLS 日志 + ARMS 链路，定位问题根因。适用于：问题排查、性能分析、流量分析、链路追踪。
+- /cwork-log — log
   （按需加载：需要时 Read `.cwork/refs/cwork-log/SKILL.md` 获取完整指令，不常驻上下文）
-- /cwork-requirement — 云效需求只读查询，对话式查云效 Projex 项目需求列表/详情/按日期筛选，实现前核对需求范围、关联变更
+- /cwork-requirement — requirement
   （按需加载：需要时 Read `.cwork/refs/cwork-requirement/SKILL.md` 获取完整指令，不常驻上下文）
-- /cwork-tech-writer — 科技技术分享高手人格。承接 cwork-article 流程层，用资深技术布道者的思维框架、语言风格、写作套路创作技术分享/开源项目/产品推广/教程/行业观察类内容。适用于：技术原理、架构设计、最佳实践、开源介绍、产品解读。
+- /cwork-tech-express — tech-express
+  （按需加载：需要时 Read `.cwork/refs/cwork-tech-express/SKILL.md` 获取完整指令，不常驻上下文）
+- /cwork-tech-writer — tech-writer
   （按需加载：需要时 Read `.cwork/refs/cwork-tech-writer/SKILL.md` 获取完整指令，不常驻上下文）
-- /cwork-test — 页面自动化测试，自动识别 Web/小程序项目，分别走 ego-browser 或 miniprogram-automator 链路
+- /cwork-test — test
   （按需加载：需要时 Read `.cwork/refs/cwork-test/SKILL.md` 获取完整指令，不常驻上下文）
-- /cwork-wuxia-writer — 金庸式武侠写作人格。承接 cwork-article 流程层，用承金庸一脉的思维框架、语言风格、写作套路创作章回体、半文半白、侠义精神的武侠故事/小说。适用于：武侠小说、江湖短篇、章回体叙事。
+- /cwork-wuxia-writer — wuxia-writer
   （按需加载：需要时 Read `.cwork/refs/cwork-wuxia-writer/SKILL.md` 获取完整指令，不常驻上下文）
 
 ## 技能文件位置

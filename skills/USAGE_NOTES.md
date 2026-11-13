@@ -19,7 +19,6 @@
 - [test] 登录/路由跳转判据必须确定性 URL 断言（waitForUrl/assertUrl），waitForNetworkIdle 永不作跳转完成判据；assertVisible 在登录页误判高发
 - [test] 「断言必须可证伪」比「断言存在」更重要——凑数等待/凑数断言会盖住完整失败证据链产生假通过
 - [test] 异步渲染组件（element-ui nextTick 面板等）禁止同步 count，必须轮询可见性；三个「瞬态失败」常共用一条根因链，机械校验收紧比文档约束可靠
-- [test] 执行器改动必须回源仓库双写，安装副本 patch 会被下次分发冲掉（rmSync 整目录覆盖，源仓库为权威）
 - [test] selector 含双引号时 JSON.stringify 嵌模板字符串会被二次解义，需 tmplSel() 转义；js() 对复杂 JSON 表达式返回 null，取复杂结构走 cdp returnByValue
 - [test] ego 任务空间是隔离浏览上下文、进程结束会话销毁，「继承用户登录态」不成立，场景 1 必须真实登录
 - [test] 小程序 MCP 网络监控劫持 wx.request 污染业务响应；automator Connection.send 无超时会永久挂起，导航统一 evaluate_script，MCP 配置强制 timeout
@@ -35,4 +34,5 @@
 - [code] clone 禁 --single-branch（后续分支上游异常）
 - [article] keyboard.paste 走 macOS 原生 cmd+v，浏览器非 OS 前台时静默失败，脚本前先 osascript 置前台；发表类按钮禁 JS click，按全文本精确匹配+坐标点击
 - [通用] bash 变量名后紧跟全角字符被吞进变量名，一律 `${var}`；成功返回 list 的 API 对它调 .get 会崩
-- [通用] 分发链四端（claude/qoder/cursor/trae）+ 全局副本各走各的命令，漏一端就分叉；改完源立即 commit 防工作区被外部恢复
+- [通用] 源仓库为唯一权威：安装副本与分发四端（qoder/claude/cursor/trae）各有命令，改完源必须同步并用 Get-FileHash 复核（installCommonFiles 走 rmSync 整目录覆盖，只 patch 安装副本会被下次分发冲掉），并立即 commit 防工作区被外部恢复
+- [通用] 内容产物外置到 contentDir（仓库根 cwork.content.json）：该配置必须**纯 ASCII**——PowerShell 5.1 把 UTF-8 按 GBK 读会让 ConvertFrom-Json 报「字符串未终止」，而异常被条件表达式吞掉后**静默回落到兜底路径**，产物看起来像丢文件；改完配置必实跑一次解析片段确认落点

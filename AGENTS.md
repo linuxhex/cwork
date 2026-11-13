@@ -41,3 +41,10 @@ cwork 内置了决策树式追问机制，分两种模式：
 2. 改动涉及**新页面或核心交互流程**（非纯样式微调、非纯数据字段增删、非纯后端接口对接）
 3. 用户确认需要跑测试（简短询问，回车跳过=不跑）
 <!-- cwork-skills:end -->
+
+## 全局内容产物目录（contentDir，对所有 skill 生效）
+- 所有**内容型产物**（公众号/头条文章档、科技速递期次档、正文 HTML、封面与配图、过程台账）统一写入外置目录，**不再落在仓库 `docs/` 下**；解析规则与目录结构见 `skills/common/output-dir.md`。
+- 工程级配置：仓库根 `cwork.content.json` 的 `contentDir`（当前 = `D:/zzz/articles`）；临时改指向用环境变量 `CWORK_CONTENT_DIR`。优先级：用户当轮指定 > 环境变量 > 配置文件 > 兜底 `<repo>/docs/articles`（兜底必须告知用户）。
+- 硬约束：**禁止在 skill 文档、脚本注释、命令示例里写死绝对路径**，一律用 `$CONTENT_DIR/...` 或 `<内容目录>/...` 占位；写入前回显一次实际落点；外置产物不入 git，不 `git add`、不提交。
+- 例外（不动）：`docs/requirements/**` 是开发流程状态（需求目录、`workflow-state.json`、测试 `plan.json/result.json`、`tech-design.md`），仍留在仓库内走原有相对路径；`docs/cwork-introduction.md` 是仓库文档，同样不动。
+- 历史迁移：`docs/articles/**` 已于 2026-11-13 整体迁至 `D:/zzz/articles/**` 并从 git 移除；任何旧文档、记忆、脚本注释里读到 `docs/articles/...` 都按新位置解析。

@@ -65,6 +65,7 @@ cwork-bug       → 快速修复 bug（定位 → 修复 → 验证 → 提交�
 cwork-test      → 页面自动化测试（Web / 小程序自动识别，条件触发）
 cwork-commit    → 统一提交所有工程（分支一致性校验 + commit + push）
 cwork-article   → 微信公众号文章写作（排版/封面/配图/直写编辑器）
+cwork-tech-express → 科技速递（给定日期锚定三日窗口 → 全球科技媒体检索 → 压缩分块 → 趋势评论 → 公众号草稿）
 ```
 
 **研发现场技能（排查与佐证）**
@@ -247,6 +248,20 @@ node bin/cwork.js --check
 
 依赖工程在 `docs/requirements/{requirement_key}/{service_name}/` 下有各自独立的一份。
 
+### 内容产物目录（与仓库分离）
+
+内容型产物（文章档、科技速递期次档、正文 HTML、封面与配图、过程台账）**不写在仓库里**，统一写入外置内容目录：
+
+| 项 | 值 |
+|------|------|
+| 工程级配置 | 仓库根 `cwork.content.json` 的 `contentDir`（当前 = `D:/zzz/articles`） |
+| 临时覆盖 | 环境变量 `CWORK_CONTENT_DIR` |
+| 解析优先级 | 用户当轮指定 > 环境变量 > 配置文件（工作区根，找不到回源 `$CWORK_HOME`）> 兜底 `<repo>/docs/articles`（兜底必须告知） |
+| 规则文件 | `skills/common/output-dir.md`（安装后为 `cwork-common/output-dir.md`），含命令片段与目录结构 |
+| 目录结构 | `<contentDir>/<主题或系列>/[<子篇名或 YYYYMMDD>]/`，配图固定放其下 `images/` |
+
+历史 `docs/articles/**`（共 124 个文件）已于 2026-11-13 整体迁至 `D:/zzz/articles/**`，并从 git 索引移除、`.gitignore` 排除 `/docs/articles/`（历史提交仍可查）。`docs/requirements/**` 属开发流程状态，仍留在仓库内，不受此设置影响。
+
 ## 关键规则
 
 1. **需求分析必须完成**：未获得用户批准前不会执行实现
@@ -255,6 +270,7 @@ node bin/cwork.js --check
 4. **每个工程独立记录**：从各自视角记录分析和改动
 5. **implement 过程中禁止提交代码**：所有提交由 cwork-commit 统一处理
 6. **git 安全护栏**：upstream 只能指向 `origin/<同名分支>`，禁止裸 push/pull
+7. **内容产物外置**：文章/速递产物写 `contentDir`（见上表），不入库不提交；skill 文档与脚本不写死绝对路径，统一用 `$CONTENT_DIR/...` 占位
 
 ## 适用场景
 

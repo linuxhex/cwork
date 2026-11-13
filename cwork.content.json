@@ -1,0 +1,8 @@
+{
+  "contentDir": "D:/zzz/articles",
+  "legacyContentDir": "docs/articles",
+  "migratedAt": "2026-11-13",
+  "envOverride": "CWORK_CONTENT_DIR",
+  "scope": "content artifacts only (articles, tech-express issues, covers, figures, ledgers); docs/requirements stays in repo",
+  "rules": "see skills/common/output-dir.md"
+}

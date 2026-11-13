@@ -41,3 +41,10 @@ skills/deploy/scripts/service-map.json
 
 # cwork-article 生成的本地图片产物
 vibe_images/
+
+# Python 语法检查/运行产物（勿提交，且会被 install 整目录拷进 ~/.qoder/skills）
+__pycache__/
+*.pyc
+
+# 内容型产物已外置到 cwork.content.json 的 contentDir（当前 D:/zzz/articles），仓库不再跟踪
+/docs/articles/

@@ -37,6 +37,18 @@ description: 微信公众号与今日头条文章写作助手。自动识别文�
 
 ---
 
+## 产物目录（全局 contentDir，强制）
+
+本 skill 的所有内容产物（文章档、正文 HTML、封面与配图、台账）**不再落在仓库 `docs/` 下**，统一写入外置内容目录。解析规则与命令片段见共享规范 **`cwork-common/output-dir.md`**（仓库内源文件 `skills/common/output-dir.md`）：
+
+1. **优先级**：用户当轮指定 > 环境变量 `CWORK_CONTENT_DIR` > 仓库根 `cwork.content.json` 的 `contentDir`（当前 = `D:/zzz/articles`）> 兜底 `<repo>/docs/articles`（兜底必须告知用户）。
+2. **开工即解析一次**（阶段 1 识别完文章类型、尚未写文件前），把结果存为 `$CONTENT_DIR` 并**回显一行**（如「产物目录：D:/zzz/articles/<主题>」），全程复用，不得一半写外置一半写仓库。
+3. **目录结构**：`<$CONTENT_DIR>/<文章主题或系列名>/[<子篇名>]/`，配图固定放其下 `images/`，正文引用相对路径 `images/xx.png`；目录已存在即视为更新同一篇草稿，不新建第二份。
+4. **禁写死绝对路径**：本文档与命令示例一律用 `$CONTENT_DIR/...` 或 `<内容目录>/...` 占位，只在真正跑命令时展开。
+5. **外置产物不入 git**：不 `git add`、不随代码提交；历史 `docs/articles/**` 已于 2026-11-13 迁至 `D:/zzz/articles/**`，读到旧路径改按新位置解析。
+
+---
+
 ## 阶段 0：人格选择（内容创作基调）
 
 根据文章类型自动加载对应「人格 skill」，**只决定「写什么、怎么组织、什么口吻」**——**不决定最终交付格式**。最终正文必须是公众号可写的 **HTML + inline CSS**（阶段 6 排版规范），封面图/配图/写入编辑器仍由本 skill 完成。
@@ -459,7 +471,7 @@ Mood: insightful, forward-looking, authoritative.
    - 登录 mp.weixin.qq.com
    - 设置与开发 → 公众号设置 → 账号详情
    - 下载二维码图片
-3. 保存到文章目录：docs/articles/{文章主题}/images/qr-code.jpg
+3. 保存到文章目录：$CONTENT_DIR/{文章主题}/images/qr-code.jpg（contentDir 解析见「产物目录」节）
 4. 写入编辑器时插入到吸粉文案下方
 ```
 

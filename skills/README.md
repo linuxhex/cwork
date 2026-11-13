@@ -35,9 +35,23 @@ cwork-code       → 代码仓库只读查询 + clone/pull（CodeUp 主平台 + 
 cwork-requirement → 云效需求只读查询（需求列表/详情/深度分析）
 cwork-image      → 本地工程/jar 打 Docker 镜像 + push registry + 服务端拉起
 cwork-article    → 微信公众号文章写作（封面图 + 排版 + 写入编辑器，按类型调用人格 skill）
+cwork-tech-express → 科技速递（给定日期锚定三天窗口 → 全球科技媒体检索 → 压缩分块 → 趋势评论 → 来源链接 → 公众号草稿）
 cwork-tech-writer → 科技技术分享高手人格（技术布道者口吻，由 article 调用）
 cwork-wuxia-writer → 金庸式武侠写作人格（章回体半文半白，由 article 调用）
 ```
+
+### 全局内容产物目录（contentDir，对所有 skill 生效）
+
+内容型产物（文章档、科技速递期次档、正文 HTML、封面与配图、过程台账）**不写在仓库 `docs/` 下**，统一写外置目录：
+
+| 项 | 值 |
+|----|----|
+| 工程级配置 | 仓库根 `cwork.content.json` 的 `contentDir`（当前 = `D:/zzz/articles`） |
+| 临时覆盖 | 环境变量 `CWORK_CONTENT_DIR`（与 `CWORK_HOME` 同一套机制） |
+| 解析优先级 | 用户当轮指定 > 环境变量 > 配置文件 > 兜底 `<repo>/docs/articles`（兜底必须告知） |
+| 规范文件 | `skills/common/output-dir.md`（安装后为 `cwork-common/output-dir.md`），含命令片段与目录结构 |
+| 铁律 | 文档/脚本不写死绝对路径（用 `$CONTENT_DIR/...`）；写入前回显落点；外置产物不入 git |
+| 例外 | `docs/requirements/**`（需求目录、`workflow-state.json`、测试 `plan.json/result.json`、`tech-design.md`）属开发流程状态，仍留仓库 |
 
 ---
 
@@ -684,6 +698,36 @@ bash deploy.sh list [关键字]
 
 ---
 
+### 3.16 cwork-tech-express
+
+**作用**：科技速递。把一个三天时间窗口的全球科技消息压成一篇公众号日更简报并存草稿。
+
+**日期锚定**：用户给日期就以该日为「当日 D」（支持 `2026-11-11`/`11.11`/`昨天`），未给则取系统当天；固定窗口 D（今日资讯）+ D-1、D-2（往日回顾），统一按北京时间，检索式必须带绝对日期。
+
+**流程**（7 阶段）：日期锚定 → 采集（领域×语言矩阵检索，候选 25-40 条落 `candidates.md`）→ 压缩（每条：标题 + 60-110 字正文 + 一行关系链）→ 分块（今日 5-8 条 / 往日 6-10 条，带日期徽标与领域标签）→ 评论（条目短评 ≤45 字 + 文末「速递观察」按民生/市场/资本/进出口与经济层面/舆论层面）→ 排版（HTML+inline CSS + ImageGen 封面）→ 写入公众号草稿并复验。
+
+**交付默认走工作台自带浏览器**（browser-use MCP）：navigate_page 拿 token → wait_for 编辑器 → evaluate_script 填标题 → evaluate_script 执行 `inject-fn.js`（函数声明版 base64 注入）→ take_snapshot+click 存草稿 → 同 appmsgid 重开复验 → Write `draft-report.json`。逐步细则、页内 JS 片段、失败手册见 `skills/tech-express/deliver.md`。
+
+**脚本**（`skills/tech-express/scripts/`）：
+- `build-inject.cjs` — `body.html` → `inject-fn.js`（箭头函数版，自带浏览器 evaluate_script 用）+ `inject.js`（IIFE 版，备用 Playwright 用），自动剔 BOM，并打印 CJK 字数、残留插图标记、class 误用数
+- `wechat_draft.py` — 备用链路（自带浏览器不可用时）：持久化 profile 扫码一次 → 填标题 → 注入正文 → 存草稿 → 重载复验；`--appmsgid` 原地修复
+- `make-cover.ps1` — 封面 png → 1280 宽 jpg（质量 88），清微信封面 ~2MB 限制（须存为带 BOM 的 UTF-8）
+
+**产物目录**：`$CONTENT_DIR/tech-express/<YYYYMMDD>/`（外置内容目录，解析见 `skills/common/output-dir.md`；历史 `docs/articles/**` 已迁至 `D:/zzz/articles/**`）
+
+**核心原则**：
+- 禁止编造链接/数据/日期，`WebFetch` 开过原文才算「已核实」，付费墙只用摘要并写「据 xx 报道」
+- 发布时间未核实的条目不得写进「今日资讯」；与上期查重，往日条目不重复
+- 评论必须能被事实支撑，不构成投资建议，不预测股价
+- 封面槽需真实手势 → 自带浏览器试一次 `upload_file`，不成即交用户手动；正文靠 base64 注入链（evaluate_script 传函数声明版），不走手写 JS 字面量
+- **署名与原创口径**：笔名固定「日新」，首屏必写「本文为公开报道的编辑整理与独立分析…文｜日新」；原创可点（正文自主压缩 + 每条标来源 + 独立评论），但**「声明原创」开关两条链路都不代点**（细则见 `template.md` 第五节）
+- **口径偏差要显式记录**：CJK 超 1500-2200 需用户明确豁免；时区换算把 D-1 美东下午的事划进今日块后，往日海外占比不足属正常 —— 两者均记进 `candidates.md`（「定稿口径」/「已知偏差」），不塞旧闻凑占比、不静默超标；被配额挤掉的已核实候选降格写进观察卡并标「（未单列）」
+- **交付前先探能力**（`deliver.md` A0）：`list_pages` 报 `tool not found` 且另一无关 MCP 同错 = 本会话 MCP 未注册（面板好坏无关），不穷举命名变体，直接降级备用链路；备用脚本已修两个时序坑（登录轮询扫全标签页 + 定时重拉首页；appmsgid 取空从 URL 回填，**严禁重跑注入新建草稿**）
+
+**注意**：cwork-tech-express 是独立内容工具（和 article 同级），不进 init→implement→commit 自动衔接链。需在 `bin/cwork.js` 白名单加 `'tech-express'`（当前安装器为目录自动发现，无需改白名单）。
+
+---
+
 ## 四、文件结构
 
 ### 产物
@@ -778,3 +822,4 @@ cp -r cwork/skills/* ~/.qoder/skills/
 - `/cwork-requirement`
 - `/cwork-image`
 - `/cwork-article`
+- `/cwork-tech-express`
