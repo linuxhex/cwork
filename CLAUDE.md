@@ -51,6 +51,8 @@ cwork 内置了决策树式追问机制，分两种模式：
 
 ## 技能清单
 
+- /cwork-agent-workshop — Agent 工坊。追踪 GitHub 等一手来源最新的 Agent 架构（多 Agent 编排、记忆、工具调用、MCP/A2A）、harness（评测脚手架与基准：SWE-bench、Terminal-Bench、GAIA、OSWorld 等）与 skill（技能包规范与生态）三类主题，选定一个主对象做源码级拆解与可复现的案例实践，按证据等级（L0 文档 / L1 源码 / L2 本地跑通 / L3 基准实测）区分「我实测」与「他人公开数据」，输出一篇公众号软文（能力特性 → 场景价值），含排版、封面，并写入公众号草稿。适用于：agent 架构解读、harness/基准拆解、skill 生态观察、开源 agent 项目推荐、AI 工程趋势软文。
+  （按需加载：需要时 Read `.cwork/refs/cwork-agent-workshop/SKILL.md` 获取完整指令，不常驻上下文）
 - /cwork-article — article
   （按需加载：需要时 Read `.cwork/refs/cwork-article/SKILL.md` 获取完整指令，不常驻上下文）
 - /cwork-bug — bug

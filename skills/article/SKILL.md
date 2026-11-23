@@ -1,7 +1,7 @@
 ---
 name: cwork-article
 lazy: true
-description: 微信公众号与今日头条文章写作助手。自动识别文章类型，补充必要信息（开源地址/GitHub star/系统地址等），生成吸引人的标题，提供精美排版（含 CSS 样式模板），强制生成封面图（尺寸按形态区分：图文 2560x1080 横版、贴图与页面图同规格竖版；概念插画用 ImageGen，大字报 = ImageGen 无文字纸底 + HTML 叠中文大字 + 本地 Chrome 渲染），为文章生成配图（系统真实截图 或 设计图）并嵌入正文，直接写入公众号编辑器，支持同时发布到今日头条。每次执行先与用户确认发布形态：图文文章 或 贴图（多图图文贴，封面图排第一张，含图片上传/排序/换封面/标题描述/保存草稿）。适用于：技术分享、开源项目介绍、产品推广、教程指南、行业观察、故事/小说（武侠）。内容创作按文章类型自动调用人格 skill（cwork-tech-writer 技术布道者 / cwork-wuxia-writer 金庸式武侠）。
+description: 微信公众号与今日头条文章写作助手。自动识别文章类型，补充必要信息（开源地址/GitHub star/系统地址等），生成吸引人的标题，提供精美排版（含 CSS 样式模板），强制生成封面图（尺寸按形态区分：图文 2560x1080 横版、贴图与页面图同规格竖版；概念插画用 ImageGen，大字报 = ImageGen 无文字纸底 + HTML 叠中文大字 + 本地 Chrome 渲染），为文章生成配图（系统真实截图 或 设计图）并嵌入正文，直接写入公众号编辑器，支持同时发布到今日头条。每次执行先与用户确认发布形态：公众号侧 图文文章 或 贴图（多图图文贴，封面图排第一张，含图片上传/排序/换封面/标题描述/保存草稿）；头条侧 文章 或 微头条（无标题无封面字段，正文+最多 18 图，含扫码登录二维码续期、逐张上传后必须点面板「确定」、存草稿后重载验图、首发声明确认）。适用于：技术分享、开源项目介绍、产品推广、教程指南、行业观察、故事/小说（武侠）。内容创作按文章类型自动调用人格 skill（cwork-tech-writer 技术布道者 / cwork-wuxia-writer 金庸式武侠）。
 ---
 
 # 微信公众号与今日头条文章写作助手
@@ -24,11 +24,11 @@ description: 微信公众号与今日头条文章写作助手。自动识别文�
 7. **文中配图生成（强制）** — 有可访问系统则截取真实页面截图；无系统则生成设计图，禁止纯文字无图文章
 8. **直接写入编辑器** — 通过内置浏览器直接写入公众号图文编辑器并保存草稿
 9. **贴图草稿发布** — 成稿渲染为多张页面图，封面图排第一张，上传到公众号「贴图」草稿（封面 + 页面图排序 + 标题 + 描述）
-10. **多平台发布** — 支持同时发布到微信公众号和今日头条（可选）
+10. **多平台发布** — 支持同时发布到微信公众号和今日头条（可选；头条侧再分「文章 / 微头条」两种形态）
 
 **工作流程（图文文章）**：
 ```
-发布形态确认 → 文章类型识别 → 必要信息追问（含系统地址） → 标题生成 → 封面图生成（强制，先选风格） → 文中配图生成（系统截图 或 设计图） → 内容撰写（含排版+嵌入配图） → 写入编辑器 → 保存草稿 → [可选] 发布到头条
+发布形态确认（公众号：图文/贴图；头条：文章/微头条） → 文章类型识别 → 必要信息追问（含系统地址） → 标题生成 → 封面图生成（强制，先选风格） → 文中配图生成（系统截图 或 设计图） → 内容撰写（含排版+嵌入配图） → 写入编辑器 → 保存草稿 → [可选] 发布到头条
 ```
 
 **工作流程（贴图）**：
@@ -1228,7 +1228,34 @@ desc.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertTe
 
 **当用户要求同时发布到今日头条时，执行此阶段。**
 
-### 头条发布流程
+### 9.0 先确认头条发布形态（必问，不可默认）
+
+| 形态 | 页面 | 结构 | 本 skill 对应 |
+|------|------|------|--------------|
+| **文章** | `/profile_v4/graphic/publish` | 标题（2-30 字）+ 长正文 + 强制封面图 | 下方 9.1~9.5 |
+| **微头条** | `/profile_v4/weitoutiao/publish` | 无标题、无封面字段，正文 + 最多 18 张图 | 见「9B 微头条发布」 |
+
+- 用户说「发微头条 / 发头条动态」→ 走 9B；说「发文章 / 发文」→ 走 9.1~9.5；只说「发头条」→ 问一句形态。
+- 与公众号侧同理：**每轮开工先确认形态，两侧的形态选择是独立的两问**（公众号图文/贴图、头条文章/微头条）。
+- 内容压缩口径：微头条没有独立标题位，文章标题要并进正文第一行；长文压到 500-800 字，保留主线冲突、复盘要点与免责说明。
+
+### 9.1 登录（两种形态共用）
+
+```
+URL: https://mp.toutiao.com/auth/page/login?redirect_url=<编码后的目标路径>
+未登录访问 publish 页会自动跳转此处，登录方式：今日头条 App 扫码。
+
+⚠️ 二维码约 60 秒过期，必须做续期，否则用户每次点开都是废码：
+- 过期标志：<p class="web-login-scan-desc"> 文本变成「二维码已失效点击刷新」
+- 刷新入口：同级的 span.web-login-scan-desc__btn（cursor:pointer）
+- 有效手法：对该 span 依次派发 mousedown / mouseup / click 三个 MouseEvent
+  （点 <p> 本身、点父容器都无效；实测点 span 后 img[src^=data:] 的 base64 会变）
+- 常驻续期：在页面里 setInterval 每 3 秒执行一次上面的检测+刷新，
+  因为 evaluate_script 单次调用 15 秒超时，写自轮询 await 循环等不到跳转
+- 登录成功判据：URL 不再是 auth/page/login，且 publish 页出现编辑器
+```
+
+### 9.2 头条文章发布流程
 
 ```
 1. 登录头条创作者后台
@@ -1255,10 +1282,9 @@ desc.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertTe
    - 封面图选项：单图 / 三图 / 无封面
    - 推荐选择"单图"
    - 上传区域：.article-cover-add 按钮
-   - ⚠️ 浏览器安全限制：无法自动上传文件，需用户手动操作
-     - 点击"单图"选项
-     - 点击上传按钮
-     - 选择本地封面图文件上传
+   - 上传手法：**先按 9B.3 的本地上传循环试自动上传**（点「图片/封面」入口 → take_snapshot 取
+     input[type=file] 的 uid → upload_file）。微头条侧已实测自动化可行，文章侧不必一上来就甩给用户手动。
+   - 仅在弹窗为原生文件选择器、拿不到 input[type=file] 节点时，才降级为提示用户手动选文件
 
 5. 发布
    - 点击"预览并发布"按钮
@@ -1267,17 +1293,18 @@ desc.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertTe
 
 ### 头条与公众号的差异
 
-| 项目 | 公众号 | 头条 |
-|------|--------|------|
-| 标题长度 | 最多 64 字 | 最多 30 字 |
-| 封面图 | 可选（建议上传） | 强制（必须上传） |
-| 正文格式 | HTML + inline CSS | HTML + inline CSS（相同） |
-| 编辑器 | ProseMirror | contenteditable div |
-| 发布方式 | 保存草稿 / 群发 | 预览并发布 |
-| 错别字检测 | 无 | 有（自动检测） |
-| 首发声明 | 无 | 有（头条首发，72小时独占） |
-| 广告投放 | 无 | 有（投放广告赚收益） |
-| 赞赏功能 | 无 | 有（每日限额） |
+| 项目 | 公众号 | 头条文章 | 头条微头条 |
+|------|--------|---------|-----------|
+| 标题长度 | 最多 64 字 | 最多 30 字 | **无标题字段**（标题并到正文首行） |
+| 封面图 | 可选（建议上传） | 强制（必须上传） | **无封面字段**，大字报封面排第一张图 |
+| 正文格式 | HTML + inline CSS | HTML + inline CSS（相同） | 纯文本 + 换行（不吃 inline CSS） |
+| 编辑器 | ProseMirror | contenteditable div | ProseMirror（`.ProseMirror` 单框） |
+| 配图 | 正文内嵌 | 正文内嵌 | 最多 18 张附图，单图 ≤20MB |
+| 发布方式 | 保存草稿 / 群发 | 预览并发布 | 存草稿 / 发布（发布后默认「审核中」） |
+| 错别字检测 | 无 | 有（自动检测） | 有（自动检测） |
+| 首发声明 | 无 | 有（头条首发，72小时独占） | 有，**且默认已勾选** |
+| 广告投放 | 无 | 有（投放广告赚收益） | 默认联动「同时发布文章和微头条」，不可取消 |
+| 赞赏功能 | 无 | 有（每日限额） | 有（每日限额） |
 
 ### 头条特有设置
 
@@ -1381,6 +1408,212 @@ await page.evaluate(() => {
    - 头条推荐算法对发布时间敏感
    - 推荐发布时间：早 7-9 点、午 12-14 点、晚 18-22 点
 ```
+
+### 9B 微头条发布（2026-11-19 实测流程）
+
+**用户要求发微头条时走这一节，与上面的文章流程互斥（除「同时发布文章和微头条」默认联动，见 9B.4）。**
+
+#### 9B.1 页面与结构
+
+```
+URL: https://mp.toutiao.com/profile_v4/weitoutiao/publish
+未登录会跳 9.1 的登录页；登好自动回跳。
+
+| 元素 | 选择器 / 说明 |
+|------|--------------|
+| 正文编辑器 | `.ProseMirror`（contenteditable，占位「有什么新鲜事想告诉大家？」）**无标题字段** |
+| 工具栏 | `button.syl-toolbar-button`，文本依次为 图片 / 表情 / 话题 / 文档导入 |
+| 图片上传面板 | 点「图片」后出现 `.upload-image-panel`，含两个 `input[type=file][multiple][accept="image/*"]`；底部按钮 保存到我的素材 / 取消 / **确定** |
+| 已选图片区 | 点「确定」后才出现：`.img-form-wrap`（文本「共 N 张，还能上传 M 张」）> `.img-box-item > span.item`，缩略图走 `background-image` |
+| 作品声明 | 每个选项是一个 `label.byte-checkbox`，文本如「虚构演绎，故事经历」 |
+| 首发声明 | `.exclusive-checkbox-wraper` 内的 `label.byte-checkbox`（文本「头条首发」） |
+| 按钮 | `button` 文本「存草稿」/「发布」 |
+| 字数校验 | 页面文本「正文字数：N」 |
+
+- 图片上限 18 张（面板文案「共 N 张，还能上传 M 张」可直接读余量），单图 ≤20MB，支持 jpg/jpeg/png。
+- **图片集选什么（用户已明确过一次口径）**：故事/贴图类发微头条，默认发**故事内容的页面图**（就是渲染切出来的 page-01…N），
+  不要把大字报封面混进去当第一张——大字报是贴图草稿的封面位，微头条侧的载体是内容截图本身。
+  只有用户点名要封面图时才加，且加在第 1 张。
+- 正文因此是**短导语**（约 150-250 字）：标题句 + 一句钩子 + 「全文 N 张图」的指代 + 化名/推测免责；
+  不要把整篇正文再抄一遍，图和字重复会被判低质，也白占字数。
+```
+
+#### 9B.2 填正文
+
+```javascript
+// execCommand 会把 \n 直接切成多个 <p>，占位文字不会混进正文，最省事
+const lines = [
+  '养猪场养的不是猪，是人（江湖故事集）',   // 标题并到第一行，微头条没有标题位
+  '',                                        // 空行做段落间距
+  '……',
+];
+const pm = document.querySelector('.ProseMirror');
+pm.focus();
+document.execCommand('insertText', false, lines.join('\n'));
+// 校验：pm.children.length 应等于段落数；document.body.innerText 里的「正文字数：N」
+```
+
+- 写完必须回读 `pm.children` 逐段确认，别只信 execCommand 的返回值。
+- 空格占位的空行会渲染成「 」段落，可接受；要更干净就留空字符串段落。
+
+#### 9B.3 上传图片（逐张，同一 uid 可复用）
+
+```
+1. JS click 工具栏「图片」按钮（button.syl-toolbar-button，文本匹配「图片」）
+2. take_snapshot，取「本地上传」下的 选择文件 input uid
+   （.btn-upload-handle 里那个；.upload-handler-drag 里的是拖拽区，别用）
+3. upload_file 一次一张（工具不支持一次多张），每张之间等 2.5-3.5 秒
+4. 面板文本会显示「已上传 N 张图片，支持拖拽调整图片顺序」，
+   缩略图在 .upload-image-panel img，src 变为 https://image-tt-private.toutiao.com/...（私有域，审核后才转公开域），
+   用 naturalWidth/naturalHeight 与本地文件尺寸指纹逐项比对，确认张数与顺序
+5. 关键差异（与公众号贴图相反）：**面板节点不会重建，同一 uid 连续上传会累加**，
+   不需要每张重新 take_snapshot
+6. ⚠️ **必须点面板底部的「确定」，否则图片全部作废**（面板按钮是「保存到我的素材 / 取消 / 确定」）：
+   只 upload 不点确定 → 存草稿成功、正文也在，但服务端 `images` 是 `null`，草稿等于没配图。
+   点完确定的判据是面板关闭 + 正文区下方出现 `.img-form-wrap`，文本「共 N 张，还能上传 M 张」。
+7. 「确定」之后面板会关闭，此时再核一次张数与尺寸指纹（`.img-box-item` 个数），才算图片真正挂上这条内容。
+```
+
+- 确认后图片**不在 `.ProseMirror` 里**（那里查 img 永远是 0），而是独立的 `.img-box-item` 容器，
+  缩略图用 `background-image` 渲染（`p3-sign/p11-sign.toutiaoimg.com/...`）。
+  所以「正文无 img 节点」不等于没图，**核验一律看 `.img-form-wrap` 的张数文案，或直接查服务端 `images` 字段**。
+
+#### 9B.4 发布前必查的三个勾（默认值有坑）
+
+| 选项 | 默认 | 可否改 | 处理 |
+|------|------|--------|------|
+| 头条首发 | **已勾** | 可取消 | 若同一内容还要发公众号/多平台，**必须问用户后取消**（等于承诺 72 小时仅在头条） |
+| 同时发布文章和微头条（发布得更多收益） | 已勾 | `byte-checkbox-disabled`，取消不了 | 告知用户：发布会额外生成一篇文章，不是只做微头条 |
+| 作品声明 | 全不勾 | 可勾 | 故事/虚构类勾「虚构演绎，故事经历」；实测勾这类声明不会拦发布，但不勾更容易被限流 |
+
+```javascript
+// 通用勾选：定位 label 后合成三个事件，用 classList 是否含 byte-checkbox-checked 判定
+const cb = [...document.querySelectorAll('.byte-checkbox')]
+  .find(e => /头条首发/.test(e.innerText));
+['mousedown','mouseup','click'].forEach(t =>
+  cb.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true, view: window })));
+// 复核：列回所有含 byte-checkbox-checked 的 label 文本，确认最终勾选集合符合预期
+```
+
+#### 9B.5 存草稿（默认终点）与发布（需用户明确指令）
+
+```
+硬约束：微头条的自动化终点是「存草稿」，不是「发布」。
+默认只点 `button` 文本严格等于「存草稿」；「发布」按钮由用户自己点。
+只有用户当轮明说「直接发布 / 你发出去」时，才可以点「发布」。
+（用户原话：发布到草稿后，我来确认，之后我手动发布。）
+
+核验方法论（本轮真实教训：我曾据此向用户误报「草稿已带 5 图」）：
+判据只认**最终载体**——落库字段，或重新载入后的页面回显；
+不认上传面板缩略图、不认 `draft_count`、不认「按钮点下去了」。
+面板里有图 ≠ 表单里有图，中间还隔着一个「确定」。
+
+存草稿后的校验（**不能只看页面反应，也不能只看 draft_count——count 不变也可能是覆盖同一条**）：
+1. 页面不跳转、无 toast —— 不能靠跳转判定，静默失败长得一模一样。
+2. **终局判据 = 重新载入这条草稿**（`reload` 当前 `publish?draft_id=<gid>`），然后查：
+   - 正文：`.ProseMirror` 字数回显一致；
+   - 图片：`.img-form-wrap` 文本「共 N 张」且 `.img-box-item` 个数 == N（缩略图是 background-image，`img[src*=toutiaoimg]` 可能抓不到）。
+   重载后没图 = 这次保存里图片就是空的（十有八九是漏点面板「确定」，见 9B.3 第 6 步）。
+3. 服务端真值接口（页内 fetch，带 cookie）：
+   - 单条草稿：`/mp/agw/draft/get_ugc_draft?draft_type=1&gid=<draft_id>&app_id=1231`，
+     `draft.origin_draft` 是 JSON 字符串，`content` / `images` 就是落库真值；`images: null` 即无图。
+   - 计数：`/mp/agw/creator_center/draft_count?type=0&app_id=1231` 的 `count`；
+   - 列表：`/mp/agw/creator_center/draft_list/?type=0&offset=0&count=5&app_id=1231&draft_type=1`
+     （**必须带 `draft_type=1`**，不带时返回空数组，别误判成没草稿）。
+4. 成功时 localStorage 键 `wtt-mpformdraft` 会被**清空**（保存成功后清本地缓存）；
+   若该键还在且 `form.nowPicList=[]`、`form.content=''`，说明这次没存进去。
+5. 内容管理页 tab 显示「草稿箱 (N)」，点击跳 `profile_v4/manage/draft`，
+   行元素 `.weitoutiao-draft-item`，行内有「编辑 / 删除」；草稿行同样不渲染图片缩略图。
+6. ⚠️ **纯图无正文存不了草稿**：正文字数为 0 时点「存草稿」静默失败，
+   且会把上一个草稿槽顶空（旧草稿随之消失）。图片-only 需求要先落地一行最小正文（标题句即可）。
+7. ⚠️ **作品声明不随草稿保存**：存完草稿重新打开，「虚构演绎，故事经历」等声明回到全不勾，
+   「头条首发」也会回到默认勾选。发布前必须再核一遍这三个勾（见 9B.4）。
+
+若真要发布（用户明确指令）：
+1. JS click 文本严格等于「发布」的可见 button（顶部「开始创作」也是 primary，别点错）。
+2. 成功判据：URL 跳到 https://mp.toutiao.com/profile_v4/weitoutiao，列表首条 `.post-item`
+   状态标签「审核中」、「修改」置灰。
+3. ⚠️ 该列表行**不渲染任何图片节点**（更早的已发布条目也一样）——
+   不能据此判定图片没传上。
+4. 审核期无法从后台核验图，等状态转「已发布」后再回列表/公开页复核。
+```
+
+#### 9B.7 加话题（#xx#，实测 2026-11-19）
+
+话题**必须走面板选**，它是富文本节点；直接 `insertText('#人性#')` 只是普通字符，不生成话题、不带曝光。
+
+```
+1. 先定光标（话题插在 caret 处，不定就往文首跑）：
+   const last = pm.querySelectorAll('p'); 取目标段落，Range.selectNodeContents(p) + collapse(false)，
+   pm.focus() 后 sel.removeAllRanges()/addRange(r)
+2. JS click 工具栏「话题」（button 文本严格等于「话题」）
+   → 出现 section.mention-selector-modal.forum + input[placeholder="搜索话题"]
+   → 默认 tab 是「最近使用 / 热门话题」，条目结构：
+     section.forum-list-item > div > span.forum-list-item-text（话题名叶子） + div（「25万讨论」）
+3. 搜索：native value setter 写 input + dispatchEvent('input')，等 1.6-2 秒出结果
+4. ⚠️ 点击只打在**叶子 span.forum-list-item-text**（或 section.forum-list-item）上，
+   事件序列用 pointerdown/mousedown/pointerup/mouseup/click（带 clientX/clientY 中心坐标）。
+   打错到上层列表容器 → 平台会把整段推荐列表当纯文本灌进正文，
+   生成 `#骗局#@跑路@义气` 这种半截脏碎片（实测踩过，且这种碎片会跟着草稿一起落库）。
+   Enter / ArrowDown 键在搜索框里无效，别指望键盘选择。
+5. 校验：每个话题在 DOM 里是 2 个节点（<templ> 和 <mask> 各一份），计数要去重：
+   [...new Set([...document.querySelectorAll('a.tteditor-forum')].map(a => a.dataset.name))]
+   节点形如 <a class="tteditor-forum" data-name="人性" data-concern-id="1607…">#人性#</a>
+```
+
+- **搜不到时条目会变「创建新话题」**（讨论量 0）。新话题没有存量流量，除非用户点名，
+  优先选带讨论量的现成话题（实测同名词常有多个候选，取讨论量最高那个）。
+- 话题选几个属于内容判断（未实测上限）：给故事/内容类默认 1-3 个贴主题的词，多了像堆词。
+- **落库判据看 `content_rich_span.links`**，不是数页面上的 `a` 标签：
+  话题会以 `{start, length, text:"#人性#", type:2, id, id_type:8, link:"sslocal://concern?cid=…"}` 进 links，
+  同时 `content` 文本里出现 `#人性#`。重载草稿后正文回显成 `#人性#` 真节点，脏碎片则回显成 `@xxx` 纯文本 —— 一眼可辨。
+
+#### 9B.8 存草稿会被服务端静默拒绝（实测 code 1065）
+
+```
+点「存草稿」后：页面不跳转、不报错、字数与图片区照旧，但服务端没收。
+抓真值要 hook 请求（XHR 通道，不是 fetch）：
+
+window.__cap = [];
+const oo = XMLHttpRequest.prototype.open, os = XMLHttpRequest.prototype.send;
+XMLHttpRequest.prototype.open = function(m,u){ this.__u=u; return oo.apply(this,arguments); };
+XMLHttpRequest.prototype.send = function(b){
+  this.addEventListener('load', () => { if (/save_ugc_draft/.test(this.__u)) window.__cap.push({url:this.__u, body:this.responseText.slice(0,200)}); });
+  return os.apply(this,arguments);
+};
+
+失败响应：{"code":1065,"gid":"","message":"保存草稿错误"}
+```
+
+- **签名相关性（本轮观察到的规律，机制未证）**：成功的两次请求 URL 带 `msToken=…&a_bogus=…`；
+  之后连续 5 次全部**不带签名且一律 1065**。期间唯一变化是页面从可见变成 `document.visibilityState === 'hidden'`
+  （内嵌浏览器面板被关掉，同期 `take_screenshot` / 真实 `click` 也一起报 surface 不可用）。
+  → 处置顺序：先 `if (document.hidden) 请用户把内置浏览器面板打开/置于前台`，再重试存草稿；
+    别在 hidden 状态下反复点，它只会静默失败，还会让你误以为已经保存。
+- 存草稿后必须做 9B.5 的**重载回显核验**，`code 1065` 时重载看到的就是旧内容。
+
+
+
+#### 9B.9 微头条踩坑清单
+
+| 现象 | 真因 | 处理 |
+|------|------|------|
+| 二维码一直「已失效」，用户扫不上 | 码约 60 秒过期 | 点 `span.web-login-scan-desc__btn` 刷新；页面内 setInterval 常驻续期 |
+| 页面里写 await 轮询登录，工具报 15 秒超时 | `evaluate_script` 单次上限 15s | 改装常驻 `setInterval`，主线程只做轻量轮询 |
+| `wait_for(['头条'])` 秒过但其实没登录 | 登录页营销文案也含这些词 | 用 URL 判定（是否仍是 `auth/page/login`），别用正文关键词 |
+| 想要「只做微头条、不生成文章」 | 该项 `disabled` 且默认勾 | 平台强制，只能告知用户，别反复点 |
+| 内容/草稿列表看不到图，以为失败 | 列表行本来就不渲染图，草稿页缩略图还是 background-image | 判据只有两条：编辑页 `.img-form-wrap` 的「共 N 张」，或服务端 `get_ugc_draft` 的 `images` |
+| 正文里出现「有什么新鲜事想告诉大家？」 | innerHTML 直改导致的错觉 | 用 `execCommand('insertText')`，占位符不会进正文 |
+| 正文 `.ProseMirror` 里查不到 img | 微头条图片不在富文本节点，是 `.img-box-item` 的 background-image | 数 `.img-form-wrap` 的「共 N 张」，或查 `get_ugc_draft` 的 `images` |
+| **图片传上了、草稿却没图** | 上传面板没点「确定」就存草稿，图片不入 form | 每张传完 → 点面板「确定」→ 见到「共 N 张」再存草稿（9B.3 第 6 步） |
+| 正文尾部出现 `#骗局#@跑路@义气` 之类半截话题碎片 | 话题面板 JS 点击打到了列表容器，把推荐列表当纯文本灌进正文 | 只点叶子 `span.forum-list-item-text`；出现碎片就删掉那段重插（9B.7 第 4 步） |
+| 页面有 `#话题#`，落库 links 里没有 | 直接 insertText 写的假话题 | 话题必须走「话题」面板，核验看 `content_rich_span.links` |
+| 点了存草稿、什么都没报错，重载却回到旧内容 | 服务端 `save_ugc_draft` 返回 `code 1065 保存草稿错误`（页面不提示） | hook XHR 看响应码；页面 `hidden` 时请求缺 `a_bogus` 签名易触发，先让用户把内置浏览器面板打开再存（9B.8） |
+| 作品声明发布前又变回没勾 | 声明不随草稿保存，重载后重置（首发同时回到默认勾选） | 存草稿只做内容校验；三个勾留到发布前那一刻复核 |
+| `draft_list` 返回空数组，以为草稿没了 | 少带参数 | 必须 `type=0&...&draft_type=1`；覆盖同一条草稿时 `draft_count` 也**不会自增**，别拿它当唯一判据 |
+| 存草稿后页面不跳转，以为没保存 | 存草稿本来就不跳转、无 toast | 终局判据是**重新载入这条草稿**看 `.img-box-item` 张数 + 正文字数（见 9B.5） |
+| 空正文点存草稿后，旧草稿凭空消失 | 正文字数为 0 静默失败，且把单草稿槽顶空 | 图片-only 需求先落地一行最小正文（标题句即可）；一旦顶掉需重建并核验 |
+| 手快点「发布」造成同篇重复 | 越界：默认终点是存草稿 | 见 9B.5；要发也由用户点，重复条目需用户确认后才删 |
 
 ---
 

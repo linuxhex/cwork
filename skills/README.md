@@ -36,6 +36,7 @@ cwork-requirement → 云效需求只读查询（需求列表/详情/深度分�
 cwork-image      → 本地工程/jar 打 Docker 镜像 + push registry + 服务端拉起
 cwork-article    → 微信公众号文章写作（封面图 + 排版 + 写入编辑器，按类型调用人格 skill）
 cwork-tech-express → 科技速递（给定日期锚定三天窗口 → 全球科技媒体检索 → 压缩分块 → 趋势评论 → 来源链接 → 公众号草稿）
+cwork-agent-workshop → Agent 工坊（GitHub 一手情报 + 案例实践 → Agent 架构/harness/skill 单主题深度软文 → 公众号草稿）
 cwork-tech-writer → 科技技术分享高手人格（技术布道者口吻，由 article 调用）
 cwork-wuxia-writer → 金庸式武侠写作人格（章回体半文半白，由 article 调用）
 ```
@@ -728,6 +729,32 @@ bash deploy.sh list [关键字]
 
 ---
 
+### 3.17 cwork-agent-workshop
+
+**作用**：Agent 工坊。追踪 GitHub 等一手来源最新的 Agent **架构**（多 Agent 编排/记忆/工具调用/MCP/A2A）、**harness**（评测脚手架与基准：SWE-bench、Terminal-Bench、GAIA、OSWorld 等）与 **skill**（技能包规范与生态），选一个主对象做源码级拆解 + 可复现案例实践，输出一篇公众号软文。
+
+**与速递的差异**：tech-express 是三日资讯简报（多条并列）；本 skill 是**单主题深挖**——1 个主对象 + 2-3 个对照，核心产出是「能力特性 → 场景价值」映射。
+
+**流程**（7 阶段）：选题锚定（选题卡回显）→ 情报采集（GitHub API/仓库/文档/论文，落 `research.md`）→ 案例实践（L0 文档 / L1 源码 / L2 本地跑通 / L3 基准实测，落 `practice-log.md`）→ 论证写作（结论 → 拆解 → 能力表 → 案例 → 三类读者场景价值 → 冷静判断 → 最小行动）→ 排版 + 封面 → 写入公众号草稿 → 汇报。
+
+**硬约束**：
+- 一篇文章只讲一个主对象，禁止写成第二份速递
+- 至少一个 L1/L2 案例；证据等级必须写进正文徽标，L1 不得冒充实测
+- 场景价值必须落到具体的人与动作，禁止「提升效率/赋能业务」式空话
+- 每个优势必须配代价或边界；不能验证的写「未验证」
+- 榜单分数必须带 harness/模型/预算/口径，禁止跨 harness 横向比较
+- star 数、版本、许可证以仓库/API 为准并记录抓取日期，禁止凭记忆写
+
+**产物目录**：`$CONTENT_DIR/agent-workshop/<YYYYMMDD>-<slug>/`（`research.md`、`practice-log.md`、`body.html`、`inject-fn.js`、`images/`、`draft-report.json`）
+
+**交付复用**：草稿写入链路与脚本直接复用 tech-express（`deliver.md`、`build-inject.cjs`、`wechat_draft.py`、`make-cover-poster.cjs`、`make-cover.ps1`），不另写一套。
+
+**参考文件**：`sources.md`（源矩阵/检索式/证据分级）、`practice.md`（实践等级/安全边界/记录范式）、`template.md`（正文骨架/标题/封面/自检清单）。
+
+**注意**：同为独立内容工具，不进 init→implement→commit 自动衔接链；安装器按目录自动发现，无需改白名单。
+
+---
+
 ## 四、文件结构
 
 ### 产物
@@ -823,3 +850,4 @@ cp -r cwork/skills/* ~/.qoder/skills/
 - `/cwork-image`
 - `/cwork-article`
 - `/cwork-tech-express`
+- `/cwork-agent-workshop`

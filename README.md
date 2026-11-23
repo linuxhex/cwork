@@ -66,6 +66,7 @@ cwork-test      → 页面自动化测试（Web / 小程序自动识别，条件
 cwork-commit    → 统一提交所有工程（分支一致性校验 + commit + push）
 cwork-article   → 微信公众号文章写作（排版/封面/配图/直写编辑器）
 cwork-tech-express → 科技速递（给定日期锚定三日窗口 → 全球科技媒体检索 → 压缩分块 → 趋势评论 → 公众号草稿）
+cwork-agent-workshop → Agent 工坊（GitHub 一手情报 + 案例实践 → Agent 架构/harness/skill 单主题深度软文 → 公众号草稿）
 ```
 
 **研发现场技能（排查与佐证）**
