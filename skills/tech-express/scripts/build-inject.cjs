@@ -132,20 +132,26 @@ fs.writeFileSync(path.join(dir, 'inject.js'), `(async () => {${CORE}})()\n`, 'ut
 fs.writeFileSync(path.join(dir, 'inject-fn.js'), `async () => {${CORE}}\n`, 'utf8');
 const fnLen = fs.statSync(path.join(dir, 'inject-fn.js')).size;
 
-// 正文自检：CJK 字数（速递目标 1500-2200）+ 残留插图标记
+// 正文自检：CJK 字数（不设上限，仅报实测值）+ 首屏摘要长度（≤56）+ 残留插图标记
 const cjk = (body.match(/[\u4e00-\u9fa5]/g) || []).length;
 const markers = (body.match(/［插图/g) || []).length;
 const classes = (body.match(/\sclass\s*=/g) || []).length;
 const gradients = (body.match(/linear-gradient/gi) || []).length;
+const dm = body.match(/<b>摘要[:：]<\/b>([^<]+)/) || body.match(/摘要[:：]\s*([^<\n]{0,160})/);
+const digest = dm ? dm[1].replace(/&nbsp;/g, ' ').trim() : '';
+const digestChars = digest.replace(/\s/g, '').length;
 const tail = [
   `${dir}`,
   `  inject.js / inject-fn.js 已生成（fn ${fnLen} bytes）`,
-  `  CJK ${cjk}（目标 1500-2200）`,
+  `  CJK ${cjk}（字数不设上限，此值仅报实测；编辑器「正文字数」另计英数标点）`,
+  `  摘要 ${digestChars} 字（≤56）${digest ? '：' + digest.slice(0, 30) + (digest.length > 30 ? '…' : '') : '（首屏没找到摘要行）'}`,
   `  期望 h2 ${expectedH2}（注入后按此对账，多了=被合并旧版本，少了=没落库）`,
   `  期望渐变 ${gradients}（浅色排版应为 0；落库后多出=正文被套在旧的深色外壳里）`,
   `  残留插图标记 ${markers}`,
   `  class 属性 ${classes}（必须 0，公众号只认 inline style）`,
 ];
 console.log(tail.join('\n'));
-if (fnLen > 200000) console.warn('警告：注入体超 200KB，evaluate_script 传参可能被截，把当日正文拆短');
+if (fnLen > 200000) console.warn('警告：注入体超 200KB，evaluate_script 传参可能被截，改走 deliver.md A4b 的 gzip + window.name 通道');
 if (classes > 0) console.warn('警告：正文含 class 属性，样式会被丢弃');
+if (!digest) console.warn('警告：首屏缺「摘要：</b>」行 —— 摘要既要有正文首屏那一行，也要填编辑器 #js_description 字段');
+else if (digestChars > 56) console.warn(`警告：摘要 ${digestChars} 字超 56 字上限，砍修饰词，别砍数字`);

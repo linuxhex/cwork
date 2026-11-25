@@ -12,6 +12,8 @@
 <!-- 顶部日期条 -->
 <section style="background:linear-gradient(135deg,#1890FF 0%,#0B5FBF 100%);border-radius:8px;padding:18px 16px;margin:0 0 24px;color:#ffffff;">
   <p style="margin:0 0 6px;font-size:20px;font-weight:bold;letter-spacing:1px;">科技速递 · {{M月D日}}</p>
+  <!-- 摘要行固定动作：≤56 字（按去空格字符数，47 字上下最稳），当日最硬的一条事实 + 一句指向，不复述标题；同一串文本同步填编辑器 #js_description。别在这行加 linear-gradient -->
+  <p style="margin:0 0 8px;font-size:14px;line-height:1.7;color:#ffffff;background:rgba(255,255,255,0.16);border-left:3px solid #FFFFFF;padding:7px 10px;border-radius:0 4px 4px 0;"><b>摘要：</b>{{≤56 字摘要}}</p>
   <p style="margin:0;font-size:13px;opacity:0.9;line-height:1.7;">当日：{{M月D日}}｜往日回顾：{{M月D-1日}}、{{M月D-2日}}｜{{N}} 条 + 三地行情</p>
   <p style="margin:8px 0 0;font-size:13px;opacity:0.9;line-height:1.7;">今日主线：{{一句话串起 2-3 条同向大事}}。</p>
   <p style="margin:6px 0 0;font-size:12px;opacity:0.85;line-height:1.7;">本文为公开报道的编辑整理与独立分析，事实均来自标注来源，观点为本号所有。文｜{{笔名}}</p>
@@ -106,6 +108,18 @@
 
 一次给 2-3 个候选让用户挑，长度 ≤64 字，不标题党。
 
+### 摘要公式（≤56 字，去空格字符数）
+
+摘要同时是**正文首屏那一行**和**编辑器「摘要」字段**（转发卡片、会话列表用它），一串文本两处一致。
+
+| 形态 | 模板 | 用法 |
+|------|------|------|
+| 主体+动作+后果 | `英伟达一天之内让黄仁勋复职、又收到参院传票，AI 行情一夜回血 6.51%，联储同刻重提连续加息。` | 默认，47 字 |
+| 两个数字对冲 | `一边是 439 亿美元的安全并购，一边是 3.75%–4% 的利率还留着加息选项，AI 的钱和利息同一天摆上台面。` | 资本 + 宏观同日 |
+| 反转/悬念 | `芯片股一周跌掉 2.3 万亿市值，又用一天涨回来一半——这次涨跌的原因不是订单。` | 情绪反转日 |
+
+约束：只写正文里已核实的事实与数字，摘要里出现的每个数字都要在条目或行情卡里有出处；不复述标题原话；不写「今天」「本文」「一起来看」；超 56 字就砍修饰，不砍数字。
+
 ---
 
 ## 四、封面图 prompt（ImageGen，强制实际生成）
@@ -192,7 +206,8 @@ powershell -ExecutionPolicy Bypass -File skills/tech-express/scripts/make-cover.
 - 行情数字全部有源且经多源互证（口径见 `sources.md` 五），冲突取舍已记进 `candidates.md`；条目「市场｜」行只挂在**真有对应板块/个股行情**的条目上，无对应就不硬挂
 - 行情段不预测涨跌、不荐股；footer 免责声明已覆盖「市场同频」与条目「市场｜」行
 - 视觉元素 ≥3 种；全文 inline style，无 `class`，无 Markdown 残留
-- CJK 字数 1500-2200（`build-inject.cjs` 打印值，**行情块与「市场｜」行计入预算，约 +300 字**），`inject-fn.js` 已由脚本生成；**确需超出上限时，要用户明确豁免，并把打印值与豁免理由记进 `candidates.md` 的「定稿口径」**，不得静默超标
-- 首屏两行齐全：今日主线一句话 + 性质声明与署名行（文｜日新）；footer 笔名与三段固定块齐全
+- **正文字数不设上限**（2026-11-24 用户口径：正常写即可），`build-inject.cjs` 的 CJK 打印值与编辑器「正文字数」两个实测值都写进 `draft-report.json`；不限字数不是注水理由——条目数仍守今日 5-8 / 往日 6-10，`inject-fn.js` 由脚本生成
+- 摘要行齐全且 ≤56 字（去空格字符数）：写在日期条内大标题之下，**同一串文本已填进编辑器「摘要」字段**（`#js_description`），复验时服务端 `digest` 非空且与它一致；摘要不复述标题、不写「今天/本文」
+- 首屏三行齐全：摘要 + 今日主线一句话 + 性质声明与署名行（文｜日新）；footer 笔名与三段固定块齐全
 - 海外占比：今日块 ≥ 2-3 条；往日块若因时区换算（D-1 美东下午发布换算到 D 日）导致海外明显少于一半，**不塞旧闻凑占比**，改在 `candidates.md` 记「已知偏差」并说明成因
 - 底部检索窗口说明 + 免责 + 关注引导三段齐全

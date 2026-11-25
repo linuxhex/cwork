@@ -2,13 +2,14 @@
 """微信公众号草稿写入（科技速递复用；持久化 profile，只扫码一次）
 
 用法:
-  python wechat_draft.py --dir <内容目录>/tech-express/20261111 --title "科技速递 · 11月11日"
-  python wechat_draft.py --dir <内容目录>/tech-express/20261111 --title "<标题>" --appmsgid 100000155
+  python wechat_draft.py --dir <内容目录>/tech-express/20261111 --title "科技速递 · 11月11日" --digest "≤56字摘要"
+  python wechat_draft.py --dir <内容目录>/tech-express/20261111 --title "<标题>" --digest "<首屏同一串>" --appmsgid 100000155
 
 --dir 接受绝对路径：内容产物已外置，真值取 cwork.content.json 的 contentDir（或环境变量
 CWORK_CONTENT_DIR），解析规则见 skills/common/output-dir.md；脚本本身仍在仓库内，不随产物外置。
 
-流程: 打开后台(等扫码) -> 打开编辑器 -> 填标题 -> 执行 inject.js -> 保存 -> fetch 服务端正文复验
+流程: 打开后台(等扫码) -> 打开编辑器 -> 填标题 -> 填摘要(#js_description) -> 执行 inject.js -> 保存 -> fetch 服务端正文复验
+复验会回读服务端 digest，为空即摘要没落库（转发卡片会抓正文开头）。
 
 已知坑（已修）: 登录轮询扫全部标签页 + 定时重拉首页；appmsgid 保存后轮询取 URL/cgi_data。
 若仍卡在 [1/6] 但已扫码：结束进程重跑即可，持久 profile 已存 cookie，不要让人重扫。
@@ -70,10 +71,23 @@ SERVER_CHECK_JS = """async (arg) => {
     gradient: (dec.match(/linear-gradient/g) || []).length,
     textChars: text.replace(/\\s/g, '').length,
     markers: (text.match(/［插图/g) || []).length,
+    digest: (t.match(/"digest":"([^"]{0,200})/) || [])[1] || '',
     pageHasTitle: arg.title ? t.indexOf(arg.title) >= 0 : true,
     head: text.replace(/\\s+/g, ' ').slice(0, 40),
     headHtml: dec.slice(0, 150)
   };
+}"""
+
+DIGEST_JS = """(digest) => {
+  const el = document.getElementById('js_description');
+  if (!el) return {ok: false, reason: 'no digest node'};
+  el.focus();
+  const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
+  setter.call(el, digest);
+  el.dispatchEvent(new Event('input', {bubbles: true}));
+  el.dispatchEvent(new Event('change', {bubbles: true}));
+  el.blur();
+  return {ok: true, chars: el.value.replace(/\\s/g, '').length};
 }"""
 
 TITLE_JS = """(title) => {
@@ -201,6 +215,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dir", required=True, help="文章目录（含 body.html 与 inject.js）")
     ap.add_argument("--title", required=True)
+    ap.add_argument("--digest", default="", help="首屏摘要（≤56 字），同步填编辑器「摘要」字段；留空则转发卡片会抓正文开头")
     ap.add_argument("--appmsgid", default="", help="已有草稿 id，传入则原地修复")
     ap.add_argument("--min-h2", type=int, default=2)
     ap.add_argument("--min-chars", type=int, default=800)
@@ -273,6 +288,13 @@ def main():
 
         log("[3/6] 填标题...")
         log(f"    {page.evaluate(TITLE_JS, args.title)}")
+        if args.digest:
+            dchars = len(re.sub(r"\s", "", args.digest))
+            if dchars > 56:
+                log(f"    摘要 {dchars} 字超 56，仍按要求填入（自行复核是否砍修饰）")
+            log(f"    摘要 {page.evaluate(DIGEST_JS, args.digest)}")
+        else:
+            log("    未传 --digest：编辑器「摘要」字段留空，转发卡片会抓正文开头（建议填 ≤56 字摘要）")
 
         log("[4/6] 注入正文...")
         body_file = article_dir / "body.html"

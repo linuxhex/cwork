@@ -69,6 +69,30 @@ navigate_page { type: "url",
 
 标题用 `insertText` 稳定；正文才需要 base64。
 
+### A3b 填摘要（≤56 字，固定动作）
+
+摘要框是 `#js_description`（`textarea.frm_textarea.js_desc.js_counter`，placeholder「选填，不填写则默认抓取正文开头部分文字，摘要会在转发卡片和公众号会话展示。」，计数 `0/120`）。要填的就是首屏摘要行**同一串文本**（判长度按去空格字符数 ≤56，见 `template.md` 三·摘要公式）：
+
+```js
+() => {
+  const el = document.getElementById('js_description');
+  if (!el) return { ok: false, reason: 'no digest node' };
+  const v = <JSON.stringify(摘要)>;
+  el.focus();
+  const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
+  setter.call(el, v);
+  el.dispatchEvent(new Event('input', { bubbles: true }));   // 必须：驱动 js_counter 与保存时的字段采集
+  el.dispatchEvent(new Event('change', { bubbles: true }));
+  el.blur();
+  return { ok: true, chars: el.value.replace(/\s/g, '').length, cjk: (el.value.match(/[一-龥]/g) || []).length };
+}
+```
+
+- 判据：返回 `chars ≤ 56`，`take_snapshot` 里该框计数从 `0/120` 变 `n/120`；A6 复验回读服务端 `digest` 确认落库。
+- 也可 `fill { uid }`（uid 取快照里那个 placeholder 含「选填，不填写则默认抓取」的 textbox），但填完**必须回读 `value`**，别只看工具调用成功。
+- 只往正文写摘要行、不填这个框＝白做：转发卡片与会话列表读的是 `digest` 字段。11-23 期实测 `digest` 为空时被系统抓成「科技速递 · 11月23日当日：11月23日｜往日回顾：…」这种窗口行。
+- 顺带：标题 `#title` 同样是 textarea（快照里的 richtext 是它的镜像），A3 的 `insertText` 与原生 setter 两种写法都能落库。
+
 ### A4 注入正文
 
 1. `Read` 出 `<目录>/inject-fn.js` **全文**（无插图占位残留、`build-inject.cjs` 自检已过）。
@@ -82,6 +106,51 @@ navigate_page { type: "url",
    - `ok=false` 或 `chars` 只有几十字 → 停，按「失败手册」处理，**禁止**改成手写 HTML 再试。
 
 > 注入体自己会先清空正文（原生 `selectAll` + `delete`，最多 3 轮），再派发一次 `paste`，然后轮询等 `h2` 收敛到 `expectedH2`（最多 15 秒）。**不要**在外面再补一次注入——重复注入是正文成倍增长的主要来源。
+
+### A4b 大块注入体的传输（省上下文，20261124 实跑）
+
+`inject-fn.js` 有 5 万+ 字节时，别 `Read` 全文再原样贴进 `evaluate_script`（一次就把上下文吃掉，长参数还可能被截）。改走「同源文件 + `window.name`」通道，正文一个字都不进对话：
+
+```bash
+# 1) 期次目录内：gzip → base64 → 切 3000 字符块，并打印本地 sha256 前 16 位
+node -e "const fs=require('fs'),z=require('zlib'),cr=require('crypto');
+const c=fs.readFileSync('inject-fn.js');
+const sha=cr.createHash('sha256').update(c).digest('hex').slice(0,16);
+const b=z.gzipSync(c,{level:9}).toString('base64');
+const n=3000,parts=[];for(let i=0;i<b.length;i+=n)parts.push(b.slice(i,i+n));
+fs.writeFileSync('chunks-gz.txt',JSON.stringify(parts));
+console.log('rawBytes',c.length,'sha16',sha,'b64len',b.length,'parts',parts.length);"
+```
+
+2. `navigate_page` 开 `file:///<期次目录>/chunks-gz.txt` → 页内解析后暂存：`() => { const a = JSON.parse(document.body.innerText.trim()); window.name = JSON.stringify(a); return { parts: a.length }; }`（`window.name` 跨导航保留、跨域也保留，容量 ~2MB）。
+3. `navigate_page` 回编辑器（**同一 tab**，回读 `window.name.length` 确认没丢）→ 页内还原并校验：
+
+```js
+async () => {
+  const arr = JSON.parse(window.name), b64 = arr.join('');
+  const bin = atob(b64), u8 = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+  const ds = new Blob([u8]).stream().pipeThrough(new DecompressionStream('gzip'));
+  const txt = await new Response(ds).text();
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(txt));
+  const hex = Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 16);
+  window.__inj = txt;                                     // 只对得上哈希才缓存
+  return { parts: arr.length, jsLen: txt.length, sha16: hex, match: hex === '<第 1 步打印的 sha16>' };
+}
+```
+
+4. `match=true` 后 fire-and-forget 驱动（注入体自轮询最多 15 秒，直接 `await` 会让 `evaluate_script` 超时）：
+
+```js
+() => { window.__res = null; window.__err = null;
+  const f = (0, eval)('(' + window.__inj + ')');
+  Promise.resolve(f()).then(r => { window.__res = r; }).catch(e => { window.__err = String(e); });
+  return { started: true }; }
+```
+
+5. 用短函数 `() => ({ res: window.__res, err: window.__err })` 轮询取结果，仍按 A4 的判据核对 `mode` / `h2` / `grad` / `targetClass` / `clearedShell`。
+
+> A4b 只换**传输方式**：注入体仍是 `build-inject.cjs` 生成的 `inject-fn.js` 原文，一个字都不改，「严禁手拼 HTML 字符串」的红线照常有效。`match=false` 就停下重跑第 1 步，别拿可疑正文去注入。
 
 ### A5 保存草稿
 
@@ -120,6 +189,7 @@ async (arg) => {
            gradient: (dec.match(/linear-gradient/g) || []).length,
            textChars: text.replace(/\s/g, '').length,
            markers: (text.match(/［插图/g) || []).length,
+           digest: (t.match(/"digest":"([^"]{0,200})/) || [])[1] || '',
            pageHasTitle: arg.title ? t.indexOf(arg.title) >= 0 : true,
            headHtml: dec.slice(0, 150) };
 }
@@ -127,7 +197,9 @@ async (arg) => {
 
 `arg.url` = 编辑器 URL 带 `appmsgid=<id>`，`arg.title` = 本期标题。
 
-判定：`h2` **等于** `body.html` 的 `<h2` 数（多了=旧版本被并进来，少了=没落库）、`textChars > 800`、`pageHasTitle=true`、`gradient` 等于 `body.html` 的 `linear-gradient` 数。等 6 秒问一次，**再等 12 秒复查一次**——编辑器还开着时可能又自动保存一遍，两次结果必须一致。不达标用同一 `appmsgid` 重跑，别被 `chars > 800` 骗过去（旧正文同样达标）。
+> ⚠️ **走自带浏览器时 `arg` 传不进来**：`evaluate_script` 的 `args` 数组只接受 `take_snapshot` 里的元素 uid，塞任意字符串会被拒。把 URL 与标题**直接写进函数体**（把上面 `arg.url` 换成常量串、`pageHasTitle` 用字面标题），其余代码不动。备用链路 `wechat_draft.py` 才走 `page.evaluate(fn, arg)` 的参数形式。
+
+判定：`h2` **等于** `body.html` 的 `<h2` 数（多了=旧版本被并进来，少了=没落库）、`textChars > 800`、`pageHasTitle=true`、`gradient` 等于 `body.html` 的 `linear-gradient` 数、**`digest` 非空且等于首屏那串摘要**（空值＝编辑器摘要字段没填进去，转发卡片会抓正文开头）。等 6 秒问一次，**再等 12 秒复查一次**——编辑器还开着时可能又自动保存一遍，两次结果必须一致。不达标用同一 `appmsgid` 重跑，别被 `chars > 800` 骗过去（旧正文同样达标）。
 
 ### A7 写回报告
 
@@ -158,6 +230,11 @@ async (arg) => {
 | 保存按钮点了但 URL 无 appmsgid | 有校验拦住（标题长度/正文空/敏感词），`take_snapshot` 读提示原文汇报，不盲试 |
 | `upload_file` 报「元素无法直接接收文件/点击未触发文件选择」 | 该 uid 不是 file input，或未展开下拉 → 重新 `take_snapshot` 取新 uid；两次不成转手动 |
 | 想传正文配图 | 走 marker-select：脚本选中 `［插图 N］` 占位文本 → 展开图片下拉 → 重新 `take_snapshot` 拿新 uid → `upload_file` → 复核 `img` 与 `markers` 计数；上传后删掉占位行 |
+| **注入一切正常，但过一会儿 `appmsg_edit?appmsgid=<id>` 报「系统错误(320003)」**（20261124 实跑踩到） | 十分钟前同源 `fetch` 同一 URL 还能拿到 371KB 正文，之后 fetch 与导航都只回 15KB 错误页 —— **不是注入丢失，是这份草稿已经被发表**（用户手改标题点了发表）。查证：`appmsg?action=list_card&f=json&ajax=1&type=77` 看 `file_cnt.draft_count` 是否已不含它，再 `appmsgpublish?sub=list&f=json&ajax=1` 解析 `publish_page` 拿 msgid / 发表时刻 / 线上标题 / `digest`。处置：**别重跑注入、别改 appmsgid**，已群发的正文改不了；要补内容只能另建新草稿，并如实告知用户线上版本与本地 `body.html` 已分叉 |
+| 粘贴后弹「内容结构检测」（详情含 `darkmode-no-gradient`） | 正文用了渐变背景，编辑器劝退。**不是失败**：页内找文本为「继续插入」的按钮 `.click()` 即可落库（视口不可用时 `click({uid})` 会报 `NATIVE_BROWSER_VIEWPORT_UNAVAILABLE`，一律页内点）。点完注入体的轮询会继续收敛，别重复注入 |
+| `wait_for` 报 `params/text must be array` | 它的 `text` 是**字符串数组**，不是单个字符串：传 `["科","技","速","递"]` 这类任一命中的数组 + `timeout` |
+| `evaluate_script` 报 `Promise.resolve(...) is not a function` | 驱动 `window.__inj` 时写成了 `Promise.resolve(eval(...)())`（先把返回值当函数调）。正确：先取引用再调用 —— `const f = (0, eval)('(' + window.__inj + ')'); Promise.resolve(f()).then(...)` |
+| 注入体几十 KB，`Read` 全文再贴进 `evaluate_script` 会把上下文塞满 | 走 A4b 的 `file:// + window.name` 通道，正文不进对话，页内还原后用 SHA-256 与本地比对再驱动 |
 | 浏览器页面丢了/被关 | `list_pages` → `select_page`，或 `navigate_page` 直接重开；登录态在自带浏览器里，不用重扫 |
 | 正文里 URL 被清洗成纯文本 | 正常（非白名单外链）。所以 A4 前必须确认每条来源都有 URL 明文 + 文末「来源一览」区块 |
 

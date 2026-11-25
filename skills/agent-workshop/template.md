@@ -2,7 +2,7 @@
 
 正文产出物是 **HTML + inline CSS 片段**（写到 `<期次>/body.html`）。公众号编辑器不吃 `class`，所有样式一律 `style="..."`。复制骨架后替换 `{{...}}`，不改结构语义。
 
-**文风**：口语化，像跟同事讲话；正文 CJK ≤2000。禁用词表与自检方法见 `SKILL.md` §3.6。
+**文风**：口语化，像跟同事讲话；正文字数不设上限（2026-11-24 起与科技速递同口径，常规一期 1500-3000 CJK，靠多拆机制加长、不靠注水）。禁用词表与自检方法见 `SKILL.md` §3.6。
 
 **配色**：工坊橙 `#E8590C`（主）、工坊青 `#0B7285`（辅）、石墨 `#1F2328`（标题）、正文灰 `#4A4F55`、浅底 `#FFF7F2`、分隔线 `#E8E1DC`。
 
@@ -26,6 +26,8 @@
 <section style="background:linear-gradient(135deg,#1F2328 0%,#0B3B4A 100%);border-radius:10px;padding:20px 18px;margin:0 0 26px;color:#ffffff;">
   <p style="margin:0 0 8px;font-size:13px;letter-spacing:3px;color:#FFB98A;">AGENT WORKSHOP · NO.{{期号}}</p>
   <p style="margin:0 0 10px;font-size:22px;font-weight:bold;line-height:1.4;">{{主对象名}}</p>
+  <!-- 摘要行固定动作：≤56 字（去空格字符数，47 字上下最稳）＝本期拆的是什么 + 最硬的那个结论。同一串文本必须填进编辑器「摘要」字段 #js_description（函数见 skills/tech-express/deliver.md A3b）。这行别加 linear-gradient，免得 gradient 计数与复验对不上 -->
+  <p style="margin:0 0 10px;font-size:14px;font-weight:bold;line-height:1.7;color:#FFE3CC;background:rgba(255,255,255,0.10);border-left:3px solid #FFB98A;padding:7px 10px;border-radius:0 4px 4px 0;">摘要：{{≤56 字摘要}}</p>
   <p style="margin:0 0 10px;font-size:14px;line-height:1.75;opacity:0.92;">{{一句话定位：作者原话的中文转述}}</p>
   <p style="margin:0;font-size:12px;line-height:1.7;opacity:0.75;">证据等级：L0 文档 / L1 源码 / L2 本地跑通 / L3 基准实测｜本期实践 {{最高等级}}<br>本文基于公开仓库、文档与自建小规模实验整理，观点为本号所有。文｜长风・Ethan</p>
 </section>
@@ -239,6 +241,7 @@ powershell -ExecutionPolicy Bypass -File skills/tech-express/scripts/make-cover.
 
 - 署名固定：**文｜长风・Ethan**（首页栏目条与 footer 一致）。
 - 首屏声明：`本文基于公开仓库、文档与自建小规模实验整理，实测与引用已标注证据等级，观点为本号所有。`
+- 首屏摘要：栏目条内一行「摘要：……」，≤56 字（去空格字符数），写「本期拆的什么 + 最硬的结论」；**同一串必须填进编辑器「摘要」字段 `#js_description`**，否则转发卡片抓正文开头。填写片段见 `skills/tech-express/deliver.md` A3b，备用链路走 `wechat_draft.py --digest`。
 - 原创判定：正文为自主拆解 + 自建实验 + 独立判断，且来源逐条标注 → 可点原创；纯翻译/纯转述不可点。
 - **「声明原创」开关不代点**，写入草稿后列为待手动项。
 - 免责：文末保留「不构成厂商背书或投资建议；数据以标注来源与抓取时间为准」。
@@ -259,9 +262,9 @@ powershell -ExecutionPolicy Bypass -File skills/tech-express/scripts/make-cover.
 | 8 | 不吹不黑 | 每个优势配了代价或边界 |
 | 9 | 冷静判断 | 有明确的「先别上」条件 |
 | 10 | 最小行动 | 30 分钟内可执行，有验证判据 |
-| 11 | 篇幅 | CJK ≤2000（`body.html` 去标签汉字数；编辑器「正文字数」不作判据）；压字不砍代价/边界/来源 |
+| 11 | 篇幅 | 字数**不设上限**（实测 CJK + 编辑器「正文字数」两个值都进 `draft-report.json`）；加长只靠多拆一节有证据的机制，代价/边界/来源不许砍 |
 | 12 | 排版 | 全 inline style，无 class；`<h2>` 数与注入期望一致 |
 | 13 | 封面 | ImageGen 底图 + 脚本叠字，Read 复核，2560×1080 |
-| 14 | 声明署名 | 首屏声明与「文｜长风・Ethan」齐全，文末免责保留 |
+| 14 | 摘要·声明·署名 | 首屏有摘要行且 ≤56 字；**同一串已填进编辑器「摘要」字段**，复验 `digest` 非空并与之一致；首屏声明与「文｜长风・Ethan」齐全，文末免责保留 |
 | 15 | 待手动项 | 「声明原创」、封面（自动失败时）已列入汇报 |
 | 16 | 口语化 | 开场是具体场景；无 AI 腔词（赋能/闭环/底层逻辑/综上所述）；术语有句人话解释；挑三段念过 |
